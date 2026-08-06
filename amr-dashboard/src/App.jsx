@@ -69,9 +69,13 @@ export default function App() {
 
         {/* RIGHT SIDE PANELS */}
         <div className="flex min-h-0 flex-col gap-3 overflow-y-auto pr-0.5">
-          <PreviewPanel title="GPS PREVIEW" active={resolvedView === 'gps'} onClick={() => setMainView('gps')}>
-            <GpsMapView compact />
-          </PreviewPanel>
+          <PreviewPanel
+  title="GPS PREVIEW"
+  active={resolvedView === 'gps'}
+  onClick={() => setMainView('gps')}
+>
+  <GpsMapView compact />
+</PreviewPanel>
 
           <PreviewPanel title="LIDAR PREVIEW" active={resolvedView === 'lidar'} onClick={() => setMainView('lidar')}>
             <LidarView compact />

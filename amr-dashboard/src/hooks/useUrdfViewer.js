@@ -50,10 +50,12 @@ export default function useUrdfViewer(containerRef) {
           rate: 10.0,
         });
 
+        const rosbridgeUrl = import.meta.env.VITE_ROSBRIDGE_URL || 'ws://localhost:9090';
+
         new ROS3D.UrdfClient({
           ros: rosService.ros,
           tfClient,
-          path: 'http://localhost:9090/',
+          path: `${rosbridgeUrl.replace(/^ws/, 'http')}/`,
           rootObject: viewer.scene,
           loader: ROS3D.COLLADA_LOADER_2,
         });

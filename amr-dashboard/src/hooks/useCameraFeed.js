@@ -3,12 +3,18 @@ import rosService from '../services/RosConnectionService.js';
 import useRosTopic from './useRosTopic.js';
 
 const CANDIDATE_TOPICS = [
+
+  // Your camera
+  { name: '/camera/camera/color/image_raw', messageType: 'sensor_msgs/Image' },
+
+  // Future cameras
   { name: '/camera/image_raw/compressed', messageType: 'sensor_msgs/CompressedImage' },
-  { name: '/depth_camera/image_raw/compressed', messageType: 'sensor_msgs/CompressedImage' },
-  { name: '/color/image_raw/compressed', messageType: 'sensor_msgs/CompressedImage' },
   { name: '/camera/image_raw', messageType: 'sensor_msgs/Image' },
+  { name: '/depth_camera/image_raw/compressed', messageType: 'sensor_msgs/CompressedImage' },
   { name: '/depth_camera/image_raw', messageType: 'sensor_msgs/Image' },
+  { name: '/color/image_raw/compressed', messageType: 'sensor_msgs/CompressedImage' },
   { name: '/color/image_raw', messageType: 'sensor_msgs/Image' },
+
 ];
 
 /**
