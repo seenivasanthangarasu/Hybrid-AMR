@@ -202,14 +202,34 @@ OS preference, no-flash init) drives the Header toggle.
 
 ## 5. Status
 
-Front-end UI/UX phase (spec Phase U) is complete and browser-verified:
+**Every phase of the remediation checklist is closed** (see
+[`remediation/tasks.md`](remediation/tasks.md)). Gates: `npm run lint` clean · `npm test`
+**27/27** · `npm run build` passes.
 
-- REQ-16 Seamlessness · REQ-17 Extreme usability · REQ-18 Light mode — ✅
-- REQ-19 Affordance honesty · REQ-20 Connection-aware fallbacks + reconnect ·
-  REQ-21 Sensor-view freshness parity — ✅ (see [`remediation/tasks.md`](remediation/tasks.md))
-- Phase-U cleanup backlog — ✅
-- **Feature layer (this guide):** adaptable drag/resize layout + settings, framer-motion polish,
+- **Phase 0** REQ-01…05 — command honesty, error boundaries, URDF mesh path, trust boundary — ✅
+- **Phase U** REQ-16…21 — seamlessness, usability, light mode, affordance honesty,
+  connection-aware fallbacks, freshness parity — ✅
+- **Phase 1** REQ-06…11 — map race, time-aware odometry, camera honesty, dead-code removal,
+  lockfile + [audit triage](remediation/npm-audit-triage.md), test infrastructure — ✅
+- **Phase 2** REQ-12…15 — `aria-live`, Prettier/ESLint, context note, error logging — ✅
+- **Deferred UI** F4 (display-only zone wording) · F5 (pinned view survives mode change) — ✅
+- **Feature layer:** adaptable drag/resize layout + settings, framer-motion polish,
   standardized active-view highlight — ✅
+- **Error UX:** 12-state error catalog, accessible fault dialogs, error reference page — ✅
+
+Fixed after live browser testing (none of which reproduced in a headless preview):
+
+- Panel **drag/resize was entirely non-functional** — `process.env.DRAGGABLE_DEBUG` threw in the
+  browser (see §4).
+- Rearranged panels **overlapped and vanished** — `compactType={null}` let two panels own the
+  same cells (see §3).
+- Edit-mode labels **criss-crossed** the panel content beneath them — scrim was too transparent.
+
+Known remaining work is **backend/ROS-side**, not dashboard: there is still no robot-side
+subscriber for `/emergency_stop`, `/mission_state_cmd`, or `/mission_goal`, and no Nav2 stack —
+so commands honestly report *sent — unconfirmed* and can never reach `CONFIRMED`. A few
+checklist lines are marked `[~]`: code-verified and unit-tested, but needing a live publishing
+robot to exercise end-to-end.
 
 Backend/runtime note: the dashboard connects to the robot's rosbridge at the URL in
 `amr-dashboard/.env` (`VITE_ROSBRIDGE_URL`). Live telemetry additionally requires the robot's

@@ -1,9 +1,13 @@
 # Hybrid AMR Command Center
 
-A production-ready ground control station for a ROS2 Jazzy hybrid (indoor/outdoor)
-autonomous mobile robot. Every widget is a live subscriber to a real ROS2 topic
-over ROSBridge — **no mock data, no simulated telemetry, no REST polling**.
-If a topic has no live publisher, the corresponding widget renders `NO DATA`.
+A ground control station for a ROS2 Jazzy hybrid (indoor/outdoor) autonomous
+mobile robot. Every widget is a live subscriber to a real ROS2 topic over
+ROSBridge — **no mock data, no simulated telemetry, no REST polling**.
+
+The guiding rule is **honesty**: the dashboard never shows a value as if it were
+live when it isn't, and never implies the robot acted on a command it cannot
+confirm. Missing data is reported by _cause_ — `OFFLINE` (no link) vs `NO SIGNAL`
+(link fine, topic silent) vs `STALE · 8s` — not as an undifferentiated `NO DATA`.
 
 ## Stack
 
@@ -35,6 +39,30 @@ npm run dev
 
 Open the printed local URL. The dashboard connects to ROSBridge automatically
 on load; connection state is shown live in the header.
+
+| Script           | What it does                                           |
+| ---------------- | ------------------------------------------------------ |
+| `npm run dev`    | Vite dev server (default `:5173`)                      |
+| `npm run build`  | Production build to `dist/`                            |
+| `npm test`       | Vitest suite, headless (`npm run test:watch` to watch) |
+| `npm run lint`   | ESLint over `src/`                                     |
+| `npm run format` | Prettier write (`format:check` to verify only)         |
+
+> Changes to `vite.config.js` or new dependencies need a **dev-server restart** —
+> Vite does not hot-reload either.
+
+## Operator features
+
+| Feature              | Where                 | Notes                                                                                              |
+| -------------------- | --------------------- | -------------------------------------------------------------------------------------------------- |
+| **Reconnect**        | Header (on link loss) | Re-establishes rosbridge without reloading the page.                                               |
+| **Light/dark theme** | Header sun/moon       | Persists in `localStorage`; first visit follows the OS setting.                                    |
+| **Edit layout**      | Settings gear         | Drag/resize every panel; the arrangement persists and `Reset to default` restores the shipped one. |
+| **Error reference**  | Settings gear → HELP  | Catalogue of all 12 fault states with the dialog each raises.                                      |
+| **Fault dialogs**    | Automatic             | Selecting a view with no data, or a command that failed to send, explains the cause and the fix.   |
+
+Full walkthrough and front-end architecture:
+[`docs/dashboard-ui-guide.md`](../docs/dashboard-ui-guide.md).
 
 ## ROS2 topic contract
 
@@ -89,18 +117,43 @@ worked around in this codebase. See
 
 ```
 src/
-  components/      Presentational + view components (GpsMapView, LidarView, SlamView,
-                    CameraView, UrdfWidget, StatusPanel, MissionPlanner, ControlPanel, ...)
-  hooks/            useRosConnection, useRosTopic, useGps, useOdometry, useLaserScan,
-                    useOccupancyGrid, useTF, useRobotMode, useUrdfViewer
-  services/         RosConnectionService (ROSBridge singleton), RobotCommandService (publishers)
-  App.jsx           Layout + dynamic main-view swapping logic
+  components/      View + panel components (GpsMapView, LidarView, SlamView, CameraView,
+                    UrdfWidget, StatusPanel, MissionPlanner, ControlPanel, DataFallback,
+                    ErrorBoundary, ErrorDialog, ErrorReference, DashboardGrid, ...)
+    ui/            Shared primitives: Dialog, SignalChip/SignalDot, FreshnessBadge,
+                    PanelHeader, PanelFrame, signalTones (one tone→colour map)
+  hooks/           useRosConnection, useRosTopic, useGps, useOdometry, useLaserScan,
+                    useOccupancyGrid, useTF, useRobotMode, useUrdfViewer, useTheme,
+                    useLayout, useNow
+  services/        RosConnectionService (ROSBridge singleton), RobotCommandService (publishers)
+  errors/          catalog.js — every fault state (code, cause, remedy); one source of
+                    truth behind the badges, the dialogs, and the error reference page
+  utils/           freshness (LIVE/STALE/NO_DATA classifier), themeColor (canvas theming)
+  test/            Vitest setup
+  App.jsx          Layout + dynamic main-view swapping logic
 ```
+
+## Testing
+
+```bash
+npm test
+```
+
+Vitest + Testing Library, headless (jsdom). Coverage focuses on the
+safety-relevant and regression-prone logic rather than chasing a percentage:
+`useRosTopic` staleness/unsubscribe, `RobotCommandService.emergencyStop()`
+payload + disconnected path, `ControlPanel`'s two-click e-stop state machine,
+`useOdometry` jump rejection, `useLayout` persistence/sanitising, the error
+catalog's invariants, and `Dialog` accessibility.
 
 ## Notes on the "no mock data" constraint
 
-- Every hook in `src/hooks` returns `hasData: false` (and components render
-  `NO DATA`) until a real ROS message has been received on the relevant topic.
+- Every hook in `src/hooks` returns `hasData: false` until a real ROS message has
+  been received on the relevant topic; the panel then reports _why_ it has
+  nothing (`OFFLINE` / `CONNECTING` / `NO SIGNAL` / `STALE · age`) rather than a
+  bare `NO DATA`.
+- A value that stopped updating is shown **dimmed with its age**, never as if it
+  were still live.
 - Speed is read verbatim from `twist.twist.linear.x` on `/odom` — never
   estimated from position deltas.
 - GPS path/marker is built only from real `NavSatFix` fixes; nothing is
