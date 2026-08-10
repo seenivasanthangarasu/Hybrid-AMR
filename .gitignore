@@ -6,3 +6,8 @@ log/
 __pycache__/
 .vscode/
 .idea/
+
+# Local helper/scratch files (carried over from the remote main branch)
+branch_structure.json
+temp_auto_push.bat
+temp_interactive_push.bat
