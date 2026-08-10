@@ -136,10 +136,20 @@ OS preference, no-flash init) drives the Header toggle.
 - **Controlled layout.** `DashboardGrid` is controlled via `layout` + `onLayoutChange={setLayout}`;
   react-grid-layout fires `onLayoutChange` on drag/resize **stop**, so persistence is one write per
   gesture with no mid-drag prop fighting.
-- **Headless-preview caveat.** react-grid-layout animates position with CSS transitions; a browser
-  tab that isn't on-screen *pauses* transitions, freezing items at the origin. That's a preview
-  artifact only — on a displayed browser the panels position and drag normally. New dependencies
-  also require a **dev-server restart** (not just a reload) to be picked up by Vite.
+- **`process` polyfill is REQUIRED for drag/resize.** react-draggable (used directly for dragging
+  and indirectly by react-resizable for resizing, both via react-grid-layout) calls an internal
+  `log()` that reads `process.env.DRAGGABLE_DEBUG` on every drag/resize **start**. The browser has
+  no `process` global, so it throws `ReferenceError: process is not defined` and the gesture is
+  aborted — **all panel drag/resize silently fail** in Layout Edit Mode. Fixed in
+  [`vite.config.js`](../amr-dashboard/vite.config.js) with `define: { 'process.env.DRAGGABLE_DEBUG':
+  'false' }` (dev **and** build). Don't remove it.
+- **Headless-preview caveat (why the above was missed).** react-grid-layout positions items with CSS
+  transitions; a browser tab that isn't on-screen *pauses* transitions, freezing every item at the
+  origin. This makes the layout look "not working" in a non-displayed preview even when it is — but
+  it also masked the real `process` bug above, which only reproduces on a **displayed** browser when
+  you actually attempt a drag. Verify drag/resize on a real display (or by asserting the layout
+  state changes), never by eyeballing the preview. New dependencies / `vite.config.js` changes also
+  require a **dev-server restart** (not just a reload) to be picked up by Vite.
 
 ---
 

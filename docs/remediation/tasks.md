@@ -194,6 +194,19 @@ overflow, global `:focus-visible` ring present, theme toggle flips + persists
 (`amr-theme`), and all icon-only controls carry `aria-label`/`title`. Visual layout
 polish (spacing/alignment) could not be assessed headless — needs a displayed browser.
 
+- [x] **BUG — panel drag/resize completely non-functional** (reported from a real
+  browser). react-draggable's internal `log()` reads `process.env.DRAGGABLE_DEBUG` on
+  every drag/resize start; with no `process` global in the browser it threw
+  `ReferenceError: process is not defined`, aborting the gesture — so no panel could be
+  moved, swapped, or resized in Layout Edit Mode (dev **and** production). react-resizable
+  drives its handle through react-draggable too, so both paths failed from the one cause.
+  Fixed with `define: { 'process.env.DRAGGABLE_DEBUG': 'false' }` in
+  [`vite.config.js`](../../amr-dashboard/vite.config.js). Verified live after a dev-server
+  restart: drag repositions (`main` 0,0→3,11), resize changes size (9×8→8×6), and Reset
+  restores the default. The prior "feature complete" claim had only been checked in the
+  frozen headless preview, which hid the bug — see the corrected caveat in
+  [`../dashboard-ui-guide.md`](../dashboard-ui-guide.md#4-design-decisions--gotchas).
+
 ## Out of scope for this checklist (backend/ROS-side work — see `plan.md`'s "Out-of-band" section)
 
 - New ROS package/node(s) for `/emergency_stop`, `/mission_state_cmd` execution, `/mission_goal` (`amr_msgs/MissionGoal`), and Nav2 bringup or an equivalent navigation mechanism. Track as a separate project, not a dashboard task.
