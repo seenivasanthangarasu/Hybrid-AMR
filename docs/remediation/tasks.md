@@ -172,6 +172,28 @@ Check items off as they land. Each task lists its requirement ID and the primary
 - [x] F4 — reworded `LidarView.jsx`'s "SAFETY ZONE BREACH"/"SAFETY ZONE CLEAR" to "OBJECT IN ZONE"/"ZONE CLEAR" + a "monitor" qualifier and a "display-only — the robot does not stop on this" tooltip, so the badge no longer implies an enforced safety-stop function
 - [x] F5 — resolved by removing `App.jsx`'s forced `setMainView('auto')` on mode change. A pinned view now **survives** a mode change (the audit concern); an unpinned view still follows `mode` reactively via `resolvedView`. This makes behavior match the stated intent ("reflects the robot's mode unless the operator explicitly pinned a preview"). Fully exercisable once `/robot_mode` publishes and flips indoor↔outdoor.
 
+### Browser UX pass (2026-08-10, live app on :5185)
+
+Hands-on inspection of the running app (computed styles / a11y tree; the pane was
+non-displayed so screenshots + grid positioning couldn't be composited). Two real,
+verified issues found and fixed:
+
+- [x] **Low-contrast secondary labels** — `--ink-low` was ~3.2–3.6:1 on panels (below
+  WCAG AA 4.5:1 for the small uppercase labels: panel/preview titles, StatusPanel
+  rows, units). This directly undercut the at-a-glance goal. Lightened dark
+  `--ink-low` 93/108/132 → **130/146/170** (now 5.9–6.1:1, verified live) and darkened
+  light `--ink-low` 100/116/139 → **90/105/128** (now ~4.9–5.3:1), both still dimmer
+  than `--ink-mid`. ([`index.css`](../../amr-dashboard/src/index.css))
+- [x] **Mission Planner inputs had no associated `<label>`** — accessible names came
+  only from `placeholder`, so both lat/long fields announced as "0.000000" to screen
+  readers. Added `htmlFor`/`id` pairs so Goal Name / Latitude / Longitude each label
+  their input (verified in the a11y tree). ([`MissionPlanner.jsx`](../../amr-dashboard/src/components/MissionPlanner.jsx))
+
+Also confirmed healthy during the pass: no sub-24px hit targets, no horizontal
+overflow, global `:focus-visible` ring present, theme toggle flips + persists
+(`amr-theme`), and all icon-only controls carry `aria-label`/`title`. Visual layout
+polish (spacing/alignment) could not be assessed headless — needs a displayed browser.
+
 ## Out of scope for this checklist (backend/ROS-side work — see `plan.md`'s "Out-of-band" section)
 
 - New ROS package/node(s) for `/emergency_stop`, `/mission_state_cmd` execution, `/mission_goal` (`amr_msgs/MissionGoal`), and Nav2 bringup or an equivalent navigation mechanism. Track as a separate project, not a dashboard task.

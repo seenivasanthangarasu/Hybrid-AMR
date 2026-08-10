@@ -94,8 +94,11 @@ export default function MissionPlanner({ connectionStatus }) {
       <PanelHeader title="MISSION PLANNER" />
       <form onSubmit={handleSendGoal} className="space-y-2">
         <div>
-          <label className="data-label mb-1 block">Goal Name</label>
+          <label htmlFor="mp-goal-name" className="data-label mb-1 block">
+            Goal Name
+          </label>
           <input
+            id="mp-goal-name"
             value={goalName}
             onChange={(e) => setGoalName(e.target.value)}
             placeholder="e.g. DOCK_A"
@@ -104,8 +107,11 @@ export default function MissionPlanner({ connectionStatus }) {
         </div>
         <div className="grid grid-cols-2 gap-2">
           <div>
-            <label className="data-label mb-1 block">Latitude</label>
+            <label htmlFor="mp-latitude" className="data-label mb-1 block">
+              Latitude
+            </label>
             <input
+              id="mp-latitude"
               value={latitude}
               onChange={(e) => {
                 setLatitude(e.target.value);
@@ -118,8 +124,11 @@ export default function MissionPlanner({ connectionStatus }) {
             />
           </div>
           <div>
-            <label className="data-label mb-1 block">Longitude</label>
+            <label htmlFor="mp-longitude" className="data-label mb-1 block">
+              Longitude
+            </label>
             <input
+              id="mp-longitude"
               value={longitude}
               onChange={(e) => {
                 setLongitude(e.target.value);

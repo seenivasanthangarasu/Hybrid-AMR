@@ -22,7 +22,11 @@
 
   --ink-high: 238 242 248;
   --ink-mid: 159 176 198;
-  --ink-low: 93 108 132;
+  /* ink-low is the de-emphasized label/secondary tone. Lightened from
+     93/108/132 so small uppercase labels (panel titles, StatusPanel rows)
+     clear WCAG AA (~5.5:1 on panels, was ~3.3:1) — critical for the
+     at-a-glance monitoring goal — while staying dimmer than ink-mid. */
+  --ink-low: 130 146 170;
 
   --shadow: 0 0 0;
   color-scheme: dark;
@@ -47,7 +51,10 @@
   /* Text ramp: dark-on-light */
   --ink-high: 17 24 39;
   --ink-mid: 51 65 85;
-  --ink-low: 100 116 139;
+  /* Darkened from 100/116/139 so light-mode labels clear WCAG AA on the
+     near-white panels (~5:1, was ~4.2:1 and failing on the darker panel end),
+     while staying lighter than ink-mid. Mirrors the dark-mode ink-low bump. */
+  --ink-low: 90 105 128;
 
   --shadow: 30 41 59;
   color-scheme: light;
