@@ -46,7 +46,15 @@ export default function DashboardGrid({ layout, onLayoutChange, editMode, childr
         isResizable={editMode}
         draggableHandle=".panel-drag-handle"
         draggableCancel=".react-resizable-handle"
-        compactType={null}
+        // Rearrangement semantics. The previous `compactType={null}` +
+        // `preventCollision={false}` was the one combination that lets panels
+        // occupy the SAME cells — dropping one onto another stacked them, so a
+        // panel silently vanished underneath its neighbour, and dragging away
+        // left an un-fillable hole. Vertical compaction makes a drop *displace*
+        // the panels it lands on and settle everything upward: no overlap, no
+        // orphan gaps, and the shipped default layout is already fully packed
+        // so it renders identically.
+        compactType="vertical"
         preventCollision={false}
         onLayoutChange={onLayoutChange}
         useCSSTransforms

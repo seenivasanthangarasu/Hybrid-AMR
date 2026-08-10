@@ -78,11 +78,19 @@ App.jsx
 - **`useLayout`** holds the react-grid-layout geometry for all 8 panels (`main`, `status`,
   `mission`, `control`, `gps`, `lidar`, `camera`, `urdf`), persists to `amr-layout-v1`, and
   `reconcile()`s a saved layout against `DEFAULT_LAYOUT` so adding/removing a panel in a future
-  build never strands a stored layout.
+  build never strands a stored layout. `reconcile()` also **`sanitize()`s** each stored entry —
+  non-finite geometry falls back to the shipped value and `x`/`w` are clamped into the 12-column
+  grid — so a corrupt or hand-edited `amr-layout-v1` can never render a panel off-screen or
+  zero-sized. Covered by [`useLayout.test.js`](../amr-dashboard/src/hooks/useLayout.test.js).
 - **`DashboardGrid`** wraps `GridLayout` with `WidthProvider`. `rowHeight` is computed from the
-  live container height (12 rows fill one screen); taller custom layouts scroll. Free placement:
-  `compactType={null}`, `preventCollision={false}`. Dragging is gated by
-  `draggableHandle=".panel-drag-handle"` and `isDraggable={editMode}`; resizing by
+  live container height (12 rows fill one screen); taller custom layouts scroll. Rearrangement is
+  **`compactType="vertical"`, `preventCollision={false}`** — a drop *displaces* the panels it
+  lands on and the grid settles upward. Do **not** revert to `compactType={null}`: that
+  combination lets two panels own the same cells, so dropping one onto another stacked them and a
+  panel silently disappeared underneath its neighbour (and dragging away left an un-fillable
+  hole). The shipped default layout is already fully packed, so it renders identically either way
+  — which is why the regression was invisible until a panel was actually moved. Dragging is gated
+  by `draggableHandle=".panel-drag-handle"` and `isDraggable={editMode}`; resizing by
   `isResizable={editMode}` with `draggableCancel=".react-resizable-handle"`.
 - **`PanelFrame`** is the drag surface. In edit mode it overlays a `.panel-drag-handle` element
   (the react-grid-layout drag target) at **z-1100** — above Leaflet's map controls (z-1000) —

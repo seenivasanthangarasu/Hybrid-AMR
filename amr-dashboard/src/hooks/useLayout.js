@@ -31,14 +31,37 @@ function clone(layout) {
   return layout.map((p) => ({ ...p }));
 }
 
+const COLS = 12;
+
+// Force one stored panel back into a sane cell. A layout that was saved by an
+// older build, hand-edited, or written while the grid was mid-gesture can carry
+// NaN/absent numbers or an off-grid x/w — which react-grid-layout renders as an
+// invisible or unreachable panel. Clamping here means a bad stored value costs
+// the operator a nudged panel, never a missing one. (Overlaps don't need fixing:
+// the grid's vertical compaction resolves those on mount.)
+function sanitize(def, s) {
+  // Only a real finite number counts as a stored value. Coercing instead (`+v`)
+  // would turn null/''/booleans into 0 and silently shrink a panel to its
+  // minimum rather than restoring the shipped size.
+  const num = (v, fallback) => (typeof v === 'number' && Number.isFinite(v) ? Math.floor(v) : fallback);
+  const minW = def.minW ?? 1;
+  const minH = def.minH ?? 1;
+  const w = Math.min(COLS, Math.max(minW, num(s.w, def.w)));
+  const h = Math.max(minH, num(s.h, def.h));
+  const x = Math.min(COLS - w, Math.max(0, num(s.x, def.x)));
+  const y = Math.max(0, num(s.y, def.y));
+  return { ...def, x, y, w, h };
+}
+
 // Keep only known panels and backfill any missing ones from the default, so a
-// stored layout stays valid across builds that add/remove panels.
+// stored layout stays valid across builds that add/remove panels — and clamp
+// whatever survives so a corrupt entry can't strand a panel off-grid.
 function reconcile(saved) {
   if (!Array.isArray(saved)) return clone(DEFAULT_LAYOUT);
   const byId = new Map(saved.filter((p) => p && PANEL_IDS.includes(p.i)).map((p) => [p.i, p]));
   return DEFAULT_LAYOUT.map((def) => {
     const s = byId.get(def.i);
-    return s ? { ...def, x: s.x, y: s.y, w: s.w, h: s.h } : { ...def };
+    return s ? sanitize(def, s) : { ...def };
   });
 }
 

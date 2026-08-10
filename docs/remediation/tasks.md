@@ -207,6 +207,24 @@ polish (spacing/alignment) could not be assessed headless — needs a displayed 
   frozen headless preview, which hid the bug — see the corrected caveat in
   [`../dashboard-ui-guide.md`](../dashboard-ui-guide.md#4-design-decisions--gotchas).
 
+- [x] **BUG — rearranged panels overlapped, vanished, and left holes** (follow-on, reported
+  with a screenshot once dragging worked). `DashboardGrid` used `compactType={null}` +
+  `preventCollision={false}` — the one combination that lets two panels occupy the *same*
+  cells. Dropping a panel onto another stacked them (the covered panel silently disappeared
+  — the missing DEPTH CAMERA in the report) and dragging one away left an un-fillable gap.
+  Switched to **`compactType="vertical"`** so a drop displaces its neighbours and the grid
+  settles upward. The shipped default is already fully packed, so it renders identically —
+  which is exactly why this went unnoticed until panels were actually moved.
+  ([`DashboardGrid.jsx`](../../amr-dashboard/src/components/DashboardGrid.jsx))
+- [x] **Layout persistence hardened** — `useLayout.reconcile()` now `sanitize()`s every stored
+  entry: non-finite `x/y/w/h` fall back to the shipped value (a plain `+v` coercion would have
+  turned `null` into `0` and collapsed a panel to its minimum) and `x`/`w` are clamped into the
+  12-column grid. An already-corrupted `amr-layout-v1` therefore self-heals on reload instead
+  of stranding an operator with an off-grid or invisible panel. Verified live by injecting a
+  broken layout (overlap + off-grid + NaN + orphan gap) and reloading: 8/8 panels recovered,
+  0 overlaps, 0 off-grid. Regression-tested in
+  [`useLayout.test.js`](../../amr-dashboard/src/hooks/useLayout.test.js) (4 tests).
+
 ## Out of scope for this checklist (backend/ROS-side work — see `plan.md`'s "Out-of-band" section)
 
 - New ROS package/node(s) for `/emergency_stop`, `/mission_state_cmd` execution, `/mission_goal` (`amr_msgs/MissionGoal`), and Nav2 bringup or an equivalent navigation mechanism. Track as a separate project, not a dashboard task.
