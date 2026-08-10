@@ -52,6 +52,7 @@ export default function Header({
   editMode,
   onToggleEdit,
   onResetLayout,
+  onOpenErrorReference,
 }) {
   const [now, setNow] = useState(new Date());
 
@@ -130,7 +131,12 @@ export default function Header({
 
         <ThemeToggle />
 
-        <SettingsMenu editMode={editMode} onToggleEdit={onToggleEdit} onReset={onResetLayout} />
+        <SettingsMenu
+          editMode={editMode}
+          onToggleEdit={onToggleEdit}
+          onReset={onResetLayout}
+          onOpenErrorReference={onOpenErrorReference}
+        />
       </div>
     </header>
   );

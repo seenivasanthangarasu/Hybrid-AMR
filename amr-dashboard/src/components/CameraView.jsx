@@ -13,9 +13,17 @@ const RETRY_MS = 3000;
  * the main and compact instances), and it recovers automatically when the
  * stream returns instead of hiding the <img> permanently on first error.
  */
-export default function CameraView({ compact = false }) {
+export default function CameraView({ compact = false, onStreamState }) {
   const [errored, setErrored] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
+
+  // Report health upward so the app can explain a blank camera view when the
+  // operator selects it. The camera does NOT ride on rosbridge, so a healthy
+  // ROSBRIDGE LINKED chip says nothing about this stream — only the <img>
+  // load/error result does.
+  useEffect(() => {
+    onStreamState?.(!errored);
+  }, [errored, onStreamState]);
 
   // While the stream is down, periodically re-request it so the view recovers
   // on its own when the camera comes back — without reloading the page.

@@ -24,6 +24,26 @@ Everything below lives in the **Header** (top bar) or on the panels themselves.
 | **Settings gear** | Header far right | Opens the layout menu (below). |
 | **Edit layout** toggle | Settings menu | Turns the whole dashboard into a **drag-and-drop, resizable grid**. A cyan "LAYOUT EDIT MODE" banner appears with a **DONE** button. |
 | **Reset to default** | Settings menu | Restores the shipped panel arrangement. |
+| **Error reference** | Settings menu → HELP | Opens the catalogue of every fault state the dashboard can report, with the dialog each one raises. |
+
+### Fault explanations (dialogs)
+
+A badge tells the operator *that* something is wrong; a dialog tells them **what, why,
+and what to do**. Dialogs are raised only where guessing would be costly:
+
+- **Selecting an empty view.** Clicking a preview with nothing to draw switches the view
+  *and* opens a dialog naming the specific cause — `OFFLINE` (link down) vs `NO SIGNAL`
+  (link fine, topic silent) vs `STALE` vs `NO CAMERA STREAM` — with the operator steps
+  for that case. Link faults carry a **RECONNECT** button inline.
+- **A command that did not reach the robot.** A failed dispatch raises a dialog (not just
+  the inline feedback line), because a silently-failed emergency stop is the worst case
+  in the app. It names the fallback: use the physical e-stop.
+- **Error reference** (settings → HELP) lists all states grouped by Connection /
+  Telemetry / Commands / System, each with a *VIEW DIALOG* preview, so the vocabulary
+  can be learned before an incident rather than during one.
+
+Every dialog is keyboard-operable: focus moves in on open, Tab is trapped inside,
+**Esc** or the backdrop closes it, and focus returns to whatever opened it.
 
 ### Rearranging panels (Edit layout)
 
@@ -95,6 +115,25 @@ App.jsx
 - **`PanelFrame`** is the drag surface. In edit mode it overlays a `.panel-drag-handle` element
   (the react-grid-layout drag target) at **z-1100** — above Leaflet's map controls (z-1000) —
   so dragging the map panel isn't swallowed by Leaflet. The resize handle is themed at z-1200.
+
+### Error catalog & dialogs
+
+```
+src/errors/catalog.js          12 fault states: code, tone, severity, summary, causes, remedies
+src/components/ui/Dialog.jsx   accessible modal primitive (focus trap, Esc, restore focus, z-3000)
+src/components/ErrorDialog.jsx renders one catalog entry (summary → causes → remedies)
+src/components/ErrorReference.jsx  the catalogue page, grouped by category
+```
+
+`catalog.js` is the **single source of truth** — the inline badges, the dialogs, and the
+reference page all read from it, so they cannot describe the same fault differently.
+`diagnoseView()` encodes the precedence (link state first, then never-seen vs went-quiet)
+and deliberately mirrors `DataFallback`, so a panel's badge and its dialog always agree.
+Note the camera is diagnosed separately: it streams over HTTP from `web_video_server`, not
+rosbridge, so a healthy `ROSBRIDGE LINKED` chip says nothing about it.
+
+Adding a fault state means adding one catalog entry — the reference page and its dialog
+are generated. `catalog.test.js` enforces that every entry carries causes *and* remedies.
 
 ### State / freshness vocabulary (spec REQ-16/17/20/21)
 

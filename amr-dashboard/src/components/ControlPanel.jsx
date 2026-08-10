@@ -2,6 +2,8 @@ import { useState } from 'react';
 import RobotCommandService, { CommandError } from '../services/RobotCommandService.js';
 import CommandFeedback from './CommandFeedback.jsx';
 import PanelHeader from './ui/PanelHeader.jsx';
+import ErrorDialog from './ErrorDialog.jsx';
+import { ERRORS } from '../errors/catalog.js';
 
 const ESTOP_CONFIRM_MS = 3000;
 const DISABLED_REASON = 'Disconnected — commands unavailable';
@@ -41,9 +43,18 @@ function errorDetail(err) {
   return 'unexpected error';
 }
 
+// A command that did NOT reach the robot is the one thing the operator must not
+// miss — the inline feedback line is easy to overlook mid-incident, so a failure
+// is also raised as a dialog naming the cause and the fallback (physical e-stop).
+function errorEntry(err) {
+  if (err instanceof CommandError && err.code === 'DISCONNECTED') return ERRORS.COMMAND_DISCONNECTED;
+  return ERRORS.COMMAND_PUBLISH_FAILED;
+}
+
 export default function ControlPanel({ connectionStatus }) {
   const [status, setStatus] = useState(null);
   const [confirmEstop, setConfirmEstop] = useState(false);
+  const [fault, setFault] = useState(null); // { error, context }
   const disabled = connectionStatus !== 'connected';
 
   function dispatch(key, label) {
@@ -53,6 +64,7 @@ export default function ControlPanel({ connectionStatus }) {
       setStatus({ state: result?.state ?? 'SENT_UNCONFIRMED', label, at: new Date() });
     } catch (err) {
       setStatus({ state: 'FAILED', label, at: new Date(), detail: errorDetail(err) });
+      setFault({ error: errorEntry(err), context: label });
     }
   }
 
@@ -141,6 +153,13 @@ export default function ControlPanel({ connectionStatus }) {
         </div>
       </div>
       <CommandFeedback status={status} />
+
+      <ErrorDialog
+        error={fault?.error}
+        open={!!fault}
+        onClose={() => setFault(null)}
+        context={fault?.context}
+      />
     </div>
   );
 }

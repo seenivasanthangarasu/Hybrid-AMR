@@ -13,9 +13,15 @@ import ControlPanel from './components/ControlPanel.jsx';
 import ErrorBoundary from './components/ErrorBoundary.jsx';
 import DashboardGrid from './components/DashboardGrid.jsx';
 import PanelFrame from './components/ui/PanelFrame.jsx';
+import ErrorDialog from './components/ErrorDialog.jsx';
+import ErrorReference from './components/ErrorReference.jsx';
 import useRosConnection from './hooks/useRosConnection.js';
 import useRobotMode from './hooks/useRobotMode.js';
 import useLayout from './hooks/useLayout.js';
+import useGps from './hooks/useGps.js';
+import useLaserScan from './hooks/useLaserScan.js';
+import useOccupancyGrid from './hooks/useOccupancyGrid.js';
+import { diagnoseView } from './errors/catalog.js';
 
 // Main-view selection: 'auto' follows robot mode (GPS for OUTDOOR, SLAM for
 // INDOOR per spec); operator can override by clicking a preview panel.
@@ -27,6 +33,25 @@ export default function App() {
   const [editMode, setEditMode] = useState(false);
   const { layout, setLayout, reset } = useLayout();
 
+  const [fault, setFault] = useState(null); // { error, context } — explains an empty view
+  const [showErrorRef, setShowErrorRef] = useState(false);
+  const [cameraOnline, setCameraOnline] = useState(true);
+
+  // These subscriptions are shared with the panels themselves (RosConnection
+  // caches one ROSLIB.Topic per name), so reading them here to decide whether a
+  // view has anything to show costs no extra traffic.
+  const gps = useGps();
+  const scan = useLaserScan();
+  const map = useOccupancyGrid();
+
+  // Is the view the operator just picked actually able to draw anything?
+  const viewHealth = {
+    gps: { live: gps.hasData, seen: gps.hasEverData, label: 'GPS · /fix' },
+    lidar: { live: scan.hasData, seen: scan.hasEverData, label: 'LIDAR · /scan' },
+    slam: { live: map.hasData, seen: map.hasEverData, label: 'SLAM · /map' },
+    camera: { live: cameraOnline, seen: cameraOnline, label: 'CAMERA · MJPEG stream', isCamera: true },
+  };
+
   // A manual pin now SURVIVES a robot-mode change (spec F5). When the view is
   // on 'auto' it already tracks `mode` reactively via `resolvedView` below, so
   // no reset is needed; when the operator has pinned a specific view, a mode
@@ -37,7 +62,28 @@ export default function App() {
 
   // While editing the layout, a preview click should not switch the main view
   // (the drag scrim also shields it) — panels are being arranged, not driven.
-  const selectView = (v) => !editMode && setMainView(v);
+  //
+  // Selecting a view that has nothing to draw used to just swap in an empty
+  // panel, leaving the operator to guess whether the sensor was dead, the link
+  // was down, or they had mis-clicked. The view still switches (so the inline
+  // fallback is visible), but a dialog now names the specific cause and the
+  // steps to fix it.
+  function selectView(v) {
+    if (editMode) return;
+    setMainView(v);
+
+    const health = viewHealth[v];
+    if (health && !health.live) {
+      setFault({
+        error: diagnoseView({
+          connectionStatus,
+          hasEverData: health.seen,
+          isCamera: health.isCamera,
+        }),
+        context: health.label,
+      });
+    }
+  }
 
   function renderMain() {
     switch (resolvedView) {
@@ -48,7 +94,7 @@ export default function App() {
       case 'lidar':
         return <LidarView />;
       case 'camera':
-        return <CameraView />;
+        return <CameraView onStreamState={setCameraOnline} />;
       default:
         return <GpsMapView />;
     }
@@ -64,6 +110,7 @@ export default function App() {
         editMode={editMode}
         onToggleEdit={() => setEditMode((v) => !v)}
         onResetLayout={reset}
+        onOpenErrorReference={() => setShowErrorRef(true)}
       />
 
       <AnimatePresence>
@@ -178,7 +225,7 @@ export default function App() {
                 onClick={() => selectView('camera')}
               >
                 <ErrorBoundary label="CAMERA PREVIEW">
-                  <CameraView compact />
+                  <CameraView compact onStreamState={setCameraOnline} />
                 </ErrorBoundary>
               </PreviewPanel>
             </PanelFrame>
@@ -195,6 +242,31 @@ export default function App() {
           </div>
         </DashboardGrid>
       </div>
+
+      {/* Explains an empty view the operator just selected. Link faults get a
+          RECONNECT action inline so the fix is one click from the explanation. */}
+      <ErrorDialog
+        error={fault?.error}
+        open={!!fault}
+        onClose={() => setFault(null)}
+        context={fault?.context}
+        actions={
+          fault?.error?.category === 'LINK' && connectionStatus !== 'connected' ? (
+            <button
+              type="button"
+              onClick={() => {
+                reconnect();
+                setFault(null);
+              }}
+              className="rounded bg-signal-cyan/15 px-3 py-1.5 font-display text-[11px] font-bold tracking-wider text-signal-cyan ring-1 ring-signal-cyan/40 transition-colors hover:bg-signal-cyan/25"
+            >
+              RECONNECT
+            </button>
+          ) : null
+        }
+      />
+
+      <ErrorReference open={showErrorRef} onClose={() => setShowErrorRef(false)} />
     </div>
   );
 }

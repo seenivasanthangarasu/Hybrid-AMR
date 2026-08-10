@@ -216,6 +216,31 @@ polish (spacing/alignment) could not be assessed headless — needs a displayed 
   settles upward. The shipped default is already fully packed, so it renders identically —
   which is exactly why this went unnoticed until panels were actually moved.
   ([`DashboardGrid.jsx`](../../amr-dashboard/src/components/DashboardGrid.jsx))
+- [x] **Criss-crossed text in Layout Edit Mode** — the drag overlay's scrim was only 55%
+  opaque, so each panel's own content ("NO SIGNAL", input labels, button rows) showed
+  through and collided with the overlay's own label + hint, rendering edit mode as a pile
+  of overlapping words. Scrim raised to 95% + a 3px backdrop blur, label/hint truncate
+  within the panel. Verified live: `rgba(14,19,28,0.95)`, `blur(3px)`, all 8 handles clean.
+  ([`PanelFrame.jsx`](../../amr-dashboard/src/components/ui/PanelFrame.jsx))
+- [x] **Empty views now explain themselves (dialogs)** — selecting a preview with nothing to
+  draw used to silently swap in a blank panel, leaving the operator to guess between "sensor
+  dead", "link down", and "mis-click". Added an **error catalog** (12 states) plus an
+  accessible `Dialog` primitive; selecting an unavailable view now switches *and* raises a
+  dialog naming the specific cause and the fix, with **RECONNECT** inline for link faults.
+  A **failed command** also escalates to a dialog (an unnoticed failed e-stop being the worst
+  case), naming the physical-e-stop fallback. New: [`errors/catalog.js`](../../amr-dashboard/src/errors/catalog.js),
+  [`ui/Dialog.jsx`](../../amr-dashboard/src/components/ui/Dialog.jsx),
+  [`ErrorDialog.jsx`](../../amr-dashboard/src/components/ErrorDialog.jsx).
+- [x] **Error reference page** — settings gear → HELP → *Error reference* opens the catalogue
+  of all 12 states grouped by Connection / Telemetry / Commands / System, each with a
+  *VIEW DIALOG* preview so the fault vocabulary can be learned before an incident. Generated
+  from the catalog, so it cannot drift from what the UI actually raises.
+  ([`ErrorReference.jsx`](../../amr-dashboard/src/components/ErrorReference.jsx))
+  Verified live: dialog opens on an unavailable view and correctly reports **NO PUBLISHER ON
+  TOPIC** (not OFFLINE) while the link is healthy, with causes + remedies + `/scan`; modal,
+  focus trapped, Esc closes; reference lists 4 categories / 12 states and nested previews work.
+  Covered by 14 new tests ([`catalog.test.js`](../../amr-dashboard/src/errors/catalog.test.js),
+  [`Dialog.test.jsx`](../../amr-dashboard/src/components/ui/Dialog.test.jsx)) — suite now 27/27.
 - [x] **Layout persistence hardened** — `useLayout.reconcile()` now `sanitize()`s every stored
   entry: non-finite `x/y/w/h` fall back to the shipped value (a plain `+v` coercion would have
   turned `null` into `0` and collapsed a panel to its minimum) and `x`/`w` are clamped into the

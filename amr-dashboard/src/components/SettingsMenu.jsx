@@ -6,7 +6,7 @@ import { AnimatePresence, motion } from 'framer-motion';
  * dashboard customization — toggle layout-edit mode (drag/resize panels) and
  * reset the layout to the shipped default. Closes on outside-click or Escape.
  */
-export default function SettingsMenu({ editMode, onToggleEdit, onReset }) {
+export default function SettingsMenu({ editMode, onToggleEdit, onReset, onOpenErrorReference }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef(null);
 
@@ -110,6 +110,34 @@ export default function SettingsMenu({ editMode, onToggleEdit, onReset }) {
                 <path d="M3 3v5h5" />
               </svg>
               Reset to default
+            </button>
+
+            <p className="mt-2 border-t border-deck-line px-1.5 pb-1.5 pt-2 font-display text-[10px] font-bold tracking-[0.14em] text-ink-mid">
+              HELP
+            </p>
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setOpen(false);
+                onOpenErrorReference?.();
+              }}
+              className="flex w-full items-center gap-2 rounded px-1.5 py-2 text-left transition-colors hover:bg-deck-800"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                className="h-3.5 w-3.5 shrink-0 text-ink-mid"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+              >
+                <circle cx="12" cy="12" r="9" />
+                <path d="M12 16v-4M12 8h.01" />
+              </svg>
+              <span className="flex flex-col">
+                <span className="font-mono text-[11px] font-semibold text-ink-high">Error reference</span>
+                <span className="font-mono text-[9px] text-ink-low">what each fault state means</span>
+              </span>
             </button>
           </motion.div>
         )}
