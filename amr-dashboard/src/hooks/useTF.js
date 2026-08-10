@@ -50,5 +50,13 @@ export default function useTF({ frameId = 'base_link', fixedFrame = 'map', stale
     return () => clearInterval(interval);
   }, [lastReceivedAt, staleMs]);
 
-  return { transform, hasData: !!transform && !stale, stale };
+  // Freshness signals mirrored from useOdometry/useGps (spec REQ-21): `stale`
+  // is live-only, `hasEverData` distinguishes "went quiet" from "never seen".
+  return {
+    transform,
+    hasData: !!transform && !stale,
+    stale,
+    lastReceivedAt,
+    hasEverData: !!transform,
+  };
 }

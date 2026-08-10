@@ -27,7 +27,12 @@ class RosConnectionService {
     this._setStatus('connecting');
 
     this.ros.on('connection', () => this._setStatus('connected'));
-    this.ros.on('error', () => this._setStatus('error'));
+    // Log the actual error payload, not just the status string (spec REQ-15) —
+    // without it, a failed link gives the operator no diagnostic detail.
+    this.ros.on('error', (err) => {
+      console.error('[RosConnectionService] ROSBridge connection error:', err);
+      this._setStatus('error');
+    });
     this.ros.on('close', () => this._setStatus('closed'));
 
     return this.ros;
@@ -90,15 +95,19 @@ class RosConnectionService {
   }
 
   /**
-   * Query rosbridge for currently advertised topics, used to
-   * auto-detect which camera topic is actually publishing.
+   * Query rosbridge for the currently advertised topics.
+   *
+   * NOTE: the original "auto-detect which camera topic is publishing" use case
+   * is dead — CameraView now streams a hardcoded VITE_WEB_VIDEO_URL (spec
+   * REQ-08) and the useCameraFeed hook that used this was removed. Retained
+   * only as a generic rosbridge-introspection helper for future debugging.
    */
   getTopicList() {
     return new Promise((resolve, reject) => {
       if (!this.ros) this.connect();
       this.ros.getTopics(
         (result) => resolve(result.topics || []),
-        (err) => reject(err)
+        (err) => reject(err),
       );
     });
   }

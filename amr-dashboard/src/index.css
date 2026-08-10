@@ -2,15 +2,90 @@
 @tailwind components;
 @tailwind utilities;
 
-html, body, #root {
+/* ── Theme tokens ────────────────────────────────────────────────────────
+   Values are space-separated RGB channels so Tailwind `<alpha-value>`
+   opacity modifiers work (see tailwind.config.js). :root is the dark
+   default; [data-theme="light"] overrides for light mode. */
+:root {
+  --deck-950: 10 14 20;
+  --deck-900: 14 19 28;
+  --deck-800: 20 27 39;
+  --deck-700: 27 36 51;
+  --deck-600: 38 50 69;
+  --deck-line: 36 48 67;
+
+  --signal-amber: 245 166 35;
+  --signal-cyan: 61 220 255;
+  --signal-green: 55 226 154;
+  --signal-red: 255 77 94;
+  --signal-violet: 140 123 255;
+
+  --ink-high: 238 242 248;
+  --ink-mid: 159 176 198;
+  --ink-low: 93 108 132;
+
+  --shadow: 0 0 0;
+  color-scheme: dark;
+}
+
+:root[data-theme='light'] {
+  /* Surface ramp inverts: 950 = app backdrop (light grey), 800 = panels (near-white) */
+  --deck-950: 226 231 238;
+  --deck-900: 237 241 246;
+  --deck-800: 249 250 252;
+  --deck-700: 226 232 240;
+  --deck-600: 203 213 225;
+  --deck-line: 203 213 225;
+
+  /* Accents darkened enough to stay legible on light surfaces; red kept strong for e-stop */
+  --signal-amber: 180 111 0;
+  --signal-cyan: 8 132 168;
+  --signal-green: 4 132 94;
+  --signal-red: 220 38 38;
+  --signal-violet: 109 70 226;
+
+  /* Text ramp: dark-on-light */
+  --ink-high: 17 24 39;
+  --ink-mid: 51 65 85;
+  --ink-low: 100 116 139;
+
+  --shadow: 30 41 59;
+  color-scheme: light;
+}
+
+html,
+body,
+#root {
   height: 100%;
   margin: 0;
-  background: #0a0e14;
+  background: rgb(var(--deck-950));
 }
 
 body {
   font-family: 'Inter', system-ui, sans-serif;
-  color: #eef2f8;
+  color: rgb(var(--ink-high));
+}
+
+/* Seamless theme switch: transition themable surface/text/border colors.
+   Disabled for users who prefer reduced motion. */
+@media (prefers-reduced-motion: no-preference) {
+  body,
+  .panel,
+  header,
+  input,
+  button {
+    transition:
+      background-color 0.25s ease,
+      border-color 0.25s ease,
+      color 0.25s ease;
+  }
+}
+
+/* Theme-aware keyboard focus ring — visible on every interactive element */
+:focus-visible {
+  outline: 2px solid rgb(var(--signal-cyan));
+  outline-offset: 2px;
+  border-radius: 2px;
 }
 
 ::-webkit-scrollbar {
@@ -18,16 +93,16 @@ body {
   height: 8px;
 }
 ::-webkit-scrollbar-track {
-  background: #0e131c;
+  background: rgb(var(--deck-900));
 }
 ::-webkit-scrollbar-thumb {
-  background: #243043;
+  background: rgb(var(--deck-line));
   border-radius: 4px;
 }
 
 .panel {
-  background: linear-gradient(180deg, #141b27 0%, #0e131c 100%);
-  border: 1px solid #243043;
+  background: linear-gradient(180deg, rgb(var(--deck-800)) 0%, rgb(var(--deck-900)) 100%);
+  border: 1px solid rgb(var(--deck-line));
 }
 
 .data-label {
@@ -35,7 +110,7 @@ body {
   letter-spacing: 0.08em;
   text-transform: uppercase;
   font-size: 0.65rem;
-  color: #5d6c84;
+  color: rgb(var(--ink-low));
 }
 
 .data-value {
@@ -44,11 +119,49 @@ body {
 }
 
 .no-data {
-  color: #5d6c84;
+  color: rgb(var(--ink-low));
   font-family: 'IBM Plex Mono', monospace;
   letter-spacing: 0.05em;
 }
 
 .leaflet-container {
-  background: #0e131c;
+  background: rgb(var(--deck-900));
+}
+
+/* Seamless main-view switch — fade the new view in (spec REQ-16).
+   Decorative, so disabled under reduced-motion. */
+@media (prefers-reduced-motion: no-preference) {
+  .view-fade {
+    animation: view-fade 0.28s ease;
+  }
+}
+@keyframes view-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* ── react-grid-layout theming (draggable/resizable dashboard) ─────────────
+   Recolour the drop placeholder and resize handle to the dashboard's signal
+   palette so layout-edit mode reads as part of the command-center identity
+   rather than the library's default red/grey. */
+.react-grid-item.react-grid-placeholder {
+  background: rgb(var(--signal-cyan) / 0.16);
+  border: 1px dashed rgb(var(--signal-cyan) / 0.65);
+  border-radius: 0.375rem;
+  opacity: 1;
+  transition-duration: 120ms;
+}
+.react-grid-item > .react-resizable-handle {
+  z-index: 1200; /* above the edit scrim (z-1100) so resize stays grabbable */
+  background-image: none;
+}
+.react-grid-item > .react-resizable-handle::after {
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid rgb(var(--signal-cyan) / 0.85);
+  border-bottom: 2px solid rgb(var(--signal-cyan) / 0.85);
 }

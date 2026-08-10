@@ -1,0 +1,304 @@
+<mxfile host="Electron" agent="Claude Code">
+  <diagram name="Hybrid AMR Architecture" id="hybrid-amr-arch">
+    <mxGraphModel dx="8970" dy="5905" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1900" pageHeight="1700" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="title" parent="1" style="text;html=1;align=center;verticalAlign=middle;fontSize=20;fontStyle=1;fontColor=#1a1a1a;" value="Hybrid AMR — Full System Architecture (ROS 2 Jazzy Jalisco)" vertex="1">
+          <mxGeometry height="34" width="1780" x="60" y="-510" as="geometry" />
+        </mxCell>
+        <mxCell id="lbl1" parent="1" style="text;html=1;align=left;verticalAlign=middle;fontSize=13;fontStyle=1;fontColor=#666666;" value="1 · HARDWARE / SENSORS" vertex="1">
+          <mxGeometry height="18" width="400" x="40" y="-380" as="geometry" />
+        </mxCell>
+        <mxCell id="lbl2" parent="1" style="text;html=1;align=left;verticalAlign=middle;fontSize=13;fontStyle=1;fontColor=#666666;" value="2 · ROS 2 DRIVER NODES" vertex="1">
+          <mxGeometry height="18" width="400" x="40" y="-110" as="geometry" />
+        </mxCell>
+        <mxCell id="lblSim" parent="1" style="text;html=1;align=left;verticalAlign=middle;fontSize=12;fontStyle=2;fontColor=#666666;" value="SIMULATION (alternative path, not primary)" vertex="1">
+          <mxGeometry height="18" width="320" x="1800" y="-140" as="geometry" />
+        </mxCell>
+        <mxCell id="lbl3" parent="1" style="text;html=1;align=left;verticalAlign=middle;fontSize=13;fontStyle=1;fontColor=#666666;" value="3 · ROBOT DESCRIPTION / TF" vertex="1">
+          <mxGeometry height="18" width="400" x="600" y="270" as="geometry" />
+        </mxCell>
+        <mxCell id="lbl4" parent="1" style="text;html=1;align=left;verticalAlign=middle;fontSize=13;fontStyle=1;fontColor=#666666;" value="4 · LOCALIZATION / SLAM" vertex="1">
+          <mxGeometry height="18" width="400" x="-620" y="440" as="geometry" />
+        </mxCell>
+        <mxCell id="lbl5" parent="1" style="text;html=1;align=left;verticalAlign=middle;fontSize=13;fontStyle=1;fontColor=#666666;" value="5 · SUPERVISOR / BRINGUP (3 alternative entry points)" vertex="1">
+          <mxGeometry height="18" width="600" x="990" y="600" as="geometry" />
+        </mxCell>
+        <mxCell id="lbl6" parent="1" style="text;html=1;align=left;verticalAlign=middle;fontSize=13;fontStyle=1;fontColor=#666666;" value="6 · NATIVE VISUALIZATION" vertex="1">
+          <mxGeometry height="18" width="400" x="400" y="870" as="geometry" />
+        </mxCell>
+        <mxCell id="lbl7" parent="1" style="text;html=1;align=left;verticalAlign=middle;fontSize=13;fontStyle=1;fontColor=#666666;" value="7 · WEB BRIDGE LAYER" vertex="1">
+          <mxGeometry height="18" width="400" x="-720" y="1050" as="geometry" />
+        </mxCell>
+        <mxCell id="hw1" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;arcSize=8;fillColor=#F5F5F5;strokeColor=#666666;" value="ESP32 Microcontroller&#xa;Motor driver + wheel encoders" vertex="1">
+          <mxGeometry height="90" width="260" x="40" y="-362" as="geometry" />
+        </mxCell>
+        <mxCell id="hw2" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;arcSize=8;fillColor=#F5F5F5;strokeColor=#666666;" value="YDLidar&#xa;2D Laser Scanner" vertex="1">
+          <mxGeometry height="90" width="260" x="340" y="-362" as="geometry" />
+        </mxCell>
+        <mxCell id="hw3" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;arcSize=8;fillColor=#F5F5F5;strokeColor=#666666;" value="u-blox GPS Receiver" vertex="1">
+          <mxGeometry height="90" width="260" x="640" y="-362" as="geometry" />
+        </mxCell>
+        <mxCell id="hw4" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;arcSize=8;fillColor=#F5F5F5;strokeColor=#999999;dashed=1;" value="Depth Camera (assumed)&#xa;RealSense-style, referenced only&#xa;in URDF — no driver package&#xa;found in this workspace" vertex="1">
+          <mxGeometry height="90" width="260" x="940" y="-362" as="geometry" />
+        </mxCell>
+        <mxCell id="d1" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;arcSize=8;fillColor=#DAE8FC;strokeColor=#6C8EBF;" value="esp32_odom / odom_node.py&#xa;(rclpy, Python 3.12)&#xa;serial I/O via pyserial" vertex="1">
+          <mxGeometry height="90" width="260" x="30" y="-90" as="geometry" />
+        </mxCell>
+        <mxCell id="d2" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;arcSize=8;fillColor=#DAE8FC;strokeColor=#6C8EBF;" value="ydlidar_ros2_driver_node&#xa;(rclcpp, C++, LifecycleNode)" vertex="1">
+          <mxGeometry height="90" width="260" x="340" y="-90" as="geometry" />
+        </mxCell>
+        <mxCell id="d3" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;arcSize=8;fillColor=#DAE8FC;strokeColor=#6C8EBF;" value="ublox_gps_node&#xa;(ublox_gps package — external,&#xa;not vendored in this workspace)" vertex="1">
+          <mxGeometry height="90" width="260" x="640" y="-92" as="geometry" />
+        </mxCell>
+        <mxCell id="d4" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;arcSize=8;fillColor=#DAE8FC;strokeColor=#999999;dashed=1;" value="Camera driver (assumed)&#xa;would publish&#xa;/camera/camera/color/image_raw&#xa;— not present in this workspace" vertex="1">
+          <mxGeometry height="90" width="260" x="940" y="-92" as="geometry" />
+        </mxCell>
+        <mxCell id="sdk1" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;arcSize=8;fillColor=#FFF2CC;strokeColor=#D6B656;" value="YDLidar-SDK&#xa;core/CYdLidar (C++ library)&#xa;vendored git submodule" vertex="1">
+          <mxGeometry height="55" width="260" x="-310" y="120" as="geometry" />
+        </mxCell>
+        <mxCell id="sim1" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;arcSize=8;fillColor=#CCE5FF;strokeColor=#3399FF;" value="Gazebo (gz sim)&#xa;via gazebo.launch.py, empty.sdf" vertex="1">
+          <mxGeometry height="70" width="280" x="1800" y="-122" as="geometry" />
+        </mxCell>
+        <mxCell id="sim2" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;arcSize=8;fillColor=#CCE5FF;strokeColor=#3399FF;" value="ros_gz_bridge&#xa;parameter_bridge&#xa;(/clock, GZ_TO_ROS)" vertex="1">
+          <mxGeometry height="70" width="280" x="1800" y="-12" as="geometry" />
+        </mxCell>
+        <mxCell id="sim3" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;arcSize=8;fillColor=#CCE5FF;strokeColor=#3399FF;" value="ros_gz_sim create&#xa;spawns &#39;gogo&#39; entity at&#xa;(0, 0, 0.32)" vertex="1">
+          <mxGeometry height="70" width="280" x="1800" y="78" as="geometry" />
+        </mxCell>
+        <mxCell id="desc1" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;arcSize=8;fillColor=#D5E8D4;strokeColor=#82B366;" value="gogo_description&#xa;gogo.xacro (URDF + xacro)" vertex="1">
+          <mxGeometry height="90" width="260" x="600" y="288" as="geometry" />
+        </mxCell>
+        <mxCell id="desc2" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;arcSize=8;fillColor=#D5E8D4;strokeColor=#82B366;" value="robot_state_publisher" vertex="1">
+          <mxGeometry height="90" width="260" x="900" y="288" as="geometry" />
+        </mxCell>
+        <mxCell id="desc3" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;arcSize=8;fillColor=#D5E8D4;strokeColor=#82B366;" value="joint_state_publisher /&#xa;joint_state_publisher_gui" vertex="1">
+          <mxGeometry height="90" width="260" x="1200" y="288" as="geometry" />
+        </mxCell>
+        <mxCell id="desc4" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;arcSize=8;fillColor=#D5E8D4;strokeColor=#82B366;" value="static_transform_publisher&#xa;base_link → laser_frame&#xa;(indoor_amr only, z=0.02)" vertex="1">
+          <mxGeometry height="90" width="260" x="1500" y="288" as="geometry" />
+        </mxCell>
+        <mxCell id="gap3" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=10;arcSize=8;fillColor=#FFE6E6;strokeColor=#FF0000;dashed=1;fontColor=#CC0000;align=left;spacingLeft=4;" value="⚠ GAP: conflicting lidar frames.&#xa;static TF: laser_frame @ z=0.02&#xa;URDF: lidar_link_1 @ (0.034,0,0.1771)&#xa;Wheel joints type=&#39;fixed&#39; yet&#xa;/joint_states publishes positions&#xa;— wheels never visually animate" vertex="1">
+          <mxGeometry height="120" width="260" x="1800" y="288" as="geometry" />
+        </mxCell>
+        <mxCell id="loc1" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;arcSize=8;fillColor=#E1D5E7;strokeColor=#9673A6;" value="slam_toolbox&#xa;online_async (mapping)  /  localization (against saved map)&#xa;Ceres Solver backend — SPARSE_NORMAL_CHOLESKY / SCHUR_JACOBI" vertex="1">
+          <mxGeometry height="70" width="560" x="-630" y="470" as="geometry" />
+        </mxCell>
+        <mxCell id="sup1" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;arcSize=8;fillColor=#F8CECC;strokeColor=#B85450;" value="hybrid_manager&#xa;(hybrid_navigation package)&#xa;GPS ↔ SLAM state-machine supervisor&#xa;spawns nodes via subprocess.Popen(&#39;ros2 ...&#39;)" vertex="1">
+          <mxGeometry height="105" width="260" x="990" y="618" as="geometry" />
+        </mxCell>
+        <mxCell id="sup2" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;arcSize=8;fillColor=#F8CECC;strokeColor=#B85450;" value="indoor_amr_launch.py&#xa;(indoor_amr package)&#xa;MAPPING bringup&#xa;(staggered TimerAction sequence)" vertex="1">
+          <mxGeometry height="105" width="260" x="1290" y="618" as="geometry" />
+        </mxCell>
+        <mxCell id="sup3" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;arcSize=8;fillColor=#F8CECC;strokeColor=#B85450;" value="navigation.launch.py&#xa;(rock_bringup package)&#xa;LOCALIZATION bringup&#xa;(runs against a pre-built saved map)" vertex="1">
+          <mxGeometry height="105" width="260" x="1590" y="618" as="geometry" />
+        </mxCell>
+        <mxCell id="gap1" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=10;arcSize=8;fillColor=#FFE6E6;strokeColor=#FF0000;dashed=1;fontColor=#CC0000;align=left;spacingLeft=4;" value="⚠ GAP: hybrid_manager never publishes /robot_mode — dashboard&#39;s INDOOR/OUTDOOR view switch always falls back to OUTDOOR" vertex="1">
+          <mxGeometry height="105" width="260" x="1890" y="618" as="geometry" />
+        </mxCell>
+        <mxCell id="viz1" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;arcSize=8;fillColor=#FFE6CC;strokeColor=#D79B00;" value="RViz2" vertex="1">
+          <mxGeometry height="80" width="260" x="400" y="888" as="geometry" />
+        </mxCell>
+        <mxCell id="viz2" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;arcSize=8;fillColor=#FFE6CC;strokeColor=#D79B00;dashed=1;" value="mapviz (vendored submodule)&#xa;+ mapviz_plugins, tile_map, multires_image, mapviz_interfaces — Qt5&#xa;NOT wired into any launch file in this workspace" vertex="1">
+          <mxGeometry height="80" width="560" x="700" y="888" as="geometry" />
+        </mxCell>
+        <mxCell id="br1" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;arcSize=8;fillColor=#D4E1F5;strokeColor=#37A76F;" value="rosbridge_server&#xa;WebSocket :9090&#xa;(JSON-over-WS ROS graph bridge)" vertex="1">
+          <mxGeometry height="80" width="320" x="-720" y="1090" as="geometry" />
+        </mxCell>
+        <mxCell id="br2" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;arcSize=8;fillColor=#D4E1F5;strokeColor=#37A76F;" value="web_video_server&#xa;MJPEG over HTTP :8080" vertex="1">
+          <mxGeometry height="80" width="320" x="-360" y="1090" as="geometry" />
+        </mxCell>
+        <mxCell id="dash0" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fontSize=13;fontStyle=1;fillColor=#FFF9E6;strokeColor=#D6B656;dashed=1;verticalAlign=top;align=left;spacingLeft=10;spacingTop=6;fontColor=#8a6d00;" value="8 · OPERATOR DASHBOARD — amr-dashboard  (React 18.3 + Vite 5.3 + TailwindCSS 3.4), served on :5173" vertex="1">
+          <mxGeometry height="380" width="1780" x="-10" y="1360" as="geometry" />
+        </mxCell>
+        <mxCell id="dash1" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;arcSize=8;fillColor=#FFFFFF;strokeColor=#D6B656;" value="RosConnectionService.js&#xa;roslibjs singleton — topic cache,&#xa;getTopic / getService / getActionClient" vertex="1">
+          <mxGeometry height="65" width="340" x="20" y="1410" as="geometry" />
+        </mxCell>
+        <mxCell id="dash2" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;arcSize=8;fillColor=#FFFFFF;strokeColor=#D6B656;" value="RobotCommandService.js&#xa;publishes operator commands&#xa;(e-stop, mission goal, cmd_vel zero)" vertex="1">
+          <mxGeometry height="65" width="340" x="20" y="1485" as="geometry" />
+        </mxCell>
+        <mxCell id="gap2" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=10;arcSize=8;fillColor=#FFE6E6;strokeColor=#FF0000;dashed=1;fontColor=#CC0000;align=left;spacingLeft=4;" value="⚠ GAP: /mission_state_cmd, /emergency_stop,&#xa;/mission_goal (amr_msgs — package does not exist),&#xa;/navigate_to_pose (nav2_msgs) are published but have&#xa;NO ROS-side subscriber. Nav2 is not deployed in this workspace." vertex="1">
+          <mxGeometry height="150" width="340" x="20" y="1560" as="geometry" />
+        </mxCell>
+        <mxCell id="dash3" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;arcSize=8;fillColor=#FFFFFF;strokeColor=#D6B656;align=left;spacingLeft=8;verticalAlign=top;spacingTop=8;" value="React Hooks&#xa;• useRosConnection · useRosTopic (base primitive)&#xa;• useOdometry ← /odom&#xa;• useGps ← /fix&#xa;• useLaserScan ← /scan&#xa;• useOccupancyGrid ← /map&#xa;• useTF ← /tf, /tf_static&#xa;• useRobotMode ← /robot_mode (defaults OUTDOOR)&#xa;• useCameraFeed (auto-detect topic)&#xa;• useUrdfViewer ← /robot_description" vertex="1">
+          <mxGeometry height="300" width="430" x="380" y="1410" as="geometry" />
+        </mxCell>
+        <mxCell id="dash4" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;arcSize=8;fillColor=#FFFFFF;strokeColor=#D6B656;align=left;spacingLeft=8;verticalAlign=top;spacingTop=8;" value="Views / Components&#xa;• GpsMapView — Leaflet + react-leaflet + OSM tiles&#xa;• SlamView — Canvas2D render of OccupancyGrid&#xa;• LidarView — Canvas2D polar plot + safety zone&#xa;• CameraView — plain &lt;img&gt; MJPEG (bypasses useCameraFeed)&#xa;• UrdfWidget — ros3d.js + three.js (UMD, window.THREE)&#xa;• MissionPlanner · ControlPanel · StatusPanel&#xa;• Header · PreviewPanel · NoDataBadge · GpsPreviewMap" vertex="1">
+          <mxGeometry height="300" width="460" x="830" y="1410" as="geometry" />
+        </mxCell>
+        <mxCell id="dash5" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;arcSize=8;fillColor=#FFFFFF;strokeColor=#D6B656;align=left;spacingLeft=8;verticalAlign=top;spacingTop=8;" value="App.jsx + MissionProvider (React Context)&#xa;&#xa;mainView = &#39;auto&#39; by default:&#xa;  mode === &#39;INDOOR&#39; → SlamView&#xa;  else → GpsMapView&#xa;(any preview click pins the view;&#xa; a mode change resets pin to auto)&#xa;&#xa;TailwindCSS &#39;deck&#39; dark theme&#xa;(amber / cyan / green / red / violet signal colors)&#xa;JetBrains Mono / IBM Plex Mono / Inter fonts" vertex="1">
+          <mxGeometry height="300" width="440" x="1310" y="1410" as="geometry" />
+        </mxCell>
+        <mxCell id="legend" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fontSize=11;fillColor=#F5F5F5;strokeColor=#666666;dashed=1;align=left;verticalAlign=top;spacingLeft=10;spacingTop=8;fontColor=#333333;" value="EXTERNAL LIBRARIES, FRAMEWORKS &amp; TOOLCHAIN&#xa;&#xa;Core: ROS 2 Jazzy Jalisco (Ubuntu 24.04) · colcon · ament_python / ament_cmake · rclpy · rclcpp · tf2_ros · sensor_msgs · nav_msgs · geometry_msgs · std_msgs · launch / launch_ros · xacro · robot_state_publisher · joint_state_publisher(+gui) · slam_toolbox (Ceres Solver) · YDLidar-SDK (C++) · ublox_gps · rosbridge_server · web_video_server · pyserial&#xa;&#xa;Simulation: Gazebo (gz sim) · ros_gz_sim · ros_gz_bridge          Visualization: RViz2 · mapviz (Qt5, vendored, unused)&#xa;&#xa;Dashboard (amr-dashboard): React 18.3 · Vite 5.3 · TailwindCSS 3.4 + PostCSS + Autoprefixer · roslibjs 1.4.1 · Leaflet 1.9.4 + react-leaflet 4.2.1 (OpenStreetMap) · ros3d 1.1.0 + three.js 0.160 · react-grid-layout 1.4.4 (declared dependency, never imported)" vertex="1">
+          <mxGeometry height="180" width="1780" x="-10" y="1770" as="geometry" />
+        </mxCell>
+        <mxCell id="e1" edge="1" parent="1" source="hw1" style="endArrow=block;startArrow=block;html=1;strokeColor=#B85450;strokeWidth=2;fontSize=9;fontColor=#B85450;" target="d1" value="Serial /dev/esp, 115200 baud&#xa;ODOM,x,y,θ,v,w,ticksL,ticksR ⇔ CMD,v,w">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e2" edge="1" parent="1" source="hw2" style="endArrow=block;startArrow=block;html=1;strokeColor=#B85450;strokeWidth=2;fontSize=9;fontColor=#B85450;" target="d2" value="Serial /dev/ttyUSB0, 230400 baud">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e3" edge="1" parent="1" source="hw3" style="endArrow=block;startArrow=block;html=1;strokeColor=#B85450;strokeWidth=2;fontSize=9;fontColor=#B85450;" target="d3" value="Serial/USB, NMEA/UBX">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e4" edge="1" parent="1" source="hw4" style="endArrow=block;startArrow=block;html=1;strokeColor=#999999;strokeWidth=1;dashed=1;fontSize=9;fontColor=#999999;" target="d4" value="USB (assumed)">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e5" edge="1" parent="1" style="endArrow=none;html=1;strokeColor=#D6B656;strokeWidth=1;dashed=1;fontSize=9;fontColor=#8a6d00;" target="d2" value="static link (CYdLidar API)">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="470" y="18" as="sourcePoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e6" edge="1" parent="1" source="d1" style="endArrow=block;html=1;strokeColor=#1F5C99;strokeWidth=1.5;fontSize=9;fontColor=#1F5C99;" target="desc2" value="/joint_states">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e7" edge="1" parent="1" source="d1" style="endArrow=block;html=1;strokeColor=#9673A6;strokeWidth=1.5;dashed=1;fontSize=9;fontColor=#9673A6;" target="loc1" value="TF odom→base_link (only dynamic TF)">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e8" edge="1" parent="1" source="d1" style="endArrow=block;html=1;strokeColor=#1F5C99;strokeWidth=1.5;fontSize=9;fontColor=#1F5C99;" target="viz1" value="/odom">
+          <mxGeometry relative="1" x="0.0003" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e9" edge="1" parent="1" source="d1" style="endArrow=block;html=1;strokeColor=#1F5C99;strokeWidth=1.5;fontSize=9;fontColor=#1F5C99;" target="br1" value="/odom">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e10" edge="1" parent="1" source="d2" style="endArrow=block;html=1;strokeColor=#1F5C99;strokeWidth=1.5;fontSize=9;fontColor=#1F5C99;" target="loc1" value="/scan">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e11" edge="1" parent="1" source="d2" style="endArrow=block;html=1;strokeColor=#1F5C99;strokeWidth=1.5;fontSize=9;fontColor=#1F5C99;" target="viz1" value="/scan, /point_cloud">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e12" edge="1" parent="1" source="d2" style="endArrow=block;html=1;strokeColor=#1F5C99;strokeWidth=1.5;fontSize=9;fontColor=#1F5C99;" target="br1" value="/scan">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e13" edge="1" parent="1" source="d3" style="endArrow=block;html=1;strokeColor=#1F5C99;strokeWidth=1.5;fontSize=9;fontColor=#1F5C99;" target="sup1" value="/fix">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e14" edge="1" parent="1" source="d3" style="endArrow=block;html=1;strokeColor=#1F5C99;strokeWidth=1.5;fontSize=9;fontColor=#1F5C99;" target="br1" value="/fix">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e15" edge="1" parent="1" source="d4" style="endArrow=block;html=1;strokeColor=#999999;strokeWidth=1;dashed=1;fontSize=9;fontColor=#999999;" target="br2" value="/camera/.../image_raw">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e16" edge="1" parent="1" source="d4" style="endArrow=block;html=1;strokeColor=#999999;strokeWidth=1;dashed=1;fontSize=9;fontColor=#999999;" target="br1" value="Image">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e17" edge="1" parent="1" source="dash2" style="endArrow=block;html=1;strokeColor=#1F5C99;strokeWidth=1.5;fontSize=9;fontColor=#1F5C99;rounded=1;exitX=0;exitY=0.5;entryX=0;entryY=0.9;" target="d1" value="/cmd_vel (only wired operator command path) — zeroed on e-stop">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="20" y="1195" />
+              <mxPoint x="20" y="235" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e18" edge="1" parent="1" source="desc1" style="endArrow=block;html=1;strokeColor=#82B366;strokeWidth=1.5;fontSize=9;fontColor=#3c6b2e;" target="desc2" value="gogo.xacro → robot_description">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e19" edge="1" parent="1" source="desc3" style="endArrow=block;html=1;strokeColor=#1F5C99;strokeWidth=1.5;fontSize=9;fontColor=#1F5C99;" target="desc2" value="/joint_states">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e20" edge="1" parent="1" source="desc2" style="endArrow=block;html=1;strokeColor=#9673A6;strokeWidth=1.5;dashed=1;fontSize=9;fontColor=#9673A6;" target="viz1" value="TF base_link→*, /robot_description">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e21" edge="1" parent="1" source="desc2" style="endArrow=block;html=1;strokeColor=#1F5C99;strokeWidth=1.5;fontSize=9;fontColor=#1F5C99;" target="br1" value="/robot_description, /tf, /tf_static">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e22" edge="1" parent="1" source="desc4" style="endArrow=block;html=1;strokeColor=#9673A6;strokeWidth=1.5;dashed=1;fontSize=9;fontColor=#9673A6;" value="TF base_link→laser_frame">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1210" y="480" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e23" edge="1" parent="1" source="loc1" style="endArrow=block;html=1;strokeColor=#9673A6;strokeWidth=1.5;fontSize=9;fontColor=#9673A6;" target="viz1" value="/map, TF map→odom">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e24" edge="1" parent="1" source="loc1" style="endArrow=block;html=1;strokeColor=#1F5C99;strokeWidth=1.5;fontSize=9;fontColor=#1F5C99;" target="br1" value="/map, /tf">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e25" edge="1" parent="1" source="sup1" style="endArrow=open;html=1;strokeColor=#999999;strokeWidth=1;dashed=1;fontSize=8;fontColor=#666666;" target="d3" value="starts on node init">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e26" edge="1" parent="1" source="sup1" style="endArrow=open;html=1;strokeColor=#999999;strokeWidth=1;dashed=1;fontSize=8;fontColor=#666666;" target="desc2" value="ros2 launch robot_state_publisher.launch.py">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e27" edge="1" parent="1" source="sup1" style="endArrow=open;html=1;strokeColor=#999999;strokeWidth=1;dashed=1;fontSize=8;fontColor=#666666;" target="d2" value="ros2 launch ydlidar_launch.py">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e28" edge="1" parent="1" source="sup1" style="endArrow=open;html=1;strokeColor=#999999;strokeWidth=1;dashed=1;fontSize=8;fontColor=#666666;" target="d1" value="ros2 run odom_node">
+          <mxGeometry relative="1" x="-0.0004" as="geometry">
+            <mxPoint as="offset" />
+            <Array as="points">
+              <mxPoint x="240" y="40" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e29" edge="1" parent="1" source="sup1" style="endArrow=open;html=1;strokeColor=#999999;strokeWidth=1;dashed=1;fontSize=8;fontColor=#666666;" target="loc1" value="ros2 launch online_sync_launch.py">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e30" edge="1" parent="1" source="sup1" style="endArrow=open;html=1;strokeColor=#999999;strokeWidth=1;dashed=1;fontSize=8;fontColor=#666666;" target="viz1" value="rviz2 (subprocess)">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e31" edge="1" parent="1" source="sup2" style="endArrow=open;html=1;strokeColor=#999999;strokeWidth=1;dashed=1;fontSize=8;fontColor=#666666;" target="d1" value="TimerAction t=0.0s">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e32" edge="1" parent="1" source="sup2" style="endArrow=open;html=1;strokeColor=#999999;strokeWidth=1;dashed=1;fontSize=8;fontColor=#666666;" target="desc4" value="TimerAction t=2.0s">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e33" edge="1" parent="1" source="sup2" style="endArrow=open;html=1;strokeColor=#999999;strokeWidth=1;dashed=1;fontSize=8;fontColor=#666666;" target="d2" value="include t=5.0s">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e34" edge="1" parent="1" source="sup2" style="endArrow=open;html=1;strokeColor=#999999;strokeWidth=1;dashed=1;fontSize=8;fontColor=#666666;" target="loc1" value="include online_async t=8.0s (mapping mode)">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e35" edge="1" parent="1" source="sup3" style="endArrow=open;html=1;strokeColor=#999999;strokeWidth=1;dashed=1;fontSize=8;fontColor=#666666;" target="desc2" value="include">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e36" edge="1" parent="1" source="sup3" style="endArrow=open;html=1;strokeColor=#999999;strokeWidth=1;dashed=1;fontSize=8;fontColor=#666666;" target="d2" value="include">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e37" edge="1" parent="1" source="sup3" style="endArrow=open;html=1;strokeColor=#999999;strokeWidth=1;dashed=1;fontSize=8;fontColor=#666666;" target="d1" value="Node">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e38" edge="1" parent="1" source="sup3" style="endArrow=open;html=1;strokeColor=#999999;strokeWidth=1;dashed=1;fontSize=8;fontColor=#666666;" target="loc1" value="include localization_launch.py (mapper_localization.yaml, map=maptest3)">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e39" edge="1" parent="1" source="sup3" style="endArrow=open;html=1;strokeColor=#999999;strokeWidth=1;dashed=1;fontSize=8;fontColor=#666666;" target="viz1" value="Node rviz2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e40" edge="1" parent="1" source="br1" style="endArrow=block;startArrow=block;html=1;strokeColor=#37A76F;strokeWidth=2;fontSize=9;fontColor=#2f8a5c;" target="dash1" value="WebSocket JSON-RPC ws://localhost:9090 (roslibjs)">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e41" edge="1" parent="1" source="br2" style="endArrow=block;html=1;strokeColor=#37A76F;strokeWidth=2;fontSize=9;fontColor=#2f8a5c;" target="dash4" value="MJPEG :8080">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e42" edge="1" parent="1" source="desc1" style="endArrow=block;html=1;strokeColor=#1F5C99;strokeWidth=1.5;fontSize=9;fontColor=#1F5C99;" target="sim3" value="/robot_description">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e43" edge="1" parent="1" source="sim3" style="endArrow=open;html=1;strokeColor=#3399FF;strokeWidth=1;dashed=1;fontSize=8;fontColor=#3399FF;" target="sim1" value="spawns &#39;gogo&#39; entity">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e44" edge="1" parent="1" source="sim1" style="endArrow=block;startArrow=block;html=1;strokeColor=#3399FF;strokeWidth=1.5;fontSize=9;fontColor=#3399FF;" target="sim2" value="/clock (GZ_TO_ROS)">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e45" edge="1" parent="1" source="desc1" style="endArrow=open;html=1;strokeColor=#3399FF;strokeWidth=1;dashed=1;fontSize=8;fontColor=#3399FF;" target="sim1" value="gazebo.launch.py (alt. bringup)">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e46" edge="1" parent="1" source="sup1" style="endArrow=block;html=1;strokeColor=#FF0000;strokeWidth=1;dashed=1;dashPattern=2 2;" target="gap1" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e47" edge="1" parent="1" source="dash2" style="endArrow=block;html=1;strokeColor=#FF0000;strokeWidth=1;dashed=1;dashPattern=2 2;" target="gap2" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e48" edge="1" parent="1" source="desc1" style="endArrow=none;html=1;strokeColor=#FF0000;strokeWidth=1;dashed=1;dashPattern=2 2;" target="gap3" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e49" edge="1" parent="1" source="desc4" style="endArrow=none;html=1;strokeColor=#FF0000;strokeWidth=1;dashed=1;dashPattern=2 2;" target="gap3" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

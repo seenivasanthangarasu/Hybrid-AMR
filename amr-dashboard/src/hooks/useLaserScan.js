@@ -8,14 +8,18 @@ import useRosTopic from './useRosTopic.js';
  * readings) are filtered out, not replaced with fake values.
  */
 export default function useLaserScan() {
-  const { data, hasData } = useRosTopic({
+  const { data, hasData, stale, lastReceivedAt } = useRosTopic({
     name: '/scan',
     messageType: 'sensor_msgs/LaserScan',
     throttle_rate: 150,
   });
 
-  if (!hasData || !data) {
-    return { hasData: false, points: [], minRange: null, raw: null };
+  // Freshness signals mirrored from useOdometry/useGps (spec REQ-21) so the
+  // sensor views can show LIVE/STALE/NO-DATA instead of a hasData-only "LIVE".
+  const timing = { hasData, hasEverData: !!data, stale, lastReceivedAt };
+
+  if (!hasData || !data || !Array.isArray(data.ranges)) {
+    return { ...timing, hasData: false, points: [], minRange: null, raw: null };
   }
 
   const { angle_min, angle_increment, ranges, range_min, range_max } = data;
@@ -34,5 +38,5 @@ export default function useLaserScan() {
     if (nearestRange === null || r < nearestRange) nearestRange = r;
   });
 
-  return { hasData: true, points, minRange: nearestRange, raw: data };
+  return { ...timing, hasData: true, points, minRange: nearestRange, raw: data };
 }

@@ -1,14 +1,58 @@
 import { useEffect, useState } from 'react';
+import useTheme from '../hooks/useTheme.js';
+import SignalChip from './ui/SignalChip.jsx';
+import SettingsMenu from './SettingsMenu.jsx';
 
-const STATUS_STYLES = {
-  connected: { color: 'bg-signal-green', text: 'text-signal-green', label: 'ROSBRIDGE LINKED' },
-  connecting: { color: 'bg-signal-amber animate-pulse-slow', text: 'text-signal-amber', label: 'CONNECTING' },
-  error: { color: 'bg-signal-red', text: 'text-signal-red', label: 'CONNECTION ERROR' },
-  closed: { color: 'bg-signal-red', text: 'text-signal-red', label: 'LINK CLOSED' },
-  disconnected: { color: 'bg-ink-low', text: 'text-ink-low', label: 'DISCONNECTED' },
+function ThemeToggle() {
+  const { theme, toggle } = useTheme();
+  const isLight = theme === 'light';
+  return (
+    <button
+      type="button"
+      onClick={toggle}
+      aria-pressed={isLight}
+      aria-label={isLight ? 'Switch to dark theme' : 'Switch to light theme'}
+      title={isLight ? 'Switch to dark theme' : 'Switch to light theme'}
+      className="flex h-7 w-7 items-center justify-center rounded border border-deck-line text-ink-mid transition-colors hover:border-ink-low hover:text-ink-high"
+    >
+      {isLight ? (
+        /* moon — click to go dark */
+        <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.6">
+          <path d="M21 12.8A9 9 0 1111.2 3a7 7 0 009.8 9.8z" />
+        </svg>
+      ) : (
+        /* sun — click to go light */
+        <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.6">
+          <circle cx="12" cy="12" r="4" />
+          <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
+        </svg>
+      )}
+    </button>
+  );
+}
+
+// Connection status → shared signal tone + label (spec REQ-16: one vocabulary)
+const STATUS_SIGNAL = {
+  connected: { tone: 'live', label: 'ROSBRIDGE LINKED' },
+  connecting: { tone: 'warn', label: 'CONNECTING', pulse: true },
+  error: { tone: 'critical', label: 'CONNECTION ERROR' },
+  closed: { tone: 'critical', label: 'LINK CLOSED' },
+  disconnected: { tone: 'idle', label: 'DISCONNECTED' },
 };
 
-export default function Header({ connectionStatus, mode, isModeDefault }) {
+// Link is recoverable (spec REQ-20) — surface a Reconnect control instead of
+// forcing the operator to reload the page.
+const RECOVERABLE = new Set(['error', 'closed', 'disconnected']);
+
+export default function Header({
+  connectionStatus,
+  mode,
+  isModeDefault,
+  onReconnect,
+  editMode,
+  onToggleEdit,
+  onResetLayout,
+}) {
   const [now, setNow] = useState(new Date());
 
   useEffect(() => {
@@ -16,13 +60,19 @@ export default function Header({ connectionStatus, mode, isModeDefault }) {
     return () => clearInterval(t);
   }, []);
 
-  const s = STATUS_STYLES[connectionStatus] || STATUS_STYLES.disconnected;
+  const s = STATUS_SIGNAL[connectionStatus] || STATUS_SIGNAL.disconnected;
 
   return (
     <header className="flex h-14 shrink-0 items-center justify-between border-b border-deck-line bg-deck-900 px-5">
       <div className="flex items-center gap-3">
         <div className="flex h-8 w-8 items-center justify-center rounded border border-signal-cyan/40 bg-signal-cyan/10">
-          <svg viewBox="0 0 24 24" className="h-4 w-4 text-signal-cyan" fill="none" stroke="currentColor" strokeWidth="1.6">
+          <svg
+            viewBox="0 0 24 24"
+            className="h-4 w-4 text-signal-cyan"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.6"
+          >
             <rect x="4" y="9" width="16" height="10" rx="2" />
             <path d="M9 9V6a3 3 0 016 0v3" />
             <circle cx="9" cy="14" r="1" fill="currentColor" />
@@ -39,7 +89,9 @@ export default function Header({ connectionStatus, mode, isModeDefault }) {
           <span className="data-label">MODE</span>
           <span
             className={`rounded px-2 py-0.5 font-mono text-xs font-semibold tracking-wide ${
-              mode === 'INDOOR' ? 'bg-signal-violet/15 text-signal-violet' : 'bg-signal-cyan/15 text-signal-cyan'
+              mode === 'INDOOR'
+                ? 'bg-signal-violet/15 text-signal-violet'
+                : 'bg-signal-cyan/15 text-signal-cyan'
             }`}
           >
             {mode}
@@ -53,9 +105,32 @@ export default function Header({ connectionStatus, mode, isModeDefault }) {
         </div>
 
         <div className="flex items-center gap-2">
-          <span className={`h-2 w-2 rounded-full ${s.color}`} />
-          <span className={`font-mono text-[11px] font-semibold tracking-wider ${s.text}`}>{s.label}</span>
+          {/* aria-live so a screen reader announces link-state changes
+              (LINKED → LINK CLOSED → …) without the operator watching the
+              chip. Polite: connection status is informational, not urgent
+              like the e-stop confirm (spec REQ-12). */}
+          <span role="status" aria-live="polite" aria-label={`Connection: ${s.label}`}>
+            <SignalChip tone={s.tone} label={s.label} pulse={s.pulse} />
+          </span>
+          {onReconnect && RECOVERABLE.has(connectionStatus) && (
+            <button
+              type="button"
+              onClick={onReconnect}
+              title="Re-establish the ROSBridge link without reloading"
+              className="flex items-center gap-1 rounded border border-signal-cyan/40 bg-signal-cyan/10 px-2 py-0.5 font-mono text-[10px] font-semibold tracking-wider text-signal-cyan transition-colors hover:bg-signal-cyan/20"
+            >
+              <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M21 12a9 9 0 11-3-6.7L21 8" />
+                <path d="M21 3v5h-5" />
+              </svg>
+              RECONNECT
+            </button>
+          )}
         </div>
+
+        <ThemeToggle />
+
+        <SettingsMenu editMode={editMode} onToggleEdit={onToggleEdit} onReset={onResetLayout} />
       </div>
     </header>
   );

@@ -1,16 +1,24 @@
 import { useEffect, useRef, useState } from 'react';
 import rosService from '../services/RosConnectionService.js';
+import { themeHex } from '../utils/themeColor.js';
 
 /**
  * useUrdfViewer
  * Mounts a ROS3D.Viewer + ROS3D.UrdfClient into the given DOM container,
  * subscribing to /robot_description, /tf, and /tf_static for live robot
- * pose and link visualization. ros3d must be loaded globally (window.ROS3D)
- * via the script include in index.html, since the npm package ships as a
- * UMD bundle expecting THREE on window.
+ * pose and link visualization. ros3d's ESM build is self-contained (it
+ * bundles its own THREE internally) — dynamically imported below, no
+ * global script include required.
+ *
+ * Mesh geometry is fetched by ROS3D.UrdfClient over plain HTTP from
+ * VITE_MESH_SERVER_URL. rosbridge (VITE_ROSBRIDGE_URL) is a WebSocket
+ * JSON-RPC endpoint and cannot serve mesh files — deriving one URL from
+ * the other was a bug (see docs/remediation/spec.md REQ-04). If no mesh
+ * server is configured, the widget reports 'no-mesh-server' rather than
+ * silently claiming 'ready' with an empty scene.
  */
 export default function useUrdfViewer(containerRef) {
-  const [status, setStatus] = useState('idle'); // idle | loading | ready | error | no-description
+  const [status, setStatus] = useState('idle'); // idle | loading | ready | error | no-description | no-mesh-server
   const viewerRef = useRef(null);
 
   useEffect(() => {
@@ -23,9 +31,9 @@ export default function useUrdfViewer(containerRef) {
     async function init() {
       try {
         const ROS3D = await import('ros3d');
-        const THREE = await import('three');
-        // ros3d's UMD build expects THREE/ROSLIB on window in this env
-        window.THREE = window.THREE || THREE;
+        // ros3d's ESM build bundles its own THREE internally — no global
+        // `window.THREE` shim and no separate `three` dependency are needed
+        // (verified against node_modules/ros3d; spec REQ-11 dead-code removal).
 
         if (disposed || !containerRef.current) return;
 
@@ -37,10 +45,21 @@ export default function useUrdfViewer(containerRef) {
           width,
           height,
           antialias: true,
-          background: '#0e131c',
+          // Resolved from the active theme at init. The ROS3D viewer is built
+          // once, so this matches whatever theme is active on mount; a later
+          // toggle won't re-theme the 3D scene (acceptable — the widget is
+          // usually in its 'no-mesh-server' state anyway).
+          background: themeHex('deck-900'),
           cameraPose: { x: 2, y: 2, z: 2 },
         });
-        viewer.addObject(new ROS3D.Grid({ color: '#243043', cellSize: 0.5, num_cells: 20 }));
+        viewer.addObject(new ROS3D.Grid({ color: themeHex('deck-line'), cellSize: 0.5, num_cells: 20 }));
+
+        const meshServerUrl = import.meta.env.VITE_MESH_SERVER_URL;
+        if (!meshServerUrl) {
+          viewerRef.current = viewer;
+          setStatus('no-mesh-server');
+          return;
+        }
 
         const tfClient = new (await import('roslib')).default.TFClient({
           ros: rosService.ros,
@@ -50,14 +69,11 @@ export default function useUrdfViewer(containerRef) {
           rate: 10.0,
         });
 
-        const rosbridgeUrl = import.meta.env.VITE_ROSBRIDGE_URL || 'ws://localhost:9090';
-
         new ROS3D.UrdfClient({
           ros: rosService.ros,
           tfClient,
-          path: `${rosbridgeUrl.replace(/^ws/, 'http')}/`,
+          path: meshServerUrl,
           rootObject: viewer.scene,
-          loader: ROS3D.COLLADA_LOADER_2,
         });
 
         viewerRef.current = viewer;

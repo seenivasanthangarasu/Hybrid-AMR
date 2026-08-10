@@ -2,13 +2,25 @@ import { useEffect, useRef } from 'react';
 import useOccupancyGrid from '../hooks/useOccupancyGrid.js';
 import useTF from '../hooks/useTF.js';
 import useLaserScan from '../hooks/useLaserScan.js';
-import NoDataBadge from './NoDataBadge.jsx';
+import useTheme from '../hooks/useTheme.js';
+import useNow from '../hooks/useNow.js';
+import { themeColor, themeRGB } from '../utils/themeColor.js';
+import { classifyFreshness } from '../utils/freshness.js';
+import DataFallback from './DataFallback.jsx';
+import FreshnessBadge from './ui/FreshnessBadge.jsx';
 
 export default function SlamView() {
   const grid = useOccupancyGrid();
   const { transform, hasData: hasPose } = useTF({ frameId: 'base_link', fixedFrame: 'map' });
   const { hasData: hasScan, points } = useLaserScan();
+  const { theme } = useTheme();
+  const now = useNow(1000);
   const canvasRef = useRef(null);
+
+  const mapFresh = classifyFreshness(
+    { hasData: grid.hasData, hasEverData: grid.hasEverData, lastReceivedAt: grid.lastReceivedAt },
+    now,
+  );
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -19,10 +31,14 @@ export default function SlamView() {
     canvas.width = w * dpr;
     canvas.height = h * dpr;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.fillStyle = '#0e131c';
+    ctx.fillStyle = themeColor('deck-900');
     ctx.fillRect(0, 0, w, h);
 
     if (!grid.hasData) return;
+
+    const unknownRGB = themeRGB('deck-900');
+    const freeRGB = themeRGB('deck-700');
+    const occupiedRGB = themeRGB('ink-mid');
 
     const { width, height, resolution, origin, data } = grid;
     const scale = Math.min(w / width, h / height);
@@ -33,9 +49,11 @@ export default function SlamView() {
     for (let i = 0; i < data.length; i++) {
       const v = data[i];
       let color;
-      if (v === -1) color = [14, 19, 28]; // unknown
-      else if (v === 0) color = [27, 36, 51]; // free
-      else color = [159, 176, 198]; // occupied, scaled by v could be added
+      if (v === -1)
+        color = unknownRGB; // unknown
+      else if (v === 0)
+        color = freeRGB; // free
+      else color = occupiedRGB; // occupied, scaled by v could be added
 
       const px = i % width;
       const py = height - 1 - Math.floor(i / width); // flip row order (map origin bottom-left)
@@ -80,7 +98,7 @@ export default function SlamView() {
 
       // live laser scan transformed into the robot's pose on the map
       if (hasScan) {
-        ctx.fillStyle = 'rgba(61,220,255,0.65)';
+        ctx.fillStyle = themeColor('signal-cyan', 0.65);
         points.forEach((p) => {
           const wx = x + p.x * Math.cos(yaw) - p.y * Math.sin(yaw);
           const wy = y + p.x * Math.sin(yaw) + p.y * Math.cos(yaw);
@@ -94,7 +112,7 @@ export default function SlamView() {
       ctx.save();
       ctx.translate(rx, ry);
       ctx.rotate(-yaw);
-      ctx.fillStyle = '#37e29a';
+      ctx.fillStyle = themeColor('signal-green');
       ctx.beginPath();
       ctx.moveTo(10, 0);
       ctx.lineTo(-6, 6);
@@ -103,14 +121,20 @@ export default function SlamView() {
       ctx.fill();
       ctx.restore();
     }
-  }, [grid, hasPose, transform, hasScan, points]);
+  }, [grid, hasPose, transform, hasScan, points, theme]);
 
   return (
     <div className="relative h-full w-full">
       <canvas ref={canvasRef} className="h-full w-full" />
       {!grid.hasData && (
         <div className="absolute inset-0 flex items-center justify-center bg-deck-900/85">
-          <NoDataBadge label="NO DATA — /map" />
+          <DataFallback topic="/map" hasEverData={grid.hasEverData} lastReceivedAt={grid.lastReceivedAt} />
+        </div>
+      )}
+      {grid.hasData && (
+        <div className="pointer-events-none absolute right-3 top-3 flex items-center gap-1.5 rounded bg-deck-900/80 px-2 py-1">
+          <FreshnessBadge freshness={mapFresh} />
+          <span className="font-mono text-[9px] tracking-wider text-ink-low">/map</span>
         </div>
       )}
       {grid.hasData && !hasPose && (

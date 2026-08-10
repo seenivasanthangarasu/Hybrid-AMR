@@ -1,0 +1,68 @@
+import { useCallback, useEffect, useState } from 'react';
+
+/**
+ * useLayout — persistent, operator-editable dashboard layout.
+ *
+ * Holds the react-grid-layout item geometry for every panel and mirrors it to
+ * localStorage so a rearranged workspace survives reloads. `reset()` restores
+ * the shipped default. The panel *set* is fixed (DEFAULT_LAYOUT ids); only
+ * position/size are editable, and unknown/missing ids are reconciled on load
+ * so adding a panel in a future build doesn't strand a saved layout.
+ */
+const STORAGE_KEY = 'amr-layout-v1';
+
+// 12-col grid, 12 rows tall by default so it fills one screen (DashboardGrid
+// derives rowHeight from the container height). Mirrors the original layout:
+// big main view + right-rail previews, telemetry/controls along the bottom.
+export const DEFAULT_LAYOUT = [
+  { i: 'main', x: 0, y: 0, w: 9, h: 8, minW: 4, minH: 4 },
+  { i: 'status', x: 0, y: 8, w: 3, h: 4, minW: 2, minH: 3 },
+  { i: 'mission', x: 3, y: 8, w: 3, h: 4, minW: 2, minH: 3 },
+  { i: 'control', x: 6, y: 8, w: 3, h: 4, minW: 2, minH: 3 },
+  { i: 'gps', x: 9, y: 0, w: 3, h: 3, minW: 2, minH: 2 },
+  { i: 'lidar', x: 9, y: 3, w: 3, h: 3, minW: 2, minH: 2 },
+  { i: 'camera', x: 9, y: 6, w: 3, h: 3, minW: 2, minH: 2 },
+  { i: 'urdf', x: 9, y: 9, w: 3, h: 3, minW: 2, minH: 2 },
+];
+
+const PANEL_IDS = DEFAULT_LAYOUT.map((p) => p.i);
+
+function clone(layout) {
+  return layout.map((p) => ({ ...p }));
+}
+
+// Keep only known panels and backfill any missing ones from the default, so a
+// stored layout stays valid across builds that add/remove panels.
+function reconcile(saved) {
+  if (!Array.isArray(saved)) return clone(DEFAULT_LAYOUT);
+  const byId = new Map(saved.filter((p) => p && PANEL_IDS.includes(p.i)).map((p) => [p.i, p]));
+  return DEFAULT_LAYOUT.map((def) => {
+    const s = byId.get(def.i);
+    return s ? { ...def, x: s.x, y: s.y, w: s.w, h: s.h } : { ...def };
+  });
+}
+
+function load() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? reconcile(JSON.parse(raw)) : clone(DEFAULT_LAYOUT);
+  } catch {
+    return clone(DEFAULT_LAYOUT);
+  }
+}
+
+export default function useLayout() {
+  const [layout, setLayout] = useState(load);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(layout));
+    } catch {
+      /* storage unavailable — layout stays in-memory only */
+    }
+  }, [layout]);
+
+  const reset = useCallback(() => setLayout(clone(DEFAULT_LAYOUT)), []);
+
+  return { layout, setLayout, reset };
+}
