@@ -333,8 +333,17 @@ them.** They define an intended interface, not a working one.
 | `/mission_state_cmd` | `std_msgs/String` (`START`/`PAUSE`/`RESUME`/`STOP`) | Control Panel buttons |
 | `/emergency_stop` | `std_msgs/Bool` | EMERGENCY STOP (two-click confirm) |
 | `/cmd_vel` | `geometry_msgs/Twist` | zeroed on e-stop |
-| `/mission_goal` | `amr_msgs/MissionGoal` (**custom msg — package does not exist**) | Mission Planner SEND GOAL |
+| `/mission_goal` | `amr_msgs/MissionGoal` (**custom msg — package does not exist**) | legacy single-goal path (`sendGoal`, no longer wired to a button) |
+| `/follow_gps_waypoints` | `nav2_msgs/action/FollowGPSWaypoints` | Mission Planner SEND ROUTE (multi-waypoint) |
 | `/navigate_to_pose` | `nav2_msgs/action/NavigateToPose` | STOP (cancel), RETURN HOME |
+
+> **Protocol caveat for all three action entries.** roslib 1.4.1's `ActionClient`
+> implements **ROS1 actionlib** — it publishes to `<name>/goal` with an
+> actionlib_msgs-style wrapper. A ROS2 action server exposes no such topic, so
+> these will not reach Nav2 even once Nav2 is deployed. Wiring the robot side
+> means switching them to rosbridge's ROS2 action op
+> (`ros.callOnConnection({ op: 'send_action_goal', action, action_type, args })`)
+> or to a roslib build with ROS2 action support.
 
 ### 5.3 TF tree
 
@@ -368,7 +377,9 @@ or an interpolated value.
 
 ```
 main.jsx
- └── <MissionProvider>            React Context: destination, routeInfo, mapApi
+ └── <MissionProvider>            two contexts: mission route (waypoints, selection,
+      │                          routeInfo) + mapApi (Leaflet handle), split so map
+      │                          mount/unmount and route edits don't re-render each other
       └── <App>
            ├── <Header>            connection status + mode badge
            ├── MAIN VIEW           swaps: GpsMapView | SlamView | LidarView | CameraView
@@ -416,9 +427,15 @@ computed client-side.
 - **`GpsMapView`** (260 lines, the largest) — Leaflet + OSM tiles. Initial view
   `[11.1271, 78.6569]` zoom 6 (**Tamil Nadu, India**), auto-zooms to 19 on first fix.
   Cyan robot marker as an `L.divIcon` with a CSS-rotated heading arrow from `/odom`.
-  Draws a breadcrumb polyline capped at **5000 points** (ring buffer). Click-to-set
-  destination. Dashed route line robot→goal. Publishes its `map` instance into
-  `MissionContext` as `mapApi` so `MissionPlanner` can drive it.
+  Draws a breadcrumb polyline capped at **5000 points** (ring buffer). Renders the
+  mission route as numbered, draggable waypoint markers (`Map<id, L.Marker>`, with
+  explicit `removeLayer` on delete) joined by a dashed line from the robot onward.
+  Click-to-add is **armed** via an on-map toggle so stray clicks don't drop pins.
+  Publishes its `map` instance as `mapApi` so `MissionPlanner` can drive it.
+  ⚠ The map container's `className` must stay static — `L.map()` adds its own
+  classes to that node imperatively, and letting React rewrite `className` wipes
+  them, silently killing the map's CSS and click handling. Reactive styling on
+  that node goes through inline `style`.
 - **`SlamView`** — Canvas2D. Renders the OccupancyGrid to an offscreen ImageData at
   native resolution then upscales with `imageSmoothingEnabled = false`. Flips row
   order (`py = height - 1 - floor(i/width)`) because the ROS map origin is bottom-left.
@@ -430,8 +447,13 @@ computed client-side.
   indicator — it triggers no robot action.
 - **`CameraView`** — plain `<img>` pointed at `web_video_server`'s MJPEG stream.
   Note this **bypasses** `useCameraFeed` entirely.
-- **`MissionPlanner`** — goal name + lat/lon inputs, two-way bound to `MissionContext`,
-  `USE COORDINATES` to place the marker, `SEND GOAL` to publish.
+- **`MissionPlanner`** — multi-waypoint route editor. Name + lat/lon entry form
+  (`ADD WAYPOINT`, or Enter), then an ordered list with per-row reorder (▲▼),
+  remove, and select-to-focus-on-map. Header shows the count and the total
+  **straight-line** length (explicitly not a drive distance, and no ETA — the
+  dashboard knows no speed). `CLEAR ALL` takes a second confirming press.
+  `SEND ROUTE (N)` dispatches the whole route as one `FollowGPSWaypoints` goal;
+  waypoints then read `SENT_UNCONFIRMED`, never "reached".
 - **`ControlPanel`** — START/PAUSE/RESUME/STOP/RETURN HOME + a two-click-confirm
   EMERGENCY STOP (3 s confirm window).
 - **`StatusPanel`** — mode, speed, heading, distance, GPS status/lat/lon, ROS link.
@@ -498,13 +520,21 @@ Grouped by severity. All of these are real observations from the source.
    but publishes nothing. The dashboard therefore always falls back to `OUTDOOR`.
    *Fix: publish `std_msgs/String` from `hybrid_manager` on every state change.*
 2. **`amr_msgs/MissionGoal` does not exist.** No `amr_msgs` package is in the
-   workspace, so `SEND GOAL` publishes a message type rosbridge cannot resolve.
+   workspace, so the legacy `sendGoal` path publishes a message type rosbridge
+   cannot resolve. (The Mission Planner no longer uses it; `SEND ROUTE` goes to
+   `FollowGPSWaypoints` instead.)
 3. **No subscriber for any operator command topic.** `/mission_state_cmd`,
    `/emergency_stop`, `/mission_goal` are published into the void.
 4. **Nav2 is not in the workspace at all.** `RobotCommandService` calls
-   `/navigate_to_pose`, but no `nav2_bringup`, costmaps, planner or controller is
-   launched anywhere. The robot can localize but cannot autonomously navigate.
-5. **Wheel joints are `type="fixed"` in the URDF** while `/joint_states` publishes
+   `/navigate_to_pose` and `/follow_gps_waypoints`, but no `nav2_bringup`,
+   costmaps, planner or controller is launched anywhere. The robot can localize
+   but cannot autonomously navigate.
+5. **The action paths speak the wrong protocol.** roslib 1.4.1's `ActionClient`
+   is ROS1 actionlib, so `sendWaypoints`, `returnHome` and `stop`'s goal-cancel
+   cannot reach a ROS2 action server regardless of whether Nav2 is running. This
+   is independent of gap 4 and must be fixed alongside it — see the caveat
+   under §5.2.
+6. **Wheel joints are `type="fixed"` in the URDF** while `/joint_states` publishes
    positions for them — wheels can never animate.
 
 ### Portability / robustness

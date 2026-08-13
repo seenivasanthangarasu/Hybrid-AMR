@@ -17,10 +17,15 @@ import rosService from './RosConnectionService.js';
  * See docs/remediation/spec.md REQ-01/REQ-02.
  */
 
+const ERROR_MESSAGES = {
+  DISCONNECTED: 'Not connected to ROSBridge',
+  EMPTY_ROUTE: 'No waypoints to send',
+};
+
 export class CommandError extends Error {
   constructor(code, cause) {
-    super(code === 'DISCONNECTED' ? 'Not connected to ROSBridge' : 'Failed to publish command');
-    this.code = code; // 'DISCONNECTED' | 'PUBLISH_FAILED'
+    super(ERROR_MESSAGES[code] ?? 'Failed to publish command');
+    this.code = code; // 'DISCONNECTED' | 'PUBLISH_FAILED' | 'EMPTY_ROUTE'
     this.cause = cause;
   }
 }
@@ -131,12 +136,84 @@ export const RobotCommandService = {
   },
 
   /**
-   * Send a navigation goal (Mission Planner "SEND GOAL").
-   * lat/lon are UI inputs only — for an outdoor AMR these would
-   * typically be converted to the local map frame via a robot-side
-   * GPS-to-map transform service before being sent to Nav2; that
-   * conversion service call is left as an explicit integration point
-   * rather than computed client-side with assumptions.
+   * Send a multi-waypoint route (Mission Planner "SEND ROUTE").
+   *
+   * Uses Nav2's FollowGPSWaypoints action rather than a bespoke message for
+   * two reasons:
+   *
+   *  1. **Sequencing belongs on the robot.** The action server drives the
+   *     route waypoint-by-waypoint. The alternative — the dashboard sending
+   *     goal N+1 once it believes N was reached — would require a "reached"
+   *     signal that does not exist, leaving the browser to guess arrival from
+   *     GPS proximity. That guess is exactly the fabricated state this
+   *     codebase forbids.
+   *  2. **It takes GeoPoses directly.** `sendGoal` below has to punt on
+   *     lat/lon → map-frame conversion; FollowGPSWaypoints consumes geographic
+   *     coordinates natively, so no client-side datum assumptions are needed.
+   *
+   * BACKEND-INTEGRATION GAP (same class as returnHome, tracked with F1/F2):
+   * `/follow_gps_waypoints` has no server in this workspace — Nav2 is not
+   * deployed. The goal goes onto the wire and nothing consumes it, so the
+   * result stays SENT_UNCONFIRMED.
+   *
+   * PROTOCOL GAP — read before wiring a real Nav2 stack: roslib 1.4.1's
+   * ActionClient implements **ROS1 actionlib**, publishing on
+   * `<name>/goal` with an actionlib_msgs-style wrapper. A ROS2 action server
+   * exposes no such topic, so this will not reach Nav2 as-is regardless of
+   * whether Nav2 is running. Whoever lands the robot side must switch this
+   * (and returnHome/stop, which have the same defect today) to the rosbridge
+   * ROS2 action op — `ros.callOnConnection({ op: 'send_action_goal',
+   * action, action_type, args })` — or to a roslib build with ROS2 action
+   * support. Kept on ActionClient here to match the file's existing
+   * convention rather than introduce a second, equally unverifiable path.
+   *
+   * The returned `goal` is the ROSLIB handle. When a Nav2 stack does land,
+   * per-waypoint status comes from wiring `goal.on('feedback')`
+   * (`current_waypoint`) and `goal.on('result')` (`missed_waypoints`) to the
+   * planner — that is the ONLY sanctioned source for advancing a waypoint past
+   * SENT_UNCONFIRMED.
+   */
+  sendWaypoints(waypoints) {
+    if (!waypoints?.length) throw new CommandError('EMPTY_ROUTE');
+
+    let goal;
+    const result = dispatch(() => {
+      goal = new ROSLIB.Goal({
+        actionClient: rosService.getActionClient({
+          name: '/follow_gps_waypoints',
+          actionType: 'nav2_msgs/action/FollowGPSWaypoints',
+        }),
+        goalMessage: {
+          gps_poses: waypoints.map((wp) => ({
+            position: {
+              latitude: Number(wp.latitude),
+              longitude: Number(wp.longitude),
+              altitude: 0,
+            },
+            // Identity orientation: the operator picks a position on the map,
+            // not a heading. Nav2 treats the final pose orientation as the
+            // goal yaw; leaving it identity means "any heading on arrival"
+            // rather than silently inventing one.
+            orientation: { x: 0, y: 0, z: 0, w: 1 },
+          })),
+        },
+      });
+      goal.send();
+    });
+
+    return { ...result, goal };
+  },
+
+  /**
+   * Send a single navigation goal on the legacy `/mission_goal` contract.
+   *
+   * Retained alongside sendWaypoints because it is a different interface, not
+   * a subset: it carries an operator-facing goal *name* that the Nav2 action
+   * has no field for. lat/lon are UI inputs only — for an outdoor AMR these
+   * would typically be converted to the local map frame via a robot-side
+   * GPS-to-map transform service before being sent to Nav2; that conversion
+   * service call is left as an explicit integration point rather than computed
+   * client-side with assumptions.
    */
   sendGoal({ goalName, latitude, longitude }) {
     return dispatch(() => {

@@ -55,10 +55,11 @@ on load; connection state is shown live in the header.
 
 | Feature              | Where                 | Notes                                                                                              |
 | -------------------- | --------------------- | -------------------------------------------------------------------------------------------------- |
-| **Reconnect**        | Header (on link loss) | Re-establishes rosbridge without reloading the page.                                               |
+| **Auto-reconnect**   | Automatic (on link loss) | Retries rosbridge on its own — 1s→2→4→8→16→30s with jitter, **bounded at 6 attempts**. The header counts down (`AUTO-RETRY 3/6 · 4s`) and says so when it gives up. |
+| **Reconnect**        | Header (on link loss) | Re-establishes rosbridge without reloading the page, and resets a spent auto-retry budget.          |
 | **Light/dark theme** | Header sun/moon       | Persists in `localStorage`; first visit follows the OS setting.                                    |
 | **Edit layout**      | Settings gear         | Drag/resize every panel; the arrangement persists and `Reset to default` restores the shipped one. |
-| **Error reference**  | Settings gear → HELP  | Catalogue of all 12 fault states with the dialog each raises.                                      |
+| **Error reference**  | Settings gear → HELP  | Catalogue of all 13 fault states with the dialog each raises.                                      |
 | **Fault dialogs**    | Automatic             | Selecting a view with no data, or a command that failed to send, explains the cause and the fix.   |
 
 Full walkthrough and front-end architecture:
@@ -94,7 +95,12 @@ robot's actual interfaces in `src/services/RobotCommandService.js`):
 | `/navigate_to_pose`  | `nav2_msgs/action/NavigateToPose`                    | STOP (cancel), RETURN HOME     |
 | `/emergency_stop`    | `std_msgs/Bool`                                      | EMERGENCY STOP                 |
 | `/cmd_vel`           | `geometry_msgs/Twist`                                | EMERGENCY STOP (zero velocity) |
-| `/mission_goal`      | `amr_msgs/MissionGoal` (adjust to your goal message) | Mission Planner "SEND GOAL"    |
+| `/follow_gps_waypoints` | `nav2_msgs/action/FollowGPSWaypoints`             | Mission Planner "SEND ROUTE"   |
+| `/mission_goal`      | `amr_msgs/MissionGoal` (adjust to your goal message) | legacy single-goal path, no longer wired to a button |
+
+> The three action entries above go through roslib's `ActionClient`, which speaks
+> **ROS1 actionlib**. A ROS2 action server does not expose those topics, so these
+> need switching to rosbridge's `send_action_goal` op when the robot side lands.
 
 ## Security model
 
@@ -165,3 +171,9 @@ catalog's invariants, and `Dialog` accessibility.
 - The Mission Planner and Control Panel only define the **publisher/action
   architecture** — they issue real ROS calls but do not simulate robot
   behavior or fabricate acknowledgements.
+- The Mission Planner builds an ordered **multi-waypoint route** and dispatches
+  it as a single `FollowGPSWaypoints` goal, so the robot sequences the route.
+  Waypoints show `SENT_UNCONFIRMED` after dispatch and never advance to
+  "reached" — that would need action feedback no server currently sends.
+  The route's straight-line length is shown as a sanity check on ordering; it
+  is not a drive distance, and no ETA is offered because no speed is known.

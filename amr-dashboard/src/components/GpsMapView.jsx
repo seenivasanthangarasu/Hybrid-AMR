@@ -1,14 +1,21 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import useGps from '../hooks/useGps.js';
 import useOdometry from '../hooks/useOdometry.js';
 import DataFallback from './DataFallback.jsx';
-import { useMission } from '../context/MissionContext.jsx';
+import { useMission, useMapApi } from '../context/MissionContext.jsx';
+import { isValidLatitude, isValidLongitude, toLatLngs, WAYPOINT_SENT } from '../utils/waypoints.js';
 
 /**
  * GpsMapView
  * Renders the robot's live position on an OSM/Leaflet map from /fix.
  * Heading arrow comes from /odom orientation.
+ *
+ * The mission route is drawn here as numbered, draggable waypoint markers
+ * joined by a polyline from the robot's current position onward. Marker
+ * lifecycle is managed imperatively against a Map<id, L.Marker> — Leaflet
+ * layers live outside React, so every waypoint removed from the list must be
+ * explicitly removeLayer'd or it stays on the map forever.
  */
 
 // Fixed map-overlay colours. These are drawn on top of OpenStreetMap raster
@@ -19,6 +26,9 @@ import { useMission } from '../context/MissionContext.jsx';
 const MAP_ROBOT_COLOR = '#3ddcff'; // robot marker + travelled track (signal-cyan)
 const MAP_MARKER_BORDER = '#0e131c'; // dark ring around the marker for legibility
 const MAP_ROUTE_COLOR = '#00b7ff'; // planned robot→goal route line
+const MAP_WAYPOINT_COLOR = '#00b7ff'; // waypoint not yet dispatched
+const MAP_WAYPOINT_SENT_COLOR = '#ffb020'; // dispatched, unacknowledged (signal-amber)
+const MAP_WAYPOINT_SELECTED = '#ffffff'; // ring on the row selected in the planner
 
 // Robot position marker: a cyan dot with a heading arrow. Built as a Leaflet
 // divIcon (raw HTML) so it lives outside React; extracted here so the create
@@ -53,25 +63,72 @@ function robotIcon(heading) {
     iconAnchor: [9, 9],
   });
 }
+
+// Numbered waypoint pin. The number is the 1-based position in the route, so
+// reordering the list visibly renumbers the map without rebuilding markers.
+function waypointIcon(position, sent, selected) {
+  const fill = sent ? MAP_WAYPOINT_SENT_COLOR : MAP_WAYPOINT_COLOR;
+  const border = selected ? MAP_WAYPOINT_SELECTED : MAP_MARKER_BORDER;
+  return L.divIcon({
+    className: '',
+    html: `
+      <div style="
+        width:22px;
+        height:22px;
+        border-radius:50%;
+        background:${fill};
+        border:2px solid ${border};
+        box-shadow:0 0 ${selected ? '10px' : '6px'} ${fill}cc;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        color:${MAP_MARKER_BORDER};
+        font:bold 11px/1 ui-monospace,monospace;
+      ">${position}</div>
+    `,
+    iconSize: [22, 22],
+    iconAnchor: [11, 11],
+  });
+}
+
 export default function GpsMapView({ compact = false }) {
   const { hasData, hasEverData, lastReceivedAt, latitude, longitude, fixStatus, fixStatusCode } = useGps();
   const { heading } = useOdometry();
-  const { destination, setDestination, setMapApi } = useMission();
+  const { waypoints, selectedId, setSelectedId, addWaypoint, updateWaypoint } = useMission();
+  const { setMapApi } = useMapApi();
+
+  // Click-to-add is armed, not always-on: an unarmed map click would drop a
+  // waypoint on every mis-aimed pan.
+  const [addMode, setAddMode] = useState(false);
 
   const firstFixRef = useRef(false);
   const mapRef = useRef(null);
   const mapInstance = useRef(null);
   const markerRef = useRef(null);
-  const destinationMarkerRef = useRef(null);
+  const waypointMarkers = useRef(new Map()); // waypoint id -> L.Marker
   const pathRef = useRef(null);
   const pathPoints = useRef([]);
   const routeRef = useRef(null);
+  const autoNameSeq = useRef(0);
+
+  // Leaflet event handlers are bound once at layer-creation time, so they must
+  // not close over values that change. Everything they need is read through a
+  // ref refreshed on each render.
+  const live = useRef({ addMode, addWaypoint, updateWaypoint, setSelectedId });
+  useEffect(() => {
+    live.current = { addMode, addWaypoint, updateWaypoint, setSelectedId };
+  });
 
   // -------------------------------
   // Create map
   // -------------------------------
   useEffect(() => {
     if (!mapRef.current || mapInstance.current) return;
+
+    // Captured for the cleanup closure: the ref holds one Map instance for the
+    // component's lifetime, but reading `.current` at teardown time is the
+    // stale-ref pattern the linter (rightly) flags.
+    const markers = waypointMarkers.current;
 
     const map = L.map(mapRef.current, {
       zoomControl: !compact,
@@ -91,13 +148,14 @@ export default function GpsMapView({ compact = false }) {
 
     if (!compact) {
       map.on('click', (e) => {
+        if (!live.current.addMode) return;
         const { lat, lng } = e.latlng;
-
-        setDestination((prev) => ({
-          ...prev,
+        autoNameSeq.current += 1;
+        live.current.addWaypoint({
+          name: `WP ${autoNameSeq.current}`,
           latitude: lat.toFixed(7),
           longitude: lng.toFixed(7),
-        }));
+        });
       });
     }
 
@@ -106,44 +164,72 @@ export default function GpsMapView({ compact = false }) {
     // Only the main (non-compact) map publishes its controls into
     // MissionContext. The right-rail preview also mounts a GpsMapView, and
     // without this guard whichever instance renders last wins the shared
-    // `mapApi` — so "USE COORDINATES" could pan the tiny preview instead of
+    // `mapApi` — so "ADD WAYPOINT" could pan the tiny preview instead of
     // the main map (spec REQ-06).
     if (!compact) {
-      setMapApi({
-        map,
-        destinationMarkerRef,
-      });
+      setMapApi({ map });
     }
 
     return () => {
       map.remove();
       mapInstance.current = null;
+      markers.clear();
+      routeRef.current = null;
     };
-  }, [compact, setDestination, setMapApi]);
+  }, [compact, setMapApi]);
 
   // -------------------------------
-  // Destination Marker
+  // Waypoint markers
   // -------------------------------
   useEffect(() => {
     const map = mapInstance.current;
-
     if (!map || compact) return;
 
-    if (destination.latitude === '' || destination.longitude === '') {
-      return;
-    }
+    const markers = waypointMarkers.current;
+    const present = new Set();
 
-    const lat = parseFloat(destination.latitude);
-    const lng = parseFloat(destination.longitude);
+    waypoints.forEach((wp, i) => {
+      if (!isValidLatitude(wp.latitude) || !isValidLongitude(wp.longitude)) return;
+      present.add(wp.id);
 
-    if (isNaN(lat) || isNaN(lng)) return;
+      const latlng = [Number(wp.latitude), Number(wp.longitude)];
+      const icon = waypointIcon(i + 1, wp.status === WAYPOINT_SENT, wp.id === selectedId);
+      const label = `${i + 1} · ${wp.name}`;
+      const existing = markers.get(wp.id);
 
-    if (!destinationMarkerRef.current) {
-      destinationMarkerRef.current = L.marker([lat, lng]).addTo(map);
-    } else {
-      destinationMarkerRef.current.setLatLng([lat, lng]);
-    }
-  }, [destination, compact]);
+      if (existing) {
+        existing.setLatLng(latlng);
+        existing.setIcon(icon);
+        // Position changes with reordering, so the label is refreshed on every
+        // pass rather than only at creation.
+        existing.setTooltipContent(label);
+        return;
+      }
+
+      const marker = L.marker(latlng, { icon, draggable: true }).addTo(map);
+      marker.bindTooltip(label, { direction: 'top', offset: [0, -12] });
+
+      // Dragging the pin is the primary way to correct a position — the
+      // planner list shows coordinates read-only.
+      marker.on('dragend', () => {
+        const { lat, lng } = marker.getLatLng();
+        live.current.updateWaypoint(wp.id, {
+          latitude: Number(lat.toFixed(7)),
+          longitude: Number(lng.toFixed(7)),
+        });
+      });
+      marker.on('click', () => live.current.setSelectedId(wp.id));
+
+      markers.set(wp.id, marker);
+    });
+
+    // Anything no longer in the list must come off the map explicitly.
+    markers.forEach((marker, id) => {
+      if (present.has(id)) return;
+      map.removeLayer(marker);
+      markers.delete(id);
+    });
+  }, [waypoints, selectedId, compact]);
 
   // -------------------------------
   // Robot Marker + GPS Path
@@ -181,12 +267,19 @@ export default function GpsMapView({ compact = false }) {
   // -------------------------------
   // Route Line
   // -------------------------------
+  // Straight legs between waypoints in list order, starting from the robot's
+  // current position. This is the ORDER the operator has queued, not a path
+  // the planner has produced — Nav2 computes the real drivable route, and
+  // nothing here should be read as obstacle-aware.
   useEffect(() => {
     const map = mapInstance.current;
 
     if (!map || compact) return;
 
-    if (!hasData || destination.latitude === '' || destination.longitude === '') {
+    const legs = toLatLngs(waypoints);
+    const points = hasData ? [[latitude, longitude], ...legs] : legs;
+
+    if (points.length < 2) {
       if (routeRef.current) {
         map.removeLayer(routeRef.current);
         routeRef.current = null;
@@ -194,29 +287,56 @@ export default function GpsMapView({ compact = false }) {
       return;
     }
 
-    const robot = [latitude, longitude];
-    const goal = [parseFloat(destination.latitude), parseFloat(destination.longitude)];
-
     if (!routeRef.current) {
-      routeRef.current = L.polyline([robot, goal], {
+      routeRef.current = L.polyline(points, {
         color: MAP_ROUTE_COLOR,
         weight: 4,
         opacity: 0.8,
         dashArray: '8,8',
       }).addTo(map);
     } else {
-      routeRef.current.setLatLngs([robot, goal]);
+      routeRef.current.setLatLngs(points);
     }
-  }, [hasData, latitude, longitude, destination, compact]);
+  }, [hasData, latitude, longitude, waypoints, compact]);
 
   return (
     <div className="relative h-full w-full">
-      <div ref={mapRef} className="h-full w-full" />
+      {/* The container's className MUST stay static. L.map() adds its own
+          classes (leaflet-container, leaflet-grab, …) to this node
+          imperatively, and React rewriting className on a later render wipes
+          them — which silently strips the map's CSS and its click handling.
+          Reactive styling therefore goes through inline style, which React
+          patches property-by-property instead of replacing wholesale. */}
+      <div
+        ref={mapRef}
+        className="h-full w-full"
+        style={addMode ? { cursor: 'crosshair' } : undefined}
+      />
 
       {!hasData && (
         <div className="absolute inset-0 z-[1000] flex items-center justify-center bg-deck-900/85">
           <DataFallback topic="/fix" hasEverData={hasEverData} lastReceivedAt={lastReceivedAt} />
         </div>
+      )}
+
+      {!compact && (
+        <button
+          type="button"
+          onClick={() => setAddMode((v) => !v)}
+          aria-pressed={addMode}
+          title={
+            addMode
+              ? 'Click the map to append a waypoint — click here to stop'
+              : 'Arm click-to-add so map clicks append waypoints'
+          }
+          className={`absolute right-3 top-3 z-[1000] rounded px-2.5 py-1.5 font-display text-[10px] font-bold tracking-[0.1em] ring-1 transition-colors ${
+            addMode
+              ? 'bg-signal-cyan/30 text-signal-cyan ring-signal-cyan/60'
+              : 'bg-deck-900/85 text-ink-mid ring-deck-line hover:text-signal-cyan'
+          }`}
+        >
+          {addMode ? '● ADDING — CLICK MAP' : '+ ADD WAYPOINT'}
+        </button>
       )}
 
       {hasData && !compact && (

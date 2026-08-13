@@ -19,7 +19,8 @@ Everything below lives in the **Header** (top bar) or on the panels themselves.
 | Control | Where | What it does |
 |---|---|---|
 | **Connection chip** | Header right | One shared tone for link state: `ROSBRIDGE LINKED` (green), `CONNECTING` (amber, pulsing), `LINK CLOSED` / `CONNECTION ERROR` (red), `DISCONNECTED` (grey). |
-| **RECONNECT** button | Header, appears on `error`/`closed`/`disconnected` | Re-establishes the rosbridge link **without a page reload**. |
+| **AUTO-RETRY chip** | Header, beside the connection chip, on link loss | The dashboard reconnects **on its own**: `AUTO-RETRY 3/6 · 4s` counts down to the next attempt. Retries are **bounded** — after 6 the chip reads `AUTO-RETRY GAVE UP (6)` and stops. |
+| **RECONNECT** button | Header, appears on `error`/`closed`/`disconnected` | Re-establishes the rosbridge link **without a page reload**, immediately rather than waiting for the countdown. Also **resets a spent retry budget** to a fresh round of 6. |
 | **Theme toggle** (sun/moon) | Header right | Switches dark ⇄ light. Persists in `localStorage` (`amr-theme`); first visit follows OS `prefers-color-scheme`. |
 | **Settings gear** | Header far right | Opens the layout menu (below). |
 | **Edit layout** toggle | Settings menu | Turns the whole dashboard into a **drag-and-drop, resizable grid**. A cyan "LAYOUT EDIT MODE" banner appears with a **DONE** button. |
@@ -66,10 +67,16 @@ as if live when it isn't:
   preview to switch (except the URDF card, which is a static display, not a selectable view).
 - **Freshness badges** (LiDAR/SLAM corners, Status rows): **LIVE** (green), **STALE · 8s**
   (amber, with age), **NO DATA** (grey).
-- **Connection-aware fallbacks** distinguish *why* data is missing: **OFFLINE** (no link),
+- **Connection-aware fallbacks** distinguish *why* data is missing: **OFFLINE** (no link and
+  not being retried), **RETRYING** (link dropped, an automatic attempt is pending),
   **CONNECTING**, **NO SIGNAL** (linked but the topic has no publisher), **STALE** (was live,
   now overdue). The camera panel shows **NO CAMERA STREAM** and auto-recovers when the stream
   returns.
+
+  The **OFFLINE / RETRYING** split matters: `RETRYING` means the dashboard is already handling
+  it and the operator should wait; `OFFLINE` means the automatic attempts are spent and the
+  robot or the network genuinely needs attention. Panels flip from `RETRYING` to `OFFLINE` at
+  the moment the budget runs out.
 - **E-stop** has a **visible confirm-window countdown** (shrinking red bar) on the two-click
   arm, and disabled command buttons state *why* on hover ("Disconnected — commands unavailable").
 
@@ -119,7 +126,7 @@ App.jsx
 ### Error catalog & dialogs
 
 ```
-src/errors/catalog.js          12 fault states: code, tone, severity, summary, causes, remedies
+src/errors/catalog.js          13 fault states: code, tone, severity, summary, causes, remedies
 src/components/ui/Dialog.jsx   accessible modal primitive (focus trap, Esc, restore focus, z-3000)
 src/components/ErrorDialog.jsx renders one catalog entry (summary → causes → remedies)
 src/components/ErrorReference.jsx  the catalogue page, grouped by category
@@ -230,6 +237,27 @@ subscriber for `/emergency_stop`, `/mission_state_cmd`, or `/mission_goal`, and 
 so commands honestly report *sent — unconfirmed* and can never reach `CONFIRMED`. A few
 checklist lines are marked `[~]`: code-verified and unit-tested, but needing a live publishing
 robot to exercise end-to-end.
+
+### Mission routes (multi-waypoint)
+
+The Mission Planner builds an **ordered route** rather than a single goal. Waypoints are added
+from the entry form (or by arming `+ ADD WAYPOINT` on the map and clicking it), reordered with
+the per-row ▲▼ controls, repositioned by dragging their map pin, and removed individually or
+via a confirming `CLEAR ALL`. Selecting a row focuses that pin on the map, and clicking a pin
+selects its row.
+
+Two deliberate limits, both about not inventing information:
+
+- **`SEND ROUTE` dispatches the whole route as one `FollowGPSWaypoints` goal**, so the *robot*
+  sequences it. The dashboard walking the route itself would need an "arrival" signal that does
+  not exist, leaving the browser to guess arrival from GPS proximity. Waypoints therefore stop
+  at `SENT_UNCONFIRMED`; there is no `REACHED` state until real action feedback exists.
+- **The route length is straight-line and labelled as such**, and there is no ETA — the
+  dashboard knows no speed, and Nav2 owns the actual drivable path.
+
+Beyond the missing Nav2 stack, these action calls also have a **protocol** gap: roslib's
+`ActionClient` speaks ROS1 actionlib, which a ROS2 action server does not answer. See
+`PROJECT_CONTEXT.md` §5.2.
 
 Backend/runtime note: the dashboard connects to the robot's rosbridge at the URL in
 `amr-dashboard/.env` (`VITE_ROSBRIDGE_URL`). Live telemetry additionally requires the robot's
