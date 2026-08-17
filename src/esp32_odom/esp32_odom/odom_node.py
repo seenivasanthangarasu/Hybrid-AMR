@@ -122,6 +122,7 @@ class ESP32OdomNode(Node):
         tf_msg.transform.rotation.w = math.cos(theta / 2.0)
 
         self.tf_broadcaster.sendTransform(tf_msg)
+        self.get_logger().info("Publishing odom TF")
 
         # ---------------- JOINT STATES ----------------
         js = JointState()
