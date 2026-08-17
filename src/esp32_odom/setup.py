@@ -24,7 +24,8 @@ setup(
     },
     entry_points={
         'console_scripts': [
-'odom_node = esp32_odom.odom_node:main',
+            'odom_node = esp32_odom.odom_node:main',
+            'arrow_teleop = esp32_odom.arrow_teleop:main',
         ],
     },
 )
