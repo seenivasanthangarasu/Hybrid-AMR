@@ -1,0 +1,65 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ─── Base reset & global styles ─── */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+@layer base {
+  :root {
+    --radius: 12px;
+    --sidebar-width-collapsed: 72px;
+    --sidebar-width-expanded: 260px;
+    --header-height: 56px;
+    --footer-height: 48px;
+    --transition-fast: 150ms ease;
+    --transition-normal: 250ms ease;
+  }
+
+  html { font-size: 16px; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+  body { font-family: 'Inter', system-ui, -apple-system, sans-serif; background: #F8FAFC; color: #0F172A; overflow: hidden; height: 100vh; width: 100vw; }
+  #root { display: flex; flex-direction: column; height: 100vh; width: 100vw; }
+
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: #94A3B8; }
+
+  /* Leaflet overrides */
+  .leaflet-container { font-family: inherit; }
+  .leaflet-control-zoom { border: none !important; box-shadow: var(--shadow-card) !important; }
+  .leaflet-control-zoom a { color: #0F172A !important; border: none !important; padding: 8px !important; font-size: 16px !important; }
+  .leaflet-control-zoom a:hover { background: #F1F5F9 !important; }
+}
+
+@layer components {
+  /* Touch-friendly button base */
+  .btn-gcs {
+    @apply inline-flex items-center justify-center gap-2 font-semibold rounded-lg;
+    min-height: 48px;
+    padding-inline: 20px;
+    transition: all var(--transition-fast);
+    user-select: none;
+  }
+  .btn-gcs:active { transform: scale(0.97); }
+
+  /* Card base */
+  .card-gcs {
+    @apply bg-white rounded-xl shadow-card border border-border;
+  }
+
+  /* Badge base */
+  .badge-gcs {
+    @apply inline-flex items-center gap-1 px-2.5 py-0.5 text-xs font-semibold rounded-full;
+  }
+
+  /* Status indicator dot */
+  .dot-gcs {
+    @apply w-2.5 h-2.5 rounded-full flex-shrink-0;
+  }
+
+  /* Panel base */
+  .panel-gcs {
+    @apply bg-white rounded-xl shadow-card border border-border overflow-hidden;
+  }
+}

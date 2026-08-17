@@ -1,0 +1,34 @@
+experiment_name: "Test002"
+date_time: "2026-08-12_16-09-22"
+
+robot:
+  type: "AMR"
+  ros_version: "ROS 2 Jazzy"
+
+sensors:
+  lidar: "YDLIDAR"
+  imu: "GY-80"
+  odometry: "ESP32"
+  encoder: "joint_states"
+  gps: "GPS NavSatFix"
+
+localization:
+  method: "SLAM Toolbox"
+
+recording:
+  storage: "MCAP"
+
+topics:
+  - "/scan"
+  - "/imu/data_raw"
+  - "/imu/mag"
+  - "/odom"
+  - "/joint_states"
+  - "/fix"
+  - "/cmd_vel"
+  - "/tf"
+  - "/tf_static"
+  - "/pose"
+  - "/map"
+
+notes: ""

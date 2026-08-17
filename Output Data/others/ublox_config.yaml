@@ -1,0 +1,23 @@
+/ublox_gps_node:
+  ros__parameters:
+    device: "/dev/gps"
+    frame_id: "gps"
+
+    uart1:
+      baudrate: 115200
+
+    baudrate: 115200
+    set_baudrate: false
+
+    rate: 1.0
+    nav_rate: 1
+
+    dynamic_model: portable
+
+    enable_ppp: false
+
+    gnss:
+      gps: true
+      glonass: true
+      galileo: true
+      beidou: true

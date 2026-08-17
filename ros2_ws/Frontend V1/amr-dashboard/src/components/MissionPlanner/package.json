@@ -1,0 +1,11 @@
+{
+  "name": "mission-planner",
+  "version": "1.0.0",
+  "description": "Professional Mission Planner for AMR Dashboard",
+  "main": "index.tsx",
+  "types": "types/index.ts",
+  "dependencies": {
+    "leaflet": "^1.9.4",
+    "zustand": "^4.4.1"
+  }
+}

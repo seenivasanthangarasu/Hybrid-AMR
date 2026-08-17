@@ -1,0 +1,25 @@
+experiment_name: "Test001"
+date_time: "2026-08-12_15-48-32"
+
+robot:
+  type: "AMR"
+  ros_version: "ROS 2 Jazzy"
+
+sensors:
+  lidar: "YDLIDAR"
+  imu: "GY-80"
+  odometry: "ESP32"
+
+recording:
+  storage: "MCAP"
+
+topics:
+  - "/scan"
+  - "/odom"
+  - "/imu/data"
+  - "/cmd_vel"
+  - "/tf"
+  - "/tf_static"
+  - "/joint_states"
+
+notes: ""

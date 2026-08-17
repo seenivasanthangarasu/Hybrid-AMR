@@ -1,0 +1,165 @@
+<?xml version="1.0" ?>
+<robot name="gogo" xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+<xacro:include filename="$(find gogo_description)/urdf/materials.xacro" />
+<xacro:include filename="$(find gogo_description)/urdf/gogo.ros2control" />
+<xacro:include filename="$(find gogo_description)/urdf/gogo.gazebo" />
+<link name="base_link">
+  <inertial>
+    <origin xyz="0.00014891641118042382 -3.330593326496944e-05 0.08014365341587747" rpy="0 0 0"/>
+    <mass value="4.296738201060667"/>
+    <inertia ixx="0.015568" iyy="0.030421" izz="0.025452" ixy="-4e-06" iyz="-1.1e-05" ixz="-4.7e-05"/>
+  </inertial>
+  <visual>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="file://$(find gogo_description)/meshes/base_link.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+    <material name="silver"/>
+  </visual>
+  <collision>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="file://$(find gogo_description)/meshes/base_link.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+  </collision>
+</link>
+
+<link name="left_wheel_1">
+  <inertial>
+    <origin xyz="-1.6009851092257577e-09 -0.00014170388341636087 -5.752817092835594e-08" rpy="0 0 0"/>
+    <mass value="0.4188079906789551"/>
+    <inertia ixx="0.000166" iyy="0.000289" izz="0.000166" ixy="-0.0" iyz="-0.0" ixz="0.0"/>
+  </inertial>
+  <visual>
+    <origin xyz="-0.0 -0.0837 -0.0325" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="file://$(find gogo_description)/meshes/left_wheel_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+    <material name="silver"/>
+  </visual>
+  <collision>
+    <origin xyz="-0.0 -0.0837 -0.0325" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="file://$(find gogo_description)/meshes/left_wheel_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+  </collision>
+</link>
+
+<link name="right_wheel_1">
+  <inertial>
+    <origin xyz="-1.600985107228026e-09 0.00014170388341636087 -5.752817091447815e-08" rpy="0 0 0"/>
+    <mass value="0.4188079906789563"/>
+    <inertia ixx="0.000166" iyy="0.000289" izz="0.000166" ixy="0.0" iyz="0.0" ixz="0.0"/>
+  </inertial>
+  <visual>
+    <origin xyz="-0.0 0.0837 -0.0325" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="file://$(find gogo_description)/meshes/right_wheel_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+    <material name="silver"/>
+  </visual>
+  <collision>
+    <origin xyz="-0.0 0.0837 -0.0325" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="file://$(find gogo_description)/meshes/right_wheel_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+  </collision>
+</link>
+
+<link name="lidar_link_1">
+  <inertial>
+    <origin xyz="0.0065000005066394445 -2.1410336840418575e-17 0.011743563677556662" rpy="0 0 0"/>
+    <mass value="0.611803086230873"/>
+    <inertia ixx="0.00019" iyy="0.00019" izz="0.000323" ixy="0.0" iyz="0.0" ixz="0.0"/>
+  </inertial>
+  <visual>
+    <origin xyz="-0.034 0.0 -0.1771" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="file://$(find gogo_description)/meshes/lidar_link_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+    <material name="silver"/>
+  </visual>
+  <collision>
+    <origin xyz="-0.034 0.0 -0.1771" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="file://$(find gogo_description)/meshes/lidar_link_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+  </collision>
+</link>
+
+<link name="camera_link_1">
+  <inertial>
+    <origin xyz="0.011637811135220555 0.0033041320198746245 -9.733004069367723e-09" rpy="0 0 0"/>
+    <mass value="0.34982474377882367"/>
+    <inertia ixx="0.000228" iyy="2.9e-05" izz="0.000227" ixy="-2e-06" iyz="-0.0" ixz="0.0"/>
+  </inertial>
+  <visual>
+    <origin xyz="-0.0925 0.0 -0.1274" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="file://$(find gogo_description)/meshes/camera_link_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+    <material name="silver"/>
+  </visual>
+  <collision>
+    <origin xyz="-0.0925 0.0 -0.1274" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="file://$(find gogo_description)/meshes/camera_link_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+  </collision>
+</link>
+
+<link name="imu_link_1">
+  <inertial>
+    <origin xyz="0.012999545587839903 -0.003999810413309962 0.008000000000000035" rpy="0 0 0"/>
+    <mass value="0.04016845000000001"/>
+    <inertia ixx="2e-06" iyy="2e-06" izz="3e-06" ixy="0.0" iyz="-0.0" ixz="0.0"/>
+  </inertial>
+  <visual>
+    <origin xyz="-0.008683 -0.004961 -0.1029" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="file://$(find gogo_description)/meshes/imu_link_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+    <material name="silver"/>
+  </visual>
+  <collision>
+    <origin xyz="-0.008683 -0.004961 -0.1029" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="file://$(find gogo_description)/meshes/imu_link_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+  </collision>
+</link>
+
+<joint name="Revolute 1" type="continuous">
+  <origin xyz="0.0 0.0837 0.0325" rpy="0 0 0"/>
+  <parent link="base_link"/>
+  <child link="left_wheel_1"/>
+  <axis xyz="0.0 -1.0 0.0"/>
+</joint>
+
+<joint name="Revolute 2" type="continuous">
+  <origin xyz="0.0 -0.0837 0.0325" rpy="0 0 0"/>
+  <parent link="base_link"/>
+  <child link="right_wheel_1"/>
+  <axis xyz="0.0 -1.0 0.0"/>
+</joint>
+
+<joint name="Rigid 3" type="fixed">
+  <origin xyz="0.034 0.0 0.1771" rpy="0 0 0"/>
+  <parent link="base_link"/>
+  <child link="lidar_link_1"/>
+</joint>
+
+<joint name="Rigid 4" type="fixed">
+  <origin xyz="0.0925 0.0 0.1274" rpy="0 0 0"/>
+  <parent link="base_link"/>
+  <child link="camera_link_1"/>
+</joint>
+
+<joint name="Rigid 5" type="fixed">
+  <origin xyz="0.008683 0.004961 0.1029" rpy="0 0 0"/>
+  <parent link="base_link"/>
+  <child link="imu_link_1"/>
+</joint>
+
+</robot>

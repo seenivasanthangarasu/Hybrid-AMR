@@ -1,13 +1,27 @@
-build/
-install/
-log/
+# ROS 2 Build Artifacts
+ros2_ws/build/
+ros2_ws/install/
+ros2_ws/log/
+**/build/
+**/install/
+**/log/
 
-node_modules/
-dist/
+# Node & Web Artifacts
+**/node_modules/
+**/dist/
+**/.env
 
+# Python & System Cache
 *.pyc
 __pycache__/
+**/__pycache__/
 .vscode/
 .idea/
 .DS_Store/
 
+# Large Archives and Files (>100MB GitHub limit)
+*.zip
+Output Data/3d_map/deplid0.db
+Output Data/3d_map/depod2.db
+Output Data/3d_map/dep,od.db
+Output Data/3d_map/lab_map2.db
