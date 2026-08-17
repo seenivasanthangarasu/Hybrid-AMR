@@ -1,6 +1,6 @@
 # Dashboard UI Guide — Hybrid AMR Command Center
 
-**Last updated:** 2026-08-10
+**Last updated:** 2026-08-13
 **Scope:** the operator-facing UI and the front-end architecture of `amr-dashboard/`.
 **Companion docs:** [`remediation/spec.md`](remediation/spec.md) (safety/functional requirements),
 [`remediation/ui-plan.md`](remediation/ui-plan.md) (visual/UX plan), [`remediation/tasks.md`](remediation/tasks.md)
@@ -258,6 +258,60 @@ Two deliberate limits, both about not inventing information:
 Beyond the missing Nav2 stack, these action calls also have a **protocol** gap: roslib's
 `ActionClient` speaks ROS1 actionlib, which a ROS2 action server does not answer. See
 `PROJECT_CONTEXT.md` §5.2.
+
+### GNSS quality (DOP, C/N0, accuracy, RF health)
+
+`/fix` (`sensor_msgs/NavSatFix`) carries a position and almost nothing about how much to
+trust it. The **GNSS QUALITY** panel — full width, row 12, below the one-screen fold —
+adds the receiver-side detail, and the three headline figures (satellites, HDOP, accuracy)
+are repeated in the Status panel and the map's corner overlay so a position is never shown
+without a confidence alongside it.
+
+Sources (`hooks/useGnssQuality.js`, maths and vocabulary in `utils/gnss.js`):
+
+| Block | Topic | What it shows |
+|---|---|---|
+| SOLUTION | `/navpvt` (`ublox_msgs/NavPVT`) | Fix type, `gnssFixOK`, **RTK** carrier solution (NONE / FLOAT / FIXED), differential corrections, satellites used, UTC + validity, TTFF (from `/navstatus`) |
+| ACCURACY | `/navpvt` + `/fix` | `hAcc`/`vAcc` (the receiver's own 1σ estimates) and **CEP(50%) / R95 / DRMS / 2DRMS** plus per-axis σ, derived from `position_covariance` |
+| GEOMETRY · DOP | `/navdop` (`ublox_msgs/NavDOP`) | **HDOP** (hero, with an IDEAL→POOR rating) plus PDOP/VDOP/GDOP/TDOP/NDOP/EDOP |
+| SIGNAL · C/N0 | `/navsat` (`ublox_msgs/NavSAT`) | Per-satellite **C/N0** bar chart, strongest-first, solid = used in the solution; visible/used counts, mean C/N0, per-constellation breakdown |
+| RF FRONT-END | `/monhw` (`ublox_msgs/MonHW`) | Antenna status (OK/SHORT/OPEN), jamming state + indicator, AGC, noise level; plus MSL vs ellipsoid height and their geoid separation |
+
+Three things worth stating precisely, because the names get mixed up:
+
+- **There is no RSSI in GNSS.** A GNSS signal arrives ~20 dB *below* the thermal noise
+  floor, so received power says nothing on its own. Receivers report post-correlation
+  **C/N0** (carrier-to-noise density, dB-Hz, 0–63) per satellite instead. The nearest
+  wideband "how strong is the RF here" figure is MonHW's AGC / jamming indicator, which is
+  why those sit in their own block.
+- **CEP is not a transmitted field.** No GNSS message contains one; it is a statistic. The
+  panel derives it from the fix covariance as `1.1774·σ` (and R95 as `2.4477·σ`, DRMS as
+  `√(σE²+σN²)`), assuming a circular-normal horizontal error — which is why the raw per-axis
+  sigmas are shown too. Where the receiver publishes its own `hAcc`, that is preferred as
+  the headline.
+- **DOP is unitless geometry**, not an error: position error ≈ DOP × ranging error.
+
+**Satellite count** is the other half of the accuracy picture — DOP says how well-spread the
+satellites are, the count says how many there are to spread — so it carries the same rating
+vocabulary and tone as DOP wherever it appears (panel header chip, SOLUTION → *Sats used*,
+SIGNAL → *Used*, the Status row and the map overlay): `≥9 EXCELLENT` / `7–8 GOOD` /
+`5–6 FAIR` / `4 MINIMUM` / `1–3 INSUFFICIENT` / `0 NONE`. Four is the arithmetic minimum for
+a 3D fix (three for position, one for the receiver clock), so it is deliberately rated amber,
+never green: a solution with no redundancy is one obstruction away from dropping. The rating
+uses the **used** count from `numSV`, not the visible one — a satellite the receiver can see
+but has not included contributes nothing to the fix.
+
+Two robustness details. The five diagnostic topics are subscribed and reported
+**independently** — the u-blox driver publishes each only when the matching
+`publish.nav.*` / `publish.mon.*` option is set in `ublox_config.yaml`, so a receiver with
+DOP disabled shows live satellites next to an honest `NO DATA` for geometry rather than a
+blank panel. And every field is read under both its ROS1 (`hAcc`, `numSV`, `gnssId`) and
+ROS2 (`h_acc`, `num_sv`, `gnss_id`) spelling, so a driver-version difference degrades to
+nothing instead of to a panel of NO DATA.
+
+Topics are unprefixed because `ros2 run ublox_gps ublox_gps_node` puts the node in the root
+namespace — the same reason `/fix` is unprefixed. Set `VITE_UBLOX_NS` if the driver is
+launched inside a namespace.
 
 Backend/runtime note: the dashboard connects to the robot's rosbridge at the URL in
 `amr-dashboard/.env` (`VITE_ROSBRIDGE_URL`). Live telemetry additionally requires the robot's

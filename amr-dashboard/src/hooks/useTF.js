@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import ROSLIB from 'roslib';
 import rosService from '../services/RosConnectionService.js';
+import { useConnectionEpoch } from './useRosConnection.js';
 
 /**
  * useTF
@@ -14,6 +15,9 @@ export default function useTF({ frameId = 'base_link', fixedFrame = 'map', stale
   const [lastReceivedAt, setLastReceivedAt] = useState(null);
   const [stale, setStale] = useState(true);
   const clientRef = useRef(null);
+  // The TFClient binds to one ROSLIB.Ros instance; a reconnect makes a new one,
+  // so the client must be rebuilt or the robot pose never returns.
+  const epoch = useConnectionEpoch();
 
   useEffect(() => {
     if (!rosService.ros) rosService.connect();
@@ -37,7 +41,7 @@ export default function useTF({ frameId = 'base_link', fixedFrame = 'map', stale
       tfClient.unsubscribe(frameId);
       tfClient.dispose?.();
     };
-  }, [frameId, fixedFrame]);
+  }, [frameId, fixedFrame, epoch]);
 
   useEffect(() => {
     const interval = setInterval(() => {

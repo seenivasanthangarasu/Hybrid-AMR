@@ -23,6 +23,10 @@ export const DEFAULT_LAYOUT = [
   { i: 'lidar', x: 9, y: 3, w: 3, h: 3, minW: 2, minH: 2 },
   { i: 'camera', x: 9, y: 6, w: 3, h: 3, minW: 2, minH: 2 },
   { i: 'urdf', x: 9, y: 9, w: 3, h: 3, minW: 2, minH: 2 },
+  // GNSS quality sits on row 12 — below the one-screen fold on purpose. It is a
+  // wide diagnostic readout an operator scrolls to when a fix looks wrong, not
+  // something that should displace the live views at a glance.
+  { i: 'gnss', x: 0, y: 12, w: 12, h: 5, minW: 3, minH: 3 },
 ];
 
 const PANEL_IDS = DEFAULT_LAYOUT.map((p) => p.i);

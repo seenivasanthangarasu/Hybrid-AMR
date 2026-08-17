@@ -1,8 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import useGps from '../hooks/useGps.js';
+import useGnssQuality from '../hooks/useGnssQuality.js';
 import useOdometry from '../hooks/useOdometry.js';
 import DataFallback from './DataFallback.jsx';
+import { dopQuality, fixed, formatDistance, satCountQuality } from '../utils/gnss.js';
+import { toneFor } from './ui/signalTones.js';
 import { useMission, useMapApi } from '../context/MissionContext.jsx';
 import { isValidLatitude, isValidLongitude, toLatLngs, WAYPOINT_SENT } from '../utils/waypoints.js';
 
@@ -91,9 +94,70 @@ function waypointIcon(position, sent, selected) {
   });
 }
 
+// Map-corner fix summary. Beyond the NavSatFix status label it carries the
+// three quality figures that decide how much to trust the marker's position:
+// satellite count, horizontal geometry (HDOP) and estimated error. Each is
+// omitted rather than zero-filled when its source topic isn't publishing.
+function GpsStatusOverlay({ fixStatus, fixStatusCode, gnss }) {
+  const hdop = gnss.dop?.hdop ?? null;
+  const hdopQ = dopQuality(hdop);
+  const accuracy = formatDistance(gnss.estimated?.horizontal ?? gnss.derived?.sigmaH ?? null);
+  const satsUsed = gnss.solution?.satellitesUsed ?? gnss.sats?.used ?? null;
+  const satsVisible = gnss.sats?.visible ?? null;
+  const satQ = satCountQuality(satsUsed);
+  const rtk = gnss.solution?.carrierSolutionCode;
+
+  return (
+    <div className="pointer-events-none absolute left-3 top-3 z-[1000] rounded panel px-3 py-2 shadow-panel">
+      <div className="data-label">GPS STATUS</div>
+
+      <div
+        className={`data-value text-sm font-semibold ${
+          fixStatusCode != null && fixStatusCode >= 0 ? 'text-signal-green' : 'text-signal-red'
+        }`}
+      >
+        {fixStatus}
+        {rtk > 0 && (
+          <span className={`ml-1.5 text-[10px] font-bold ${rtk === 2 ? 'text-signal-green' : 'text-signal-amber'}`}>
+            {rtk === 2 ? 'RTK FIX' : 'RTK FLOAT'}
+          </span>
+        )}
+      </div>
+
+      {(satsUsed != null || hdop != null || accuracy) && (
+        <div className="mt-1 flex gap-3 font-mono text-[10px] text-ink-mid">
+          {satsUsed != null && (
+            <span title={`satellites used / visible — ${satQ.label ?? 'unrated'}`}>
+              SAT <span className={toneFor(satQ.tone).text}>{satsUsed}</span>
+              {satsVisible != null && `/${satsVisible}`}
+            </span>
+          )}
+          {hdop != null && (
+            <span title={`horizontal dilution of precision — ${hdopQ.label}`}>
+              HDOP <span className={toneFor(hdopQ.tone).text}>{fixed(hdop, 2)}</span>
+            </span>
+          )}
+          {accuracy && (
+            <span title="estimated horizontal accuracy (1σ)">
+              ±
+              <span className="text-ink-high">
+                {accuracy.value}
+                {accuracy.unit}
+              </span>
+            </span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function GpsMapView({ compact = false }) {
   const { hasData, hasEverData, lastReceivedAt, latitude, longitude, fixStatus, fixStatusCode } = useGps();
   const { heading } = useOdometry();
+  // Fix quality alongside the fix itself — a position on a map looks equally
+  // confident at 2 cm and at 30 m, so the overlay states which it is.
+  const gnss = useGnssQuality();
   const { waypoints, selectedId, setSelectedId, addWaypoint, updateWaypoint } = useMission();
   const { setMapApi } = useMapApi();
 
@@ -339,19 +403,7 @@ export default function GpsMapView({ compact = false }) {
         </button>
       )}
 
-      {hasData && !compact && (
-        <div className="pointer-events-none absolute left-3 top-3 z-[1000] rounded panel px-3 py-2 shadow-panel">
-          <div className="data-label">GPS STATUS</div>
-
-          <div
-            className={`data-value text-sm font-semibold ${
-              fixStatusCode != null && fixStatusCode >= 0 ? 'text-signal-green' : 'text-signal-red'
-            }`}
-          >
-            {fixStatus}
-          </div>
-        </div>
-      )}
+      {hasData && !compact && <GpsStatusOverlay fixStatus={fixStatus} fixStatusCode={fixStatusCode} gnss={gnss} />}
     </div>
   );
 }

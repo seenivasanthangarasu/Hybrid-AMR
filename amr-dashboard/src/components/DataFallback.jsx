@@ -7,7 +7,8 @@ import { toneFor } from './ui/signalTones.js';
 /**
  * DataFallback (spec REQ-20) — a single fallback treatment that distinguishes
  * *why* data is absent instead of an undifferentiated "NO DATA — /topic":
- *   OFFLINE    — no ROS link (disconnected/error/closed)
+ *   OFFLINE    — no ROS link, and not currently being retried
+ *   RETRYING   — link dropped, an automatic reconnect attempt is pending
  *   CONNECTING — link negotiating
  *   NO SIGNAL  — linked, but the topic has never published
  *   STALE      — was live, now overdue (with age)
@@ -18,9 +19,15 @@ import { toneFor } from './ui/signalTones.js';
  * For non-ROS sources (e.g. the HTTP camera stream) pass an explicit
  * `label`/`tone` to skip the ROS-link derivation.
  */
-function resolveCause({ connectionStatus, hasEverData, ageSec }) {
+function resolveCause({ connectionStatus, hasEverData, ageSec, retrying }) {
   if (connectionStatus === 'connecting') return { label: 'CONNECTING', tone: 'warn', pulse: true };
-  if (connectionStatus !== 'connected') return { label: 'OFFLINE', tone: 'critical', pulse: false };
+  // Precedence must match catalog.diagnoseView(), or the inline badge and the
+  // dialog explaining the same panel would name two different faults.
+  if (connectionStatus !== 'connected') {
+    return retrying
+      ? { label: 'RETRYING', tone: 'warn', pulse: true }
+      : { label: 'OFFLINE', tone: 'critical', pulse: false };
+  }
   if (!hasEverData) return { label: 'NO SIGNAL', tone: 'idle', pulse: false };
   return { label: ageSec != null ? `STALE · ${formatAge(ageSec)}` : 'STALE', tone: 'stale', pulse: false };
 }
@@ -34,7 +41,7 @@ export default function DataFallback({
   pulse = false,
   className = '',
 }) {
-  const { status } = useRosConnection();
+  const { status, retry } = useRosConnection();
   const now = useNow(1000);
 
   let cause;
@@ -42,7 +49,12 @@ export default function DataFallback({
     cause = { label, tone, pulse };
   } else {
     const ageSec = lastReceivedAt ? Math.max(0, Math.round((now - lastReceivedAt) / 1000)) : null;
-    cause = resolveCause({ connectionStatus: status, hasEverData, ageSec });
+    cause = resolveCause({
+      connectionStatus: status,
+      hasEverData,
+      ageSec,
+      retrying: retry.attempt > 0 && !retry.exhausted,
+    });
   }
 
   const t = toneFor(cause.tone);

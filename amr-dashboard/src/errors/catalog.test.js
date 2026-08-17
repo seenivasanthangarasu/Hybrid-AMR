@@ -40,6 +40,17 @@ describe('diagnoseView', () => {
     expect(diagnoseView({ connectionStatus: 'error', hasEverData: true })).toBe(ERRORS.LINK_OFFLINE);
   });
 
+  it('distinguishes a link being auto-retried from one that is simply down', () => {
+    // Telling an operator to go restart rosbridge while an automatic attempt is
+    // seconds away sends them chasing a problem already being handled.
+    expect(diagnoseView({ connectionStatus: 'closed', hasEverData: true, retrying: true })).toBe(
+      ERRORS.LINK_RETRYING,
+    );
+    expect(diagnoseView({ connectionStatus: 'closed', hasEverData: true, retrying: false })).toBe(
+      ERRORS.LINK_OFFLINE,
+    );
+  });
+
   it('reports a negotiating link as connecting, not offline', () => {
     expect(diagnoseView({ connectionStatus: 'connecting', hasEverData: false })).toBe(ERRORS.LINK_CONNECTING);
   });

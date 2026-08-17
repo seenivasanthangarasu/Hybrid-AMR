@@ -44,11 +44,46 @@ const STATUS_SIGNAL = {
 // forcing the operator to reload the page.
 const RECOVERABLE = new Set(['error', 'closed', 'disconnected']);
 
+/**
+ * Bounded auto-reconnect, made visible. A silent retry would be worse than no
+ * retry: the operator cannot tell whether the dashboard is recovering, and
+ * cannot tell when it has stopped trying. So the countdown to the next attempt
+ * is shown, and running out of attempts is stated outright rather than the
+ * indicator simply going quiet.
+ */
+function RetryIndicator({ retry, now }) {
+  if (!retry || retry.attempt === 0) return null;
+
+  if (retry.exhausted) {
+    return (
+      <SignalChip
+        tone="critical"
+        label={`AUTO-RETRY GAVE UP (${retry.maxAttempts})`}
+        className="whitespace-nowrap"
+      />
+    );
+  }
+
+  const secondsLeft = retry.nextAttemptAt
+    ? Math.max(0, Math.ceil((retry.nextAttemptAt - now.getTime()) / 1000))
+    : 0;
+
+  return (
+    <SignalChip
+      tone="warn"
+      pulse
+      label={`AUTO-RETRY ${retry.attempt}/${retry.maxAttempts} · ${secondsLeft}s`}
+      className="whitespace-nowrap"
+    />
+  );
+}
+
 export default function Header({
   connectionStatus,
   mode,
   isModeDefault,
   onReconnect,
+  retry,
   editMode,
   onToggleEdit,
   onResetLayout,
@@ -113,11 +148,20 @@ export default function Header({
           <span role="status" aria-live="polite" aria-label={`Connection: ${s.label}`}>
             <SignalChip tone={s.tone} label={s.label} pulse={s.pulse} />
           </span>
+          {/* Polite too: an automatic retry is progress information, not an
+              action the operator must take right now (spec REQ-12). */}
+          <span role="status" aria-live="polite">
+            <RetryIndicator retry={retry} now={now} />
+          </span>
           {onReconnect && RECOVERABLE.has(connectionStatus) && (
             <button
               type="button"
               onClick={onReconnect}
-              title="Re-establish the ROSBridge link without reloading"
+              title={
+                retry?.exhausted
+                  ? 'Automatic retries are spent — this starts a fresh attempt'
+                  : 'Re-establish the ROSBridge link now, without waiting for the next automatic retry'
+              }
               className="flex items-center gap-1 rounded border border-signal-cyan/40 bg-signal-cyan/10 px-2 py-0.5 font-mono text-[10px] font-semibold tracking-wider text-signal-cyan transition-colors hover:bg-signal-cyan/20"
             >
               <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2">

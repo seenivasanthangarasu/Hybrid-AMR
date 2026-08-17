@@ -8,7 +8,11 @@ const hoisted = vi.hoisted(() => ({ subscribe: vi.fn(), unsubscribe: vi.fn() }))
 vi.mock('../services/RosConnectionService.js', () => ({
   default: {
     ros: {},
+    epoch: 0,
     connect: vi.fn(),
+    // useRosTopic keys its subscription on the connection epoch so a reconnect
+    // rebuilds it; the hook therefore observes the service.
+    onStatusChange: vi.fn(() => () => {}),
     getTopic: vi.fn(() => ({ subscribe: hoisted.subscribe, unsubscribe: hoisted.unsubscribe })),
   },
 }));

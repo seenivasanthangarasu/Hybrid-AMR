@@ -45,6 +45,7 @@ export const ERRORS = {
     ],
     remedies: [
       'Press RECONNECT in the header — it re-establishes the link without reloading.',
+      'The dashboard already retried automatically a bounded number of times; reaching this state means those attempts are spent, so the robot or the network needs attention.',
       'On the robot, start rosbridge: ros2 launch rosbridge_server rosbridge_websocket_launch.xml',
       'Confirm the URL in amr-dashboard/.env (VITE_ROSBRIDGE_URL) matches the robot.',
       'Verify the robot is reachable from this workstation (ping / same VLAN).',
@@ -66,6 +67,28 @@ export const ERRORS = {
     remedies: [
       'Wait a few seconds — this resolves itself on a healthy network.',
       'If it never reaches LINKED, treat it as “No rosbridge link” and check that rosbridge is running.',
+    ],
+  },
+
+  LINK_RETRYING: {
+    code: 'LINK_RETRYING',
+    title: 'Link lost — retrying',
+    category: 'LINK',
+    tone: 'warn',
+    severity: 'Warning',
+    blocking: true,
+    summary:
+      'The rosbridge link dropped and the dashboard is automatically retrying with a growing delay. No telemetry is arriving and no command can be sent until it comes back.',
+    causes: [
+      'rosbridge restarted, or the robot rebooted.',
+      'The network dropped briefly (Wi-Fi roam, cable, switch).',
+      'The robot went out of radio range.',
+    ],
+    remedies: [
+      'Wait — a transient drop usually recovers on one of the automatic attempts.',
+      'Press RECONNECT to attempt immediately instead of waiting for the countdown.',
+      'Retries are bounded; if they run out the header says so and RECONNECT starts a fresh round.',
+      'If it never recovers, treat it as “No rosbridge link” and check the robot and the URL.',
     ],
   },
 
@@ -287,11 +310,18 @@ export function errorsByCategory() {
  * Decide which catalog entry explains why a view has nothing to show.
  * Mirrors DataFallback's precedence so the badge and the dialog never disagree:
  * link state first, then never-seen vs went-quiet.
+ *
+ * `retrying` distinguishes a link the dashboard is actively recovering from one
+ * that is simply down — telling an operator to go restart rosbridge while an
+ * automatic attempt is seconds away sends them chasing a problem that is
+ * already being handled.
  */
-export function diagnoseView({ connectionStatus, hasEverData, isCamera = false }) {
+export function diagnoseView({ connectionStatus, hasEverData, isCamera = false, retrying = false }) {
   if (isCamera) return ERRORS.CAMERA_STREAM_DOWN;
   if (connectionStatus === 'connecting') return ERRORS.LINK_CONNECTING;
-  if (connectionStatus !== 'connected') return ERRORS.LINK_OFFLINE;
+  if (connectionStatus !== 'connected') {
+    return retrying ? ERRORS.LINK_RETRYING : ERRORS.LINK_OFFLINE;
+  }
   if (!hasEverData) return ERRORS.TOPIC_NO_SIGNAL;
   return ERRORS.DATA_STALE;
 }

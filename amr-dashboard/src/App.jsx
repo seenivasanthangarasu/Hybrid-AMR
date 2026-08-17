@@ -8,6 +8,7 @@ import CameraView from './components/CameraView.jsx';
 import UrdfWidget from './components/UrdfWidget.jsx';
 import PreviewPanel from './components/PreviewPanel.jsx';
 import StatusPanel from './components/StatusPanel.jsx';
+import GnssQualityPanel from './components/GnssQualityPanel.jsx';
 import MissionPlanner from './components/MissionPlanner.jsx';
 import ControlPanel from './components/ControlPanel.jsx';
 import ErrorBoundary from './components/ErrorBoundary.jsx';
@@ -26,7 +27,10 @@ import { diagnoseView } from './errors/catalog.js';
 // Main-view selection: 'auto' follows robot mode (GPS for OUTDOOR, SLAM for
 // INDOOR per spec); operator can override by clicking a preview panel.
 export default function App() {
-  const { status: connectionStatus, reconnect } = useRosConnection();
+  const { status: connectionStatus, retry, reconnect } = useRosConnection();
+  // An automatic attempt is pending — used to explain a dead link as "retrying"
+  // rather than sending the operator off to restart rosbridge unnecessarily.
+  const retrying = retry.attempt > 0 && !retry.exhausted;
   const { mode, isDefault } = useRobotMode();
 
   const [mainView, setMainView] = useState('auto'); // 'auto' | 'gps' | 'lidar' | 'camera'
@@ -79,6 +83,7 @@ export default function App() {
           connectionStatus,
           hasEverData: health.seen,
           isCamera: health.isCamera,
+          retrying,
         }),
         context: health.label,
       });
@@ -107,6 +112,7 @@ export default function App() {
         mode={mode}
         isModeDefault={isDefault}
         onReconnect={reconnect}
+        retry={retry}
         editMode={editMode}
         onToggleEdit={() => setEditMode((v) => !v)}
         onResetLayout={reset}
@@ -238,6 +244,14 @@ export default function App() {
                   <UrdfWidget />
                 </ErrorBoundary>
               </PreviewPanel>
+            </PanelFrame>
+          </div>
+          {/* GNSS DIAGNOSTICS — DOP, per-satellite C/N0, accuracy radii, RF health */}
+          <div key="gnss" className="h-full w-full">
+            <PanelFrame title="GNSS QUALITY" editMode={editMode}>
+              <ErrorBoundary label="GNSS QUALITY">
+                <GnssQualityPanel />
+              </ErrorBoundary>
             </PanelFrame>
           </div>
         </DashboardGrid>

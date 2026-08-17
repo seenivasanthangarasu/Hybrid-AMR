@@ -20,7 +20,16 @@ export default function useGps() {
   const timing = { hasData, hasEverData: !!data, stale, lastReceivedAt };
 
   if (!data) {
-    return { ...timing, latitude: null, longitude: null, altitude: null, fixStatus: null };
+    return {
+      ...timing,
+      latitude: null,
+      longitude: null,
+      altitude: null,
+      fixStatus: null,
+      service: null,
+      covariance: null,
+      covarianceType: null,
+    };
   }
 
   const fixStatusCode = data.status?.status;
@@ -33,6 +42,12 @@ export default function useGps() {
     altitude: data.altitude,
     fixStatusCode,
     fixStatus: fixLabels[fixStatusCode] ?? 'UNKNOWN',
+    // Constellation bitmask (GPS/GLONASS/BeiDou/Galileo) — decoded by
+    // utils/gnss.serviceLabels for display.
+    service: data.status?.service ?? null,
     covariance: data.position_covariance,
+    // position_covariance_type: 0 = UNKNOWN means the driver filled in nothing,
+    // so derived accuracy (CEP/R95/DRMS) must read NO DATA rather than 0.
+    covarianceType: data.position_covariance_type ?? null,
   };
 }

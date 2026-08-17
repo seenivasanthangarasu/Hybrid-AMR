@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import rosService from '../services/RosConnectionService.js';
+import { useConnectionEpoch } from './useRosConnection.js';
 import { themeHex } from '../utils/themeColor.js';
 
 /**
@@ -20,6 +21,9 @@ import { themeHex } from '../utils/themeColor.js';
 export default function useUrdfViewer(containerRef) {
   const [status, setStatus] = useState('idle'); // idle | loading | ready | error | no-description | no-mesh-server
   const viewerRef = useRef(null);
+  // UrdfClient and TFClient both bind to one ROSLIB.Ros instance, so the whole
+  // viewer is rebuilt when a reconnect replaces it.
+  const epoch = useConnectionEpoch();
 
   useEffect(() => {
     if (!containerRef.current) return undefined;
@@ -87,9 +91,20 @@ export default function useUrdfViewer(containerRef) {
 
     return () => {
       disposed = true;
+      const viewer = viewerRef.current;
       viewerRef.current = null;
+      // The viewer appends its own <canvas> to the container. Now that this
+      // effect re-runs on reconnect, leaving it behind would stack a second
+      // canvas on top of the first after every link drop.
+      try {
+        viewer?.stop?.();
+        const canvas = viewer?.renderer?.domElement;
+        if (canvas?.parentNode) canvas.parentNode.removeChild(canvas);
+      } catch {
+        // Viewer never finished initialising — nothing to tear down.
+      }
     };
-  }, [containerRef]);
+  }, [containerRef, epoch]);
 
   return { status };
 }

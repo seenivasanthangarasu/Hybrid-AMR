@@ -1,10 +1,12 @@
 import useOdometry from '../hooks/useOdometry.js';
 import useGps from '../hooks/useGps.js';
+import useGnssQuality from '../hooks/useGnssQuality.js';
 import useNow from '../hooks/useNow.js';
 import PanelHeader from './ui/PanelHeader.jsx';
 import FreshnessBadge from './ui/FreshnessBadge.jsx';
 import { toneFor } from './ui/signalTones.js';
 import { classifyFreshness } from '../utils/freshness.js';
+import { dopQuality, fixed, formatDistance, satCountQuality } from '../utils/gnss.js';
 
 // Stale values are still shown (dimmed) so the operator sees the last reading;
 // LIVE values render at full weight, NO DATA renders the placeholder.
@@ -60,6 +62,11 @@ export default function StatusPanel({ mode, connectionStatus }) {
   const now = useNow(1000);
   const odom = useOdometry();
   const gps = useGps();
+  // Glance-level fix quality. The full breakdown lives in the GNSS QUALITY
+  // panel; the three figures that decide whether to trust a position — how many
+  // satellites, how good the geometry, how big the error — belong next to the
+  // coordinates themselves.
+  const gnss = useGnssQuality();
 
   const odomFresh = classifyFreshness(
     { hasData: odom.hasData, hasEverData: odom.hasEverData, lastReceivedAt: odom.lastReceivedAt },
@@ -84,6 +91,15 @@ export default function StatusPanel({ mode, connectionStatus }) {
   const speed = odom.linearVelocity != null ? odom.linearVelocity.toFixed(2) : null;
   const heading = odom.heading != null ? odom.heading.toFixed(1) : null;
   const distance = odom.hasEverData ? odom.distanceTravelled.toFixed(1) : null;
+
+  const hdop = gnss.dop?.hdop ?? null;
+  const hdopQ = dopQuality(hdop);
+  const satsUsed = gnss.solution?.satellitesUsed ?? gnss.sats?.used ?? null;
+  const satsVisible = gnss.sats?.visible ?? null;
+  // Tone-coded so "5 satellites" reads as marginal rather than as just a number.
+  const satQ = satCountQuality(satsUsed);
+  // Receiver estimate first, covariance-derived 1σ as the fallback.
+  const accuracy = formatDistance(gnss.estimated?.horizontal ?? gnss.derived?.sigmaH ?? null);
 
   return (
     <div className="panel h-full overflow-auto rounded-md p-3 shadow-panel">
@@ -124,6 +140,22 @@ export default function StatusPanel({ mode, connectionStatus }) {
       <Row
         label="Longitude"
         value={gps.longitude != null ? gps.longitude.toFixed(6) : null}
+        valueClass={valueClassFor(gpsFresh.state)}
+      />
+      <Row
+        label="Satellites"
+        value={satsUsed == null ? null : satsVisible == null ? `${satsUsed}` : `${satsUsed}/${satsVisible}`}
+        valueClass={satsUsed != null ? toneFor(satQ.tone).text : valueClassFor(gpsFresh.state)}
+      />
+      <Row
+        label="HDOP"
+        value={fixed(hdop, 2)}
+        valueClass={hdop != null ? toneFor(hdopQ.tone).text : valueClassFor(gpsFresh.state)}
+      />
+      <Row
+        label="Accuracy"
+        value={accuracy?.value ?? null}
+        unit={accuracy?.unit}
         valueClass={valueClassFor(gpsFresh.state)}
       />
 

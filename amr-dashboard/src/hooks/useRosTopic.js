@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import rosService from '../services/RosConnectionService.js';
+import { useConnectionEpoch } from './useRosConnection.js';
 
 /**
  * useRosTopic
@@ -15,6 +16,9 @@ export default function useRosTopic({ name, messageType, throttle_rate = 100, st
   const [lastReceivedAt, setLastReceivedAt] = useState(null);
   const [stale, setStale] = useState(true);
   const topicRef = useRef(null);
+  // A reconnect replaces the ROSLIB.Ros instance and clears the topic cache, so
+  // the subscription below has to be rebuilt against the new one.
+  const epoch = useConnectionEpoch();
 
   useEffect(() => {
     if (!name || !messageType) return undefined;
@@ -33,7 +37,7 @@ export default function useRosTopic({ name, messageType, throttle_rate = 100, st
     return () => {
       topic.unsubscribe(handler);
     };
-  }, [name, messageType, throttle_rate]);
+  }, [name, messageType, throttle_rate, epoch]);
 
   // Staleness watchdog — if no message has arrived recently, surface NO DATA
   useEffect(() => {

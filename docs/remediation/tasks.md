@@ -7,12 +7,19 @@ Check items off as they land. Each task lists its requirement ID and the primary
 
 **Execution order changed 2026-08-07: Phase U (front-end UI/UX) runs first** — see `plan.md`.
 
-> **STATUS 2026-08-10 — all checklist phases complete.** Phase 0 (REQ-01…05),
+> **STATUS 2026-08-11 — the front-end checklist is closed.** Phase 0 (REQ-01…05),
 > Phase U (REQ-16…21 + cleanup), Phase 1 (REQ-06…11), and Phase 2 (REQ-12…15) are
-> done, plus the deferred UI items F4 and F5. `npm run lint` is clean, `npm test`
-> is 9/9 green, and `npm run build` succeeds. The only remaining line items are
-> live-backend manual checks (marked `[~]`) that need a publishing robot, and the
-> explicitly out-of-scope ROS-side node work at the bottom.
+> done, plus the deferred UI items F4 and F5. The last two open items were closed
+> on 2026-08-11: **bounded auto-reconnect with backoff** (REQ-20 follow-up) and
+> REQ-02's outstanding manual e-stop check (now covered by an automated test).
+> `npm run lint` is clean, `npm test` is **36/36 green**, and `npm run build` succeeds.
+>
+> What remains is **not front-end work**: one line item still marked `[~]` is a
+> click-through that needs a GPS-publishing robot, and the rest is the explicitly
+> out-of-scope ROS-side node work at the bottom of this file. See
+> `PROJECT_CONTEXT.md` §8 for the full backend gap list — most of the dashboard's
+> command surface (`/robot_mode`, `/emergency_stop`, `/mission_state_cmd`,
+> `/mission_goal`, Nav2) still has no counterpart on the robot.
 
 ---
 
@@ -34,7 +41,7 @@ Check items off as they land. Each task lists its requirement ID and the primary
 - [x] Add a sun/moon toggle button to `Header.jsx` (focusable, `aria-pressed`)
 - [x] Theme the JS-drawn canvases (LidarView, SlamView, useUrdfViewer) via `themeColor`/`themeHex` so no dark patches remain in light mode (THREE r89 needs hex, hence `themeHex`)
 - [x] Browser verify (fresh Vite on :5174): utilities compile to `rgb(var(--…))`; dark↔light fully invert (app bg, text, panels, inputs, signal colors); h1 contrast 17.2 dark / 14.3 light; no console errors. **Screenshots pending** — the Browser pane must be displayed to composite frames.
-- [ ] ⚠️ The already-running dev server (:5173) must be **restarted** to pick up `tailwind.config.js` — Vite caches the Tailwind/PostCSS pipeline, so a config change is not HMR'd.
+- [n/a] ⚠️ *Operational note, not a work item:* a running dev server must be **restarted** to pick up `tailwind.config.js` — Vite caches the Tailwind/PostCSS pipeline, so a config change is not HMR'd.
 
 ### REQ-16 — Seamlessness ✅
 - [x] Create `src/components/ui/SignalChip.jsx` + `SignalDot.jsx` + `signalTones.js` (single tone→color map)
@@ -68,7 +75,27 @@ Check items off as they land. Each task lists its requirement ID and the primary
 - [x] Added a **RECONNECT** button in `Header.jsx` (shown on `error`/`closed`/`disconnected`), wired to `useRosConnection().reconnect()` via `App.jsx`
 - [x] Rewrote `CameraView` fallback in React state — removed `getElementById`/`classList`, dropped the duplicate `id="camera-no-data"` (state-driven per instance now), auto-recovers via a retry timer + cache-busted remount when the stream returns
 - [x] Browser-verified (:5174, rosbridge down): Header reads **LINK CLOSED** + RECONNECT; GPS/LiDAR views + previews read **OFFLINE · topic**; camera reads **NO CAMERA STREAM**; URDF reads **NO MESH SERVER CONFIGURED**
-- [ ] (Follow-up, optional) bounded auto-reconnect with backoff in `RosConnectionService`
+- [x] **Bounded auto-reconnect with backoff** (2026-08-11) — `RosConnectionService` now retries a
+  dropped link on its own: 1s → 2 → 4 → 8 → 16 → 30s (capped), ±15% jitter, **6 attempts** then it
+  stops and sets `retry.exhausted`. Bounded on purpose — a dashboard left open against a powered-down
+  robot must not hammer the network forever, and a chip that says "retrying" indefinitely teaches the
+  operator nothing. Manual RECONNECT resets the budget.
+  - Made **visible**, not silent: header shows `AUTO-RETRY 3/6 · 4s` (counting down) then
+    `AUTO-RETRY GAVE UP (6)`; `DataFallback` gained a **RETRYING** state so panels distinguish
+    "being handled" from "genuinely down"; new catalog entry **`LINK_RETRYING`** with
+    `diagnoseView({ retrying })` so the badge and the dialog never disagree.
+  - Added a **connection `epoch`** to the service. `useRosTopic`, `useTF` and `useUrdfViewer` capture
+    `rosService.ros`/a cached `ROSLIB.Topic` in a mount-time effect and now key that effect on the
+    epoch. Without it a successful reconnect would restore the header to LINKED while every panel
+    stayed silent — the exact "looks fine but isn't" failure the spec forbids. `useUrdfViewer`'s
+    cleanup now also removes the viewer's `<canvas>`, since that effect can re-run.
+  - Handlers check ROSLIB.Ros instance identity, so a superseded socket's late `close`/`error`
+    cannot knock the live connection offline or start a competing retry.
+  - Verified live (dev server pointed at a refused port): observed attempts 1→6 with the backoff
+    doubling as specified (4th=9s, 5th=18s incl. jitter), the countdown ticking, panels reading
+    `RETRYING`, the `LINK_RETRYING` dialog raised on selecting an empty view mid-retry, exhaustion
+    flipping the chip to `AUTO-RETRY GAVE UP (6)` and panels to `OFFLINE`, and RECONNECT restarting
+    the budget. Covered by 7 tests in [`RosConnectionService.test.js`](../../amr-dashboard/src/services/RosConnectionService.test.js).
 
 ### REQ-21 — Sensor-view freshness parity ✅
 - [x] Threaded `stale`/`lastReceivedAt`/`hasEverData` through `useLaserScan`, `useOccupancyGrid`, `useTF` (mirrors the `useOdometry`/`useGps` change)
@@ -98,7 +125,7 @@ Check items off as they land. Each task lists its requirement ID and the primary
 - [x] Thread `connectionStatus` down to `ControlPanel` and `MissionPlanner` from `App.jsx`
 - [x] `ControlPanel.jsx` — disable all buttons when disconnected; `dispatch`/`handleEstop` catch and display errors via `CommandFeedback`
 - [x] `MissionPlanner.jsx` — same pattern for `handleSendGoal`
-- [ ] Manual test: disconnect rosbridge, click e-stop, confirm a visible error appears — **not yet done live**: this session's dev server is connected to a live "ROSBRIDGE LINKED" backend of unknown identity, so command buttons were deliberately not clicked. Verify by code review (done) or in an isolated/offline test environment before considering this fully closed.
+- [x] Manual test: disconnect rosbridge, click e-stop, confirm a visible error appears — **closed 2026-08-11 by automated test** rather than a live click. The original blocker stands (the dev server was attached to a live backend of unknown identity, so the e-stop was deliberately never clicked). Instead, `ControlPanel.test.jsx` now covers the *dangerous* variant in an isolated environment: the link drops **between render and publish**, so the button is still enabled and the operator believes the robot was commanded to stop. Asserts both the inline `EMERGENCY STOP failed — disconnected` feedback and the escalated `COMMAND_DISCONNECTED` dialog naming the physical-e-stop fallback. (The already-disconnected case — buttons disabled with a visible reason — was already covered.)
 
 ### REQ-01 — Three-state command feedback
 - [x] Create `src/components/CommandFeedback.jsx` (presentational: `SENDING` / `SENT_UNCONFIRMED` / `FAILED` states — `CONFIRMED` intentionally unreachable until a robot-side ack exists, per spec.md's cross-cutting note)
