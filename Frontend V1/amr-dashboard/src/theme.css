@@ -1,0 +1,147 @@
+/* Professional Industrial Theme for AMR Dashboard */
+:root {
+  /* Color Palette */
+  --color-dark-slate: #16232E;
+  --color-panel: #FFFFFF;
+  --color-secondary-panel: #F5F7F7;
+  --color-primary-orange: #FF6A13;
+  --color-primary-blue: #2B6CB0;
+  --color-success-green: #1B8A5A;
+  --color-warning: #C98400;
+  --color-danger: #D8352B;
+  --color-light-borders: #D7DEE0;
+
+  /* Typography */
+  --font-display: 'Oswald', sans-serif;
+  --font-body: 'Inter', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  /* UI Elements */
+  --border-radius: 8px;
+  --shadow-panel: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --shadow-glass: 0 4px 30px rgba(0, 0, 0, 0.1);
+  --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Base styles */
+body {
+  background-color: var(--color-dark-slate);
+  color: #FFFFFF;
+  font-family: var(--font-body);
+  margin: 0;
+  padding: 0;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* Panel styling */
+.panel {
+  background-color: var(--color-panel);
+  border-radius: var(--border-radius);
+  box-shadow: var(--shadow-panel);
+  border: 1px solid var(--color-light-borders);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+/* Header styling */
+.header {
+  background-color: var(--color-dark-slate);
+  border-bottom: 1px solid var(--color-light-borders);
+  padding: 12px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+
+/* Data labels */
+.data-label {
+  font-size: 10px;
+  font-weight: bold;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #888;
+}
+
+/* Input styling */
+input, select, textarea {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  background-color: rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--color-light-borders);
+  border-radius: var(--border-radius);
+  padding: 8px 12px;
+  color: #FFFFFF;
+}
+
+input:focus, select:focus, textarea:focus {
+  outline: none;
+  border-color: var(--color-primary-blue);
+  box-shadow: 0 0 0 2px rgba(43, 108, 176, 0.2);
+}
+
+/* Button styling */
+button {
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: bold;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 8px 16px;
+  border-radius: var(--border-radius);
+  transition: var(--transition-smooth);
+  cursor: pointer;
+}
+
+button:hover {
+  opacity: 0.9;
+}
+
+/* Glass effect */
+.glass-effect {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Responsive design */
+@media (min-width: 1920px) {
+  .panel {
+    font-size: 16px;
+  }
+
+  .header {
+    padding: 16px 24px;
+  }
+}
+
+/* Animation for smooth transitions */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.fade-in {
+  animation: fadeIn 0.3s ease-out;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}

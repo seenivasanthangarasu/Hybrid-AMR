@@ -1,0 +1,62 @@
+/* App-wide utility styles — component-specific styles live in their own files */
+
+.glass-panel {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(226, 232, 240, 0.6);
+}
+
+.animate-pulse-slow {
+  animation: pulse-slow 3s ease-in-out infinite;
+}
+
+@keyframes pulse-slow {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+/* Leaflet map container */
+.map-container {
+  width: 100%;
+  height: 100%;
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+/* Floating widget base */
+.floating-widget {
+  position: absolute;
+  background: white;
+  border-radius: var(--radius);
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.1);
+  border: 1px solid #E2E8F0;
+  user-select: none;
+}
+
+/* Route transition */
+.route-enter {
+  animation: route-in 200ms ease-out;
+}
+
+@keyframes route-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Waypoint marker label */
+.waypoint-label {
+  background: white;
+  border: 2px solid #0EA5E9;
+  border-radius: 9999px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #0F172A;
+  white-space: nowrap;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+}
+
+/* Touch-friendly spacing for industrial touch screens */
+.touch-sm { min-height: 44px; padding-inline: 12px; }
+.touch-md { min-height: 48px; padding-inline: 16px; }
+.touch-lg { min-height: 52px; padding-inline: 20px; font-size: 16px; }
