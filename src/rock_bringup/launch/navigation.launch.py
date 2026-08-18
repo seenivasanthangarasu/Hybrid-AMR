@@ -69,7 +69,7 @@ def generate_launch_description():
         ),
         launch_arguments={
             'slam_params_file':
-            '/home/ubuntu/ros2_ws/src/rock_bringup/config/mapper_localization.yaml',
+            '/home/ubuntu/Desktop/Xtrmbly/src/rock_bringup/config/mapper_localization.yaml',
 
             'map_file_name':
             '/home/ubuntu/2_maps/maptest3'

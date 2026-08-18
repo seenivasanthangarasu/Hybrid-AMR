@@ -65,7 +65,7 @@ class HybridManager(Node):
                 '/bin/bash',
                 '-c',
                 'source /opt/ros/jazzy/setup.bash && '
-                'source /home/ubuntu/ros2_ws/install/setup.bash && '
+                'source /home/ubuntu/Desktop/Xtrmbly/install/setup.bash && '
                 'ros2 run ublox_gps ublox_gps_node '
                 '--ros-args --params-file /home/ubuntu/ublox_config.yaml'
             ])
@@ -94,7 +94,7 @@ class HybridManager(Node):
             '/bin/bash',
             '-c',
             'source /opt/ros/jazzy/setup.bash && '
-            'source /home/ubuntu/ros2_ws/install/setup.bash && '
+            'source /home/ubuntu/Desktop/Xtrmbly/install/setup.bash && '
             'ros2 launch gogo_description robot_state_publisher.launch.py'
         ])
 
@@ -162,7 +162,7 @@ class HybridManager(Node):
             '/bin/bash',
             '-c',
             'source /opt/ros/jazzy/setup.bash && '
-            'source /home/ubuntu/ros2_ws/install/setup.bash && '
+            'source /home/ubuntu/Desktop/Xtrmbly/install/setup.bash && '
             'ros2 launch ydlidar_ros2_driver ydlidar_launch.py'
         ])
 
@@ -182,7 +182,7 @@ class HybridManager(Node):
             '/bin/bash',
             '-c',
             'source /opt/ros/jazzy/setup.bash && '
-            'source /home/ubuntu/ros2_ws/install/setup.bash && '
+            'source /home/ubuntu/Desktop/Xtrmbly/install/setup.bash && '
             'ros2 run esp32_odom odom_node'
         ])
 
@@ -204,7 +204,7 @@ class HybridManager(Node):
             '/bin/bash',
             '-c',
             'source /opt/ros/jazzy/setup.bash && '
-            'source /home/ubuntu/ros2_ws/install/setup.bash && '
+            'source /home/ubuntu/Desktop/Xtrmbly/install/setup.bash && '
             'ros2 launch slam_toolbox online_sync_launch.py'
         ])
 
