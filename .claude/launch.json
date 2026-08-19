@@ -1,0 +1,23 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "amr-dashboard-dev",
+      "runtimeExecutable": "C:\\Program Files\\nodejs\\npm.cmd",
+      "runtimeArgs": ["run", "dev", "--prefix", "amr-dashboard"],
+      "port": 5173
+    },
+    {
+      "name": "amr-dashboard-verify",
+      "runtimeExecutable": "C:\\Program Files\\nodejs\\npm.cmd",
+      "runtimeArgs": ["run", "dev", "--prefix", "amr-dashboard", "--", "--port", "5174", "--strictPort"],
+      "port": 5174
+    },
+    {
+      "name": "amr-dashboard-ux",
+      "runtimeExecutable": "C:\\Program Files\\nodejs\\npm.cmd",
+      "runtimeArgs": ["run", "dev", "--prefix", "amr-dashboard", "--", "--port", "5185", "--strictPort"],
+      "port": 5185
+    }
+  ]
+}

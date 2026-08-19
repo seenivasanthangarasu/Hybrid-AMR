@@ -4,6 +4,15 @@
 > contracts and known issues of a hybrid (indoor/outdoor) Autonomous Mobile Robot
 > project. Written to be used as background context for an LLM assistant.
 > Everything below was derived by reading the actual source tree.
+>
+> **Scope note:** this repo is the client-side operator dashboard
+> (`amr-dashboard/`) only. Sections 2.1, 3–4, 7 (robot/backend) document the
+> companion ROS 2 robot workspace this dashboard is built to talk to. That
+> workspace runs on the robot itself, in its own separate repo/workspace —
+> it is not tracked here and never was; these sections are kept as
+> historical reference for the interface this dashboard was built against.
+> Section 5 (the ROS 2 interface contract) and section 6 (the dashboard
+> itself) are what's actually live in this repo.
 
 ---
 
@@ -71,30 +80,21 @@ is no REST API and no mock data layer anywhere in the frontend.
 
 ## 3. REPOSITORY LAYOUT
 
+This repo is client-only — the operator dashboard, nothing else:
+
 ```
 ros2_ws/
-├── src/                              ← ROS 2 colcon workspace
-│   ├── esp32_odom/                   first-party — serial odometry bridge
-│   ├── gogo_description/             first-party — URDF, meshes, RViz configs
-│   ├── hybrid_navigation/            first-party — indoor/outdoor supervisor
-│   ├── indoor_amr/                   first-party — indoor SLAM (mapping) launch
-│   ├── rock_bringup/                 first-party — production bringup + localization
-│   ├── ydlidar_ros2_driver/          vendored (git submodule) — lidar ROS 2 driver
-│   ├── YDLidar-SDK/                  vendored (git submodule) — C++ lidar SDK
-│   └── mapviz/                       vendored (git submodule) — map visualization
-├── amr-dashboard/                    ← React operator ground control station
-├── build/ install/ log/              colcon artifacts (gitignored; Linux-only)
-├── frames_*.gv / frames_*.pdf        captured `ros2 run tf2_tools view_frames` output
-└── robot.txt                         dump of the /robot_description topic (URDF XML)
+├── amr-dashboard/                    ← React operator ground control station (the app)
+├── architecture.drawio               system architecture diagram (draw.io)
+└── docs/                             UI guide, remediation specs
 ```
 
-Three directories are **git submodules (gitlinks)**, not regular source:
-`src/YDLidar-SDK`, `src/mapviz`, `src/ydlidar_ros2_driver`.
-
-`build/`, `install/`, `log/` are gitignored and contain **x86 Linux artifacts with
-absolute paths baked in** (e.g. symlinks pointing at `/home/ubuntu/ros2_ws/...`).
-They must never be copied to another machine — always delete and re-run
-`colcon build`.
+The ROS 2 colcon workspace described in sections 4 and 7 below runs on the
+robot itself, in its own separate workspace/repo — it has never been hosted
+in this repo's working tree. Those sections are kept as historical reference
+for the packages, topics, and behavior the interface contract in §5 was
+built against; treat package names and file paths in §4 and §7 as
+describing the robot's own repo, not anything present here.
 
 ---
 
@@ -613,6 +613,9 @@ Grouped by severity. All of these are real observations from the source.
 ---
 
 ## 10. QUICK REFERENCE — WHAT TO ASK ABOUT WHAT
+
+Robot-side paths below (`src/...`) refer to the **robot's own workspace**,
+not this repo — see the scope note at the top of this document.
 
 | If the question is about… | Look at |
 |---|---|

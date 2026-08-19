@@ -1,6 +1,6 @@
 <mxfile host="Electron" agent="Claude Code">
   <diagram name="Hybrid AMR Architecture" id="hybrid-amr-arch">
-    <mxGraphModel dx="3314" dy="2541" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1900" pageHeight="1700" math="0" shadow="0">
+    <mxGraphModel dx="6033" dy="3803" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1900" pageHeight="1700" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />

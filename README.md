@@ -1,88 +1,32 @@
-# Hybrid AMR — ROS 2 Workspace
+# Hybrid AMR — Operator Dashboard
 
-A hybrid indoor/outdoor Autonomous Mobile Robot ("gogo") built on **ROS 2
-Jazzy**. A differential-drive base uses an ESP32 microcontroller for wheel
-odometry/motor control, a YDLidar 2D scanner for mapping and localization, a
-u-blox GPS for outdoor positioning, and a depth camera for video. A
-supervisor node watches GPS validity and switches the robot between
-**GPS mode** (outdoor) and **SLAM mode** (indoor). Operators drive and
-monitor the robot from a browser-based ground control station that talks to
-ROS 2 exclusively over rosbridge WebSocket — no mock data, no REST API.
+This repo holds the client-side operator dashboard for a hybrid
+indoor/outdoor Autonomous Mobile Robot ("gogo"). It's a browser-based ground
+control station that talks to the robot's ROS 2 stack exclusively over
+rosbridge WebSocket — no mock data, no REST API, and no robot-side/backend
+code lives here.
 
-> For full architectural detail — every package, topic, launch file, and
-> known issue, derived directly from the source tree — see
-> [`PROJECT_CONTEXT.md`](PROJECT_CONTEXT.md).
+> For the full interface contract this dashboard expects from the robot
+> (topics, message types, TF tree) see [`PROJECT_CONTEXT.md`](PROJECT_CONTEXT.md)
+> §5. That document also has historical detail on the companion ROS 2 robot
+> workspace this dashboard was built against. That workspace runs on the
+> robot itself, in its own separate repo — it is not part of this repo.
 
 ## Repository layout
 
 ```
 ros2_ws/
-├── src/                      colcon workspace
-│   ├── esp32_odom/           serial odometry bridge (ESP32 ↔ ROS 2)
-│   ├── gogo_description/     URDF, meshes, RViz configs
-│   ├── hybrid_navigation/    hybrid_manager — GPS/SLAM mode supervisor
-│   ├── indoor_amr/           SLAM mapping-mode launch
-│   ├── rock_bringup/         production bringup + localization against a saved map
-│   ├── ydlidar_ros2_driver/  vendored (submodule) — LiDAR ROS 2 driver
-│   ├── YDLidar-SDK/          vendored (submodule) — LiDAR C++ SDK
-│   └── mapviz/               vendored (submodule) — Qt map visualization
-├── amr-dashboard/            React/Vite operator ground control station
-├── docs/                     UI guide, remediation specs, architecture diagram
-├── build/ install/ log/      colcon artifacts (gitignored, Linux-only, not portable)
-└── frames_*.gv / *.pdf       captured `tf2_tools view_frames` snapshots
+├── amr-dashboard/            React/Vite operator ground control station (the app)
+├── architecture.drawio       system architecture diagram (draw.io)
+└── docs/                     UI guide, remediation specs
 ```
-
-`src/YDLidar-SDK`, `src/mapviz`, and `src/ydlidar_ros2_driver` are git
-submodules — run `git submodule update --init --recursive` after cloning.
 
 ## Prerequisites
 
-- Ubuntu 24.04 (Noble) with **ROS 2 Jazzy Jalisco**
-- `colcon` build tools
-- Node.js 18+ (for the dashboard)
-- Hardware: ESP32 odometry bridge (`/dev/esp`, 115200 baud), YDLidar
-  (`/dev/ttyUSB0`, 230400 baud), u-blox GPS, depth camera
-
-## Build
-
-```bash
-source /opt/ros/jazzy/setup.bash
-git submodule update --init --recursive
-colcon build
-source install/setup.bash
-```
-
-`build/`, `install/`, and `log/` are gitignored and contain absolute paths
-baked in at build time — never copy them between machines; always rebuild.
-
-## Running the robot stack
-
-Launch files differ by scenario:
-
-| Package | Launch file | Purpose |
-| --- | --- | --- |
-| `gogo_description` | `robot_state_publisher.launch.py` | URDF + `robot_state_publisher` only |
-| `gogo_description` | `display.launch.py` | Same, plus RViz2 |
-| `indoor_amr` | `indoor_amr_launch.py` | Build a new SLAM map (`slam_toolbox` mapping mode) |
-| `rock_bringup` | `navigation.launch.py` | Localize against an existing saved map |
-
-```bash
-ros2 launch indoor_amr indoor_amr_launch.py
-# or, once a map exists:
-ros2 launch rock_bringup navigation.launch.py
-```
-
-`hybrid_navigation`'s `hybrid_manager` node supervises which stack is
-running based on GPS fix validity; see `PROJECT_CONTEXT.md` §4.3 for its
-state machine and current limitations.
-
-To connect the dashboard, also run:
-
-```bash
-ros2 launch rosbridge_server rosbridge_websocket_launch.xml
-# optional, for the camera panel:
-ros2 run web_video_server web_video_server
-```
+- Node.js 18+
+- A reachable robot running the ROS 2 stack described in `PROJECT_CONTEXT.md`,
+  exposing `rosbridge_server` (WebSocket, default port 9090) and, optionally,
+  `web_video_server` (MJPEG, default port 8080) for the camera panel.
 
 ## Operator dashboard
 
@@ -96,6 +40,11 @@ cd amr-dashboard
 npm install
 npm run dev
 ```
+
+The frontend does **not** require ROS 2 to be installed on the machine
+running it — `roslib` is a pure-JS client speaking rosbridge's
+JSON-over-WebSocket protocol. Point `VITE_ROSBRIDGE_URL` (see
+`amr-dashboard/.env.example`) at a robot that's reachable on the network.
 
 ## Security
 
