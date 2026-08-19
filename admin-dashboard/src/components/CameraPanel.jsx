@@ -1,7 +1,15 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Camera, Maximize2, Minimize2, RefreshCw, AlertTriangle, Settings, CheckCircle2, XCircle } from 'lucide-react';
 
-const VIDEO_SERVER_URL = import.meta.env.VITE_VIDEO_SERVER_URL || 'http://localhost:8080';
+const getVideoServerUrl = () => {
+  if (typeof window !== 'undefined' && window.location && window.location.hostname) {
+    const host = window.location.hostname;
+    return `http://${host}:8080`;
+  }
+  return import.meta.env.VITE_VIDEO_SERVER_URL || 'http://localhost:8080';
+};
+
+const VIDEO_SERVER_URL = getVideoServerUrl();
 
 // Common camera topic options for ROS 2 + web_video_server
 const TOPIC_PRESETS = [

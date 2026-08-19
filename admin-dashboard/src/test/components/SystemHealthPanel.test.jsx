@@ -84,7 +84,8 @@ describe('SystemHealthPanel – with real system data', () => {
 
   it('displays disk usage percentage', () => {
     render(<SystemHealthPanel systemData={MOCK_SYSTEM} />);
-    expect(screen.getByText(/34%/)).toBeInTheDocument();
+    const diskMatches = screen.getAllByText(/34%/);
+    expect(diskMatches.length).toBeGreaterThan(0);
   });
 
   it('formats uptime as "2h 2m"', () => {

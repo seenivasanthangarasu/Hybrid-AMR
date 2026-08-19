@@ -44,6 +44,16 @@ export default function Header({ rosStatus, backendConnected, systemData, active
         {/* Center Quick Nav Tabs */}
         <nav className="flex items-center bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs font-medium">
           <button
+            onClick={() => setActiveTab('control')}
+            className={`px-3 py-1.5 rounded-lg transition ${
+              activeTab === 'control'
+                ? 'bg-cyan-500 text-slate-950 font-bold shadow'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            Robot Control
+          </button>
+          <button
             onClick={() => setActiveTab('graph')}
             className={`px-3 py-1.5 rounded-lg transition ${
               activeTab === 'graph'

@@ -1,5 +1,7 @@
 from launch import LaunchDescription
-from launch.actions import IncludeLaunchDescription
+from launch.actions import IncludeLaunchDescription, DeclareLaunchArgument
+from launch.conditions import IfCondition
+from launch.substitutions import LaunchConfiguration
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 
 from launch_ros.actions import Node
@@ -10,6 +12,21 @@ import os
 
 
 def generate_launch_description():
+
+    # -----------------------------
+    # Launch Arguments
+    # -----------------------------
+    start_camera_arg = DeclareLaunchArgument(
+        'start_camera',
+        default_value='false',
+        description='Whether to start the optional camera driver / stream'
+    )
+
+    start_rviz_arg = DeclareLaunchArgument(
+        'start_rviz',
+        default_value='false',
+        description='Whether to start GUI RViz2'
+    )
 
     # -----------------------------
     # Robot State Publisher
@@ -83,14 +100,34 @@ def generate_launch_description():
     rviz_node = Node(
         package='rviz2',
         executable='rviz2',
-        output='screen'
+        output='screen',
+        condition=IfCondition(LaunchConfiguration('start_rviz'))
+    )
+
+    # -----------------------------
+    # Camera Node (Optional)
+    # -----------------------------
+    camera_node = Node(
+        package='v4l2_camera',
+        executable='v4l2_camera_node',
+        name='v4l2_camera_node',
+        output='screen',
+        parameters=[{
+            'video_device': '/dev/video0',
+            'image_size': [640, 480],
+            'time_per_frame': [1, 30]
+        }],
+        condition=IfCondition(LaunchConfiguration('start_camera'))
     )
 
     return LaunchDescription([
+        start_camera_arg,
+        start_rviz_arg,
         robot_launch,
         lidar_launch,
         odom_node,
         imu_node,
         slam_node,
-        rviz_node
+        rviz_node,
+        camera_node
     ])

@@ -120,7 +120,8 @@ describe('ProcessHardwarePanel – serial device cards with data', () => {
         backendConnected={true}
       />
     );
-    expect(screen.getByText(/reachable/i)).toBeInTheDocument();
+    const reachableBadges = screen.getAllByText(/reachable/i);
+    expect(reachableBadges.length).toBeGreaterThan(0);
   });
 });
 

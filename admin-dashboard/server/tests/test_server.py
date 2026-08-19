@@ -155,7 +155,8 @@ class TestApiStatus:
     def test_managed_processes_dict_contains_expected_keys(self, client):
         procs = client.get("/api/status").get_json()["managed_processes"]
         expected = {"hybrid_manager", "gps_proc", "urdf_proc", "lidar_proc",
-                    "odom_proc", "slam_proc", "rviz_proc"}
+                    "odom_proc", "slam_proc", "rviz_proc", "camera_proc",
+                    "imu_proc", "joint_state_proc", "rosbridge_proc"}
         assert expected.issubset(set(procs.keys()))
 
     def test_stopped_process_has_correct_defaults(self, client, monkeypatch):
@@ -235,6 +236,52 @@ class TestApiProcessRestart:
         rv = self._post(client, {"process": "lidar_proc"})
         assert rv.status_code == 500
         assert rv.get_json()["status"] == "error"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# /api/stack/* and /api/camera/toggle
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestApiStackAndCamera:
+
+    def test_start_stack(self, client, monkeypatch):
+        class FakeSubprocess:
+            pid = 1234
+            def poll(self):
+                return None
+
+        monkeypatch.setattr("server.subprocess.Popen", lambda *a, **kw: FakeSubprocess())
+        rv = client.post("/api/stack/start", json={"include_camera": False})
+        assert rv.status_code == 200
+        body = rv.get_json()
+        assert body["status"] == "ok"
+        assert "launched successfully" in body["message"]
+
+    def test_stop_stack(self, client, monkeypatch):
+        import psutil
+        monkeypatch.setattr(psutil, "process_iter", lambda fields: iter([]))
+        rv = client.post("/api/stack/stop")
+        assert rv.status_code == 200
+        body = rv.get_json()
+        assert body["status"] == "ok"
+        assert body["message"] == "Robot stack stopped."
+
+    def test_toggle_camera_on_and_off(self, client, monkeypatch):
+        class FakeSubprocess:
+            pid = 5678
+            def poll(self):
+                return None
+
+        monkeypatch.setattr("server.subprocess.Popen", lambda *a, **kw: FakeSubprocess())
+        rv_on = client.post("/api/camera/toggle", json={"enable": True})
+        assert rv_on.status_code == 200
+        assert rv_on.get_json()["status"] == "ok"
+
+        import psutil
+        monkeypatch.setattr(psutil, "process_iter", lambda fields: iter([]))
+        rv_off = client.post("/api/camera/toggle", json={"enable": False})
+        assert rv_off.status_code == 200
+        assert rv_off.get_json()["status"] == "ok"
 
 
 # ─────────────────────────────────────────────────────────────────────────────

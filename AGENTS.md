@@ -193,3 +193,32 @@ Same dependency check applied (no live-code references found), but **left in pla
 ### 9. Repo-Wide Uncommitted State Committed
 
 On inspection, `git status` showed a large set of **pre-existing, uncommitted deletions** — `Frontend V1/*`, `amr-dashboard/*`, and `unclean/*` — that had been sitting unstaged in the working tree since the reorg described in the "Repository Reorganization & Git Maintenance" section above. These correspond exactly to material that was moved into (now-deleted) `unwanted/`, and match that section's own stated intent. This session committed and pushed that pre-existing deletion set together with the fixes above, so the repo's committed state finally matches what's actually on disk. Excluded from this commit: `src/YDLidar-SDK`, `src/mapviz`, `src/ydlidar_ros2_driver` — these remain gitlinks with no `.gitmodules` (see the "Submodule Rescue" section above); converting them is still an open, undecided item and was left untouched.
+
+---
+
+## 🚀 Session Log (2026-08-19) — Robot Bringup Control, Selective Camera, & UI Telemetry
+
+### 1. Launch File & Stack Configuration
+- **`navigation.launch.py` Updated**:
+  - Added `start_camera` launch argument (default `false`) wrapping `v4l2_camera_node` (`/dev/video0`).
+  - Added `start_rviz` launch argument (default `false`) conditioning `rviz2` so headless background launches run without display crashes.
+  - Automatically brings up core stack: `gogo_description` (URDF / TF), `esp32_odom` (`/odom`), `imu_node` (`/imu/data_raw`), `ydlidar_ros2_driver` (`/scan`), and `slam_toolbox` localization (`/map`).
+
+### 2. Dashboard Backend (`server/server.py`)
+- Sourced the correct workspace path (`/home/ubuntu/Desktop/Xtrmbly/install/setup.bash`).
+- Added endpoints:
+  - `POST /api/stack/start`: Launches full robot stack with optional camera.
+  - `POST /api/stack/stop`: Gracefully terminates the stack.
+  - `POST /api/camera/toggle`: Independent ON/OFF toggle for `v4l2_camera_node`.
+  - `GET /api/stack/logs`: Real-time streaming log buffer of bringup console output.
+- Extended process patterns for `imu_proc`, `joint_state_proc`, `odom_proc`, and `slam_proc` for real-time PID/CPU/Memory introspection.
+- Configured CORS wildcard with `supports_credentials=True` across all endpoints.
+
+### 3. Dashboard Frontend (`admin-dashboard/src`)
+- Added **Robot Control** primary tab.
+- Integrated multi-stage animated launch feedback, status badges, and actionable diagnostic alert cards.
+- Added live console terminal in the panel streaming bringup output.
+- Made backend, rosbridge, and video server URLs dynamically resolve `window.location.hostname`.
+
+### 4. Single-Command Startup Script
+- Added `start_all.sh` at workspace root to launch ROSBridge WebSocket, Flask API backend, and Vite frontend daemonized in one command.

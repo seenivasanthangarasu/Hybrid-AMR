@@ -8,8 +8,10 @@ import SystemHealthPanel from './components/SystemHealthPanel';
 import LogsPanel from './components/LogsPanel';
 import CameraPanel from './components/CameraPanel';
 
+import RobotControlPanel from './components/RobotControlPanel';
+
 export default function App() {
-  const [activeTab, setActiveTab] = useState('graph');
+  const [activeTab, setActiveTab] = useState('control');
   const [rosStatus, setRosStatus] = useState('disconnected');
 
   const {
@@ -18,6 +20,10 @@ export default function App() {
     backendConnected,
     restartProcess,
     fetchLogs,
+    startStack,
+    stopStack,
+    toggleCamera,
+    fetchStackLogs,
   } = useBackendApi(2000);
 
   useEffect(() => {
@@ -43,6 +49,16 @@ export default function App() {
       />
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 py-6">
+        {activeTab === 'control' && (
+          <RobotControlPanel
+            statusData={statusData}
+            startStack={startStack}
+            stopStack={stopStack}
+            toggleCamera={toggleCamera}
+            fetchStackLogs={fetchStackLogs}
+            backendConnected={backendConnected}
+          />
+        )}
         {activeTab === 'graph' && <RosGraphPanel rosStatus={rosStatus} />}
         {activeTab === 'process' && (
           <ProcessHardwarePanel

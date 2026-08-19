@@ -6,10 +6,11 @@
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
+
+vi.mock('roslib', () => import('../__mocks__/roslib.js'));
+
 import { MockRos, MockTopic } from '../__mocks__/roslib.js';
 
-// We need a fresh RosService singleton for each test so the topic cache
-// doesn't bleed between tests.
 let rosService;
 let useRosTopic;
 
@@ -22,9 +23,10 @@ beforeEach(async () => {
   vi.resetModules();
   const svcMod = await import('../../services/RosService.js');
   rosService = svcMod.default;
-  // Simulate a connected rosbridge so subscriptions work
   rosService.connect('ws://localhost:9090');
-  MockRos._lastInstance._emit('connection');
+  if (MockRos._lastInstance) {
+    MockRos._lastInstance._emit('connection');
+  }
 
   const hookMod = await import('../../hooks/useRosTopic.js');
   useRosTopic = hookMod.default;

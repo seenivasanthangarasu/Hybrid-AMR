@@ -10,7 +10,7 @@ from flask_cors import CORS
 import psutil
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
 
 PORT = int(os.environ.get("ADMIN_BACKEND_PORT", 5001))
 
@@ -18,10 +18,14 @@ MANAGED_PROCESS_PATTERNS = {
     "hybrid_manager": ["hybrid_manager.py", "hybrid_navigation"],
     "gps_proc": ["ublox_gps_node", "ublox_gps"],
     "urdf_proc": ["robot_state_publisher"],
+    "joint_state_proc": ["joint_state_publisher"],
     "lidar_proc": ["ydlidar_ros2_driver", "ydlidar_ros2_driver_node"],
-    "odom_proc": ["esp32_odom", "arrow_teleop"],
-    "slam_proc": ["slam_toolbox", "async_slam_toolbox_node"],
+    "odom_proc": ["esp32_odom", "odom_node", "arrow_teleop"],
+    "imu_proc": ["imu_serial_node", "imu_node"],
+    "slam_proc": ["slam_toolbox", "localization_slam_toolbox_node", "async_slam_toolbox_node"],
     "rviz_proc": ["rviz2"],
+    "camera_proc": ["v4l2_camera_node", "v4l2_camera"],
+    "rosbridge_proc": ["rosbridge_websocket"],
 }
 
 def check_port_reachable(host="127.0.0.1", port=9090, timeout=1.0):
@@ -242,6 +246,162 @@ def restart_managed_process():
         })
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
+
+GLOBAL_STACK_PROC = None
+GLOBAL_CAMERA_PROC = None
+
+BRINGUP_LOG_FILE = "/tmp/robot_bringup.log"
+
+@app.route("/api/stack/start", methods=["POST"])
+def start_robot_stack():
+    global GLOBAL_STACK_PROC
+    data = request.json or {}
+    include_camera = data.get("include_camera", False)
+
+    if GLOBAL_STACK_PROC and GLOBAL_STACK_PROC.poll() is None:
+        return jsonify({
+            "status": "ok",
+            "message": "Robot stack is already running.",
+            "pid": GLOBAL_STACK_PROC.pid
+        })
+
+    cmd_str = (
+        "source /opt/ros/jazzy/setup.bash && "
+        "source /home/ubuntu/Desktop/Xtrmbly/install/setup.bash && "
+        f"ros2 launch rock_bringup navigation.launch.py start_camera:={'true' if include_camera else 'false'}"
+    )
+
+    try:
+        # Clear/open log file
+        log_out = open(BRINGUP_LOG_FILE, "w")
+        GLOBAL_STACK_PROC = subprocess.Popen(
+            ["/bin/bash", "-c", cmd_str],
+            stdout=log_out,
+            stderr=subprocess.STDOUT
+        )
+        return jsonify({
+            "status": "ok",
+            "message": f"Robot stack launched successfully (camera={'on' if include_camera else 'off'}).",
+            "pid": GLOBAL_STACK_PROC.pid
+        })
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+@app.route("/api/stack/logs", methods=["GET"])
+def get_stack_logs():
+    lines_count = int(request.args.get("lines", 100))
+    if os.path.exists(BRINGUP_LOG_FILE):
+        try:
+            with open(BRINGUP_LOG_FILE, "r", errors="ignore") as f:
+                all_lines = f.readlines()
+                return jsonify({
+                    "status": "ok",
+                    "lines": [l.rstrip("\r\n") for l in all_lines[-lines_count:]]
+                })
+        except Exception as e:
+            return jsonify({"status": "error", "message": str(e), "lines": []}), 500
+    return jsonify({"status": "ok", "lines": ["[No bringup logs recorded yet]"]})
+
+@app.route("/api/stack/stop", methods=["POST"])
+def stop_robot_stack():
+    global GLOBAL_STACK_PROC, GLOBAL_CAMERA_PROC
+    killed_pids = []
+
+    if GLOBAL_STACK_PROC and GLOBAL_STACK_PROC.poll() is None:
+        try:
+            GLOBAL_STACK_PROC.terminate()
+            killed_pids.append(GLOBAL_STACK_PROC.pid)
+        except Exception:
+            pass
+        GLOBAL_STACK_PROC = None
+
+    if GLOBAL_CAMERA_PROC and GLOBAL_CAMERA_PROC.poll() is None:
+        try:
+            GLOBAL_CAMERA_PROC.terminate()
+            killed_pids.append(GLOBAL_CAMERA_PROC.pid)
+        except Exception:
+            pass
+        GLOBAL_CAMERA_PROC = None
+
+    # Terminate any running stack processes by pattern
+    for proc_key, patterns in MANAGED_PROCESS_PATTERNS.items():
+        for p in psutil.process_iter(['pid', 'name', 'cmdline']):
+            try:
+                cmdline_str = " ".join(p.info['cmdline'] or [])
+                pname = p.info['name'] or ""
+                full_str = f"{pname} {cmdline_str}"
+                for pat in patterns:
+                    if pat in full_str:
+                        p.terminate()
+                        killed_pids.append(p.info['pid'])
+                        break
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                continue
+
+    return jsonify({
+        "status": "ok",
+        "message": "Robot stack stopped.",
+        "killed_pids": list(set(killed_pids))
+    })
+
+@app.route("/api/camera/toggle", methods=["POST"])
+def toggle_camera_module():
+    global GLOBAL_CAMERA_PROC
+    data = request.json or {}
+    enable = data.get("enable", True)
+
+    if enable:
+        # Stop existing standalone camera process if running
+        if GLOBAL_CAMERA_PROC and GLOBAL_CAMERA_PROC.poll() is None:
+            return jsonify({
+                "status": "ok",
+                "message": "Camera module is already running.",
+                "pid": GLOBAL_CAMERA_PROC.pid
+            })
+
+        cmd_str = (
+            "source /opt/ros/jazzy/setup.bash && "
+            "source /home/ubuntu/Desktop/Xtrmbly/install/setup.bash && "
+            "ros2 run v4l2_camera v4l2_camera_node --ros-args -p video_device:=/dev/video0"
+        )
+        try:
+            GLOBAL_CAMERA_PROC = subprocess.Popen(["/bin/bash", "-c", cmd_str])
+            return jsonify({
+                "status": "ok",
+                "message": "Camera module turned ON.",
+                "pid": GLOBAL_CAMERA_PROC.pid
+            })
+        except Exception as e:
+            return jsonify({"status": "error", "message": str(e)}), 500
+    else:
+        killed = []
+        if GLOBAL_CAMERA_PROC and GLOBAL_CAMERA_PROC.poll() is None:
+            try:
+                GLOBAL_CAMERA_PROC.terminate()
+                killed.append(GLOBAL_CAMERA_PROC.pid)
+            except Exception:
+                pass
+            GLOBAL_CAMERA_PROC = None
+
+        patterns = MANAGED_PROCESS_PATTERNS["camera_proc"]
+        for p in psutil.process_iter(['pid', 'name', 'cmdline']):
+            try:
+                cmdline_str = " ".join(p.info['cmdline'] or [])
+                pname = p.info['name'] or ""
+                full_str = f"{pname} {cmdline_str}"
+                for pat in patterns:
+                    if pat in full_str:
+                        p.terminate()
+                        killed.append(p.info['pid'])
+                        break
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                continue
+
+        return jsonify({
+            "status": "ok",
+            "message": "Camera module turned OFF.",
+            "killed_pids": list(set(killed))
+        })
 
 @app.route("/api/logs", methods=["GET"])
 def get_logs():

@@ -15,8 +15,10 @@ A full-stack **ROS 2 Jazzy** autonomous mobile robot platform designed for hybri
 * **IMU & LiDAR Hardware Drivers**: Sensor drivers for GY-80 IMU (`/dev/esp-imu`) publishing raw acceleration and magnetic fields, and YDLidar range sensors publishing to `/scan`.
 * **Telemetry Data Recorder**: Dedicated recording tool (`amr_data_recorder`) for capturing synchronized sensor streams (`/scan`, `/imu/*`, `/odom`, `/fix`, `/tf`) into MCAP format ROS 2 bags with structured experiment metadata (`metadata.yaml`).
 * **Web Onboard Admin & Diagnostics Dashboard** (`admin-dashboard`): the actively maintained onboard tool, built to run directly on the Rubik Pi itself.
+  * **Robot Bringup & Control**: Start/Stop full navigation stack (`navigation.launch.py`) with automatic startup of Odom, GY-80 IMU, YDLidar, URDF, and SLAM Toolbox.
+  * **Selective Camera Control**: Independent ON/OFF toggle for the Camera module (`v4l2_camera_node` on `/dev/video0`) with real-time launch progress phases and live bringup console logs.
   * **ROS Graph Health**: live node/topic/service registry, per-topic Hz, TF tree staleness (`map→odom`, `odom→base_link`).
-  * **Processes & Hardware**: serial device presence/permissions for `/dev/esp` and the lidar, GPS fix decode, managed-process status/restart for the `hybrid_manager` subprocess stack.
+  * **Processes & Hardware**: serial device presence/permissions for `/dev/esp`, `/dev/esp-imu`, `/dev/ttyUSB0`, managed-process status/metrics (PID, CPU%, Memory%, Uptime).
   * **Pi System Health**: CPU temperature, per-core usage, RAM, disk, network interfaces.
   * **Logs Viewer**: live `~/.ros/log/` and `journalctl` tailing.
   * See [`admin-dashboard/README.md`](admin-dashboard/README.md) for full details, ports, and its security/trust model (no auth — LAN-only tool).
@@ -28,9 +30,10 @@ A full-stack **ROS 2 Jazzy** autonomous mobile robot platform designed for hybri
 ## 📁 Repository Structure
 
 ```
+├── start_all.sh              # Single-command startup script for all background services & dashboard
 ├── admin-dashboard/          # Onboard ROS 2 admin & diagnostics dashboard (React + Vite + Flask)
-│   ├── src/                  # Dashboard UI (ROS Graph, Processes & Hardware, Pi System, Logs, Camera panels)
-│   ├── server/server.py      # Local Flask API (0.0.0.0:5001) — hardware/process/system status
+│   ├── src/                  # Dashboard UI (Robot Control, ROS Graph, Processes & Hardware, Pi System, Logs, Camera)
+│   ├── server/server.py      # Local Flask API (0.0.0.0:5001) — stack control, hardware/process metrics
 │   ├── package.json
 │   └── vite.config.js
 ├── src/                      # ROS 2 Jazzy Workspace Packages
@@ -56,20 +59,32 @@ Three directories under `src/` (`YDLidar-SDK`, `mapviz`, `ydlidar_ros2_driver`) 
 2. **Node.js** (v18+) & **npm** (v9+).
 3. **Python 3.12+** with required dependencies:
    ```bash
-   pip install pyserial
+   pip install pyserial flask flask-cors psutil requests
    ```
-   `admin-dashboard/server/server.py` additionally requires `flask` and `psutil`.
 4. **ROS 2 Packages**:
    ```bash
    sudo apt update
-   sudo apt install ros-jazzy-rosbridge-server ros-jazzy-slam-toolbox ros-jazzy-navigation2 ros-jazzy-nav2-bringup ros-jazzy-robot-state-publisher
+   sudo apt install ros-jazzy-rosbridge-server ros-jazzy-slam-toolbox ros-jazzy-navigation2 ros-jazzy-nav2-bringup ros-jazzy-robot-state-publisher ros-jazzy-v4l2-camera
    ```
 
 ---
 
-## 🚀 Quick Start Guide
+## 🚀 All-in-One Startup Command (Recommended)
 
-> These steps assume the workspace lives at `~/Desktop/Xtrmbly` on the robot — several launch files (`hybrid_manager.py`, `rock_bringup/navigation.launch.py`) currently hardcode this absolute path when sourcing `install/setup.bash`. If you clone this elsewhere, update those paths first (tracked as a known portability gap).
+To launch the complete project (ROSBridge server, Flask Admin Backend API, and Vite Dashboard Frontend) with a single command:
+
+```bash
+cd ~/Desktop/Xtrmbly
+./start_all.sh
+```
+
+Once started:
+* **Dashboard Frontend**: Open `http://<ROBOT_IP>:3000` (or `http://localhost:3000`) in your browser.
+* **Robot Bringup**: Go to the **Robot Control** tab and click **"Launch Robot Stack"** to automatically launch Odom, IMU, YDLidar, URDF, and SLAM Localization.
+
+---
+
+## 🛠️ Step-by-Step Manual Startup
 
 ### 1. Build the ROS 2 Workspace
 
@@ -78,41 +93,21 @@ cd ~/Desktop/Xtrmbly
 colcon build --symlink-install --packages-skip mapviz mapviz_interfaces mapviz_plugins multires_image tile_map
 source install/setup.bash
 ```
-(`mapviz` is skipped by default — it's a heavy Qt build and isn't referenced by any launch file here. Drop the `--packages-skip` flag if you need it.)
 
-### 2. Launch Hardware & Navigation Stack
-
-To launch the full navigation stack:
-```bash
-ros2 launch rock_bringup navigation.launch.py
-```
-Note: this requires `/home/ubuntu/ublox_config.yaml` (GPS) and a saved map at the path set in `rock_bringup/config/mapper_localization.yaml` — neither ships with this repo and must be provided per-robot.
-
-To run the automated Hybrid Mode Manager (monitors GPS fix and transitions to SLAM if fix lost):
-```bash
-ros2 run hybrid_navigation hybrid_manager
-```
-
-To start the ROSBridge WebSocket server for the dashboard:
-```bash
-ros2 launch rosbridge_server rosbridge_websocket_launch.xml
-```
-
-For a minimal hardware smoke-test without GPS/SLAM (robot description + odometry + IMU + bridge only):
-```bash
-ros2 launch gogo_description robot_state_publisher.launch.py &
-ros2 run esp32_odom odom_node &
-ros2 run imu_node imu_serial_node &
-ros2 launch rosbridge_server rosbridge_websocket_launch.xml &
-```
-
-### 3. Launch the Onboard Admin & Diagnostics Dashboard (`admin-dashboard`)
+### 2. Start Dashboard Services Individually
 
 ```bash
+# Terminal 1: ROSBridge WebSocket (Port 9090)
+source /opt/ros/jazzy/setup.bash
+ros2 launch rosbridge_server rosbridge_websocket_launch.xml port:=9090
+
+# Terminal 2: Admin Backend Server (Port 5001)
 cd ~/Desktop/Xtrmbly/admin-dashboard
-npm install       # run natively on the target machine's own architecture — see note below
-python3 server/server.py &     # Flask API on 0.0.0.0:5001
-npm run dev &                  # Vite dev server on 0.0.0.0:3000
+python3 server/server.py
+
+# Terminal 3: Dashboard Frontend (Port 3000)
+cd ~/Desktop/Xtrmbly/admin-dashboard
+npm run dev -- --host 0.0.0.0 --port 3000
 ```
 
 Open `http://<ROBOT_IP>:3000` from any browser on the robot's LAN. `admin-dashboard/.env` must point `VITE_ROSBRIDGE_URL` / `VITE_BACKEND_URL` / `VITE_VIDEO_SERVER_URL` at the robot's actual LAN IP (not `localhost`) for remote browsers to connect — see [`admin-dashboard/README.md`](admin-dashboard/README.md).

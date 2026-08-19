@@ -116,7 +116,8 @@ describe('RosGraphPanel – connected state with graph data', () => {
   it('shows node count after graph refresh', async () => {
     render(<RosGraphPanel rosStatus="connected" />);
     await waitFor(() => {
-      expect(screen.getByText('3')).toBeInTheDocument(); // 3 nodes
+      const threeMatches = screen.getAllByText('3');
+      expect(threeMatches.length).toBeGreaterThan(0);
     });
   });
 

@@ -1,6 +1,12 @@
 import ROSLIB from 'roslib';
 
-const DEFAULT_ROSBRIDGE_URL = import.meta.env.VITE_ROSBRIDGE_URL || 'ws://localhost:9090';
+export const getRosbridgeUrl = () => {
+  if (typeof window !== 'undefined' && window.location && window.location.hostname) {
+    const host = window.location.hostname;
+    return `ws://${host}:9090`;
+  }
+  return import.meta.env.VITE_ROSBRIDGE_URL || 'ws://127.0.0.1:9090';
+};
 
 class RosService {
   constructor() {
@@ -11,12 +17,13 @@ class RosService {
     this.hzTrackers = new Map(); // topicName -> { count, lastTime, hz }
   }
 
-  connect(url = DEFAULT_ROSBRIDGE_URL) {
+  connect(url) {
+    const targetUrl = url || getRosbridgeUrl();
     if (this.ros && (this.status === 'connected' || this.status === 'connecting')) {
       return this.ros;
     }
 
-    this.ros = new ROSLIB.Ros({ url });
+    this.ros = new ROSLIB.Ros({ url: targetUrl });
     this._setStatus('connecting');
 
     this.ros.on('connection', () => {

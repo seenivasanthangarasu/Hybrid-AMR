@@ -18,39 +18,39 @@ const baseProps = {
 describe('Header – ROS status badge', () => {
   it('shows "disconnected" badge when rosStatus is disconnected', () => {
     render(<Header {...baseProps} rosStatus="disconnected" />);
-    expect(screen.getByText(/disconnected/i)).toBeInTheDocument();
+    expect(screen.getByText(/ROS WS: disconnected/i)).toBeInTheDocument();
   });
 
   it('shows "connecting" badge when rosStatus is connecting', () => {
     render(<Header {...baseProps} rosStatus="connecting" />);
-    expect(screen.getByText(/connecting/i)).toBeInTheDocument();
+    expect(screen.getByText(/ROS WS: connecting/i)).toBeInTheDocument();
   });
 
   it('shows "connected" badge when rosStatus is connected', () => {
     render(<Header {...baseProps} rosStatus="connected" />);
-    expect(screen.getByText(/connected/i)).toBeInTheDocument();
+    expect(screen.getByText(/ROS WS: connected/i)).toBeInTheDocument();
   });
 
   it('shows "error" badge when rosStatus is error', () => {
     render(<Header {...baseProps} rosStatus="error" />);
-    expect(screen.getByText(/error/i)).toBeInTheDocument();
+    expect(screen.getByText(/ROS WS: error/i)).toBeInTheDocument();
   });
 
   it('shows "closed" badge when rosStatus is closed', () => {
     render(<Header {...baseProps} rosStatus="closed" />);
-    expect(screen.getByText(/closed/i)).toBeInTheDocument();
+    expect(screen.getByText(/ROS WS: closed/i)).toBeInTheDocument();
   });
 });
 
 describe('Header – backend API badge', () => {
   it('shows "Offline" when backendConnected is false', () => {
     render(<Header {...baseProps} />);
-    expect(screen.getByText(/offline/i)).toBeInTheDocument();
+    expect(screen.getByText(/API: Offline/i)).toBeInTheDocument();
   });
 
   it('shows "Connected" when backendConnected is true', () => {
     render(<Header {...baseProps} backendConnected={true} />);
-    expect(screen.getByText(/connected/i)).toBeInTheDocument();
+    expect(screen.getByText(/API: Connected/i)).toBeInTheDocument();
   });
 });
 
@@ -71,7 +71,7 @@ describe('Header – CPU/Temp info strip', () => {
 });
 
 describe('Header – tab navigation', () => {
-  const tabs = ['graph', 'process', 'system', 'logs', 'camera'];
+  const tabs = ['control', 'graph', 'process', 'system', 'logs', 'camera'];
 
   tabs.forEach((tab) => {
     it(`calls setActiveTab("${tab}") when that tab button is clicked`, () => {
@@ -79,6 +79,7 @@ describe('Header – tab navigation', () => {
       render(<Header {...baseProps} setActiveTab={setActiveTab} />);
 
       const tabLabels = {
+        control: /robot control/i,
         graph: /ros graph/i,
         process: /processes/i,
         system: /pi system/i,

@@ -38,11 +38,11 @@ describe('CameraPanel – initial loading state', () => {
 describe('CameraPanel – error state after timeout', () => {
   it('transitions to error after 6 second watchdog fires', async () => {
     render(<CameraPanel backendConnected={false} />);
-    // Advance past the 6s load watchdog
-    vi.advanceTimersByTime(6100);
-    await waitFor(() => {
-      expect(screen.getByText(/stream unavailable/i)).toBeInTheDocument();
+    // Advance past the 6s load watchdog wrapped in act
+    await act(async () => {
+      vi.advanceTimersByTime(6100);
     });
+    expect(screen.getByText(/stream unavailable/i)).toBeInTheDocument();
   });
 
   it('shows "Camera Stream Unavailable" error overlay after timeout', async () => {
