@@ -54,20 +54,42 @@ function Block({ title, freshness, topic, children, className = '' }) {
   );
 }
 
-/** One label/value pair. `value == null` renders NO DATA, never a zero. */
-function Stat({ label, value, unit, tone, title, dim = false }) {
+/**
+ * One label/value pair. `value == null` renders NO DATA, never a zero.
+ *
+ * `wrap` stacks label above value instead of the usual single baseline row —
+ * for the rare stat (Constellations) whose value is a long space-separated
+ * list that would otherwise force the label to truncate: the label and a
+ * `shrink-0` value both wanting the same narrow row is fine for short
+ * numbers, not for "GPS GLONASS BEIDOU GALILEO".
+ */
+function Stat({ label, value, unit, tone, title, dim = false, wrap = false }) {
   const toneClass = tone ? toneFor(tone).text : 'text-ink-high';
+  const valueNode =
+    value == null || value === '' ? (
+      <span className={`no-data text-[10px] ${wrap ? '' : 'shrink-0'}`}>NO DATA</span>
+    ) : (
+      <span
+        className={`data-value text-xs font-semibold ${wrap ? 'leading-snug' : 'shrink-0'} ${toneClass} ${dim ? 'opacity-70' : ''}`}
+      >
+        {value}
+        {unit && <span className="ml-0.5 text-[10px] font-normal text-ink-low">{unit}</span>}
+      </span>
+    );
+
+  if (wrap) {
+    return (
+      <div title={title}>
+        <span className="data-label block">{label}</span>
+        {valueNode}
+      </div>
+    );
+  }
+
   return (
     <div className="flex items-baseline justify-between gap-2" title={title}>
       <span className="data-label truncate">{label}</span>
-      {value == null || value === '' ? (
-        <span className="no-data shrink-0 text-[10px]">NO DATA</span>
-      ) : (
-        <span className={`data-value shrink-0 text-xs font-semibold ${toneClass} ${dim ? 'opacity-70' : ''}`}>
-          {value}
-          {unit && <span className="ml-0.5 text-[10px] font-normal text-ink-low">{unit}</span>}
-        </span>
-      )}
+      {valueNode}
     </div>
   );
 }
@@ -154,7 +176,7 @@ export default function GnssQualityPanel() {
     g.solution?.carrierSolutionCode === 2 ? 'live' : g.solution?.carrierSolutionCode === 1 ? 'warn' : 'idle';
 
   return (
-    <div className="panel flex h-full flex-col overflow-auto rounded-md p-3 shadow-panel">
+    <div className="flex flex-col gap-1">
       <PanelHeader
         title="GNSS QUALITY"
         right={
@@ -178,7 +200,14 @@ export default function GnssQualityPanel() {
         }
       />
 
-      <div className="grid min-h-0 flex-1 gap-2 lg:grid-cols-5 md:grid-cols-3 sm:grid-cols-2">
+      {/* Breakpoints are tuned for this panel's actual container width — the
+          xl:2xl Dialog it now lives in caps at max-w-6xl (1152px) regardless
+          of viewport, so 5 columns only kicks in once the viewport is wide
+          enough (1280px) that the Dialog has already hit that cap and has
+          the ~220px/column room this needs; a plain lg: breakpoint here
+          triggered before the container was actually that wide, crushing
+          every column into unreadable truncated text. */}
+      <div className="grid min-h-0 flex-1 gap-2 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5">
         {/* ---------------- SOLUTION ---------------- */}
         <Block title="SOLUTION" freshness={fresh.pvt} topic={g.topics.pvt}>
           <div className="flex flex-col gap-1">
@@ -235,6 +264,7 @@ export default function GnssQualityPanel() {
               label="Constellations"
               value={g.fix.constellations?.length ? g.fix.constellations.join(' ') : null}
               title="NavSatFix.status.service bitmask"
+              wrap
             />
           </div>
         </Block>
@@ -314,7 +344,7 @@ export default function GnssQualityPanel() {
         </Block>
 
         {/* ---------------- SIGNAL (C/N0) ---------------- */}
-        <Block title="SIGNAL · C/N0" freshness={fresh.sat} topic={g.topics.sat} className="lg:col-span-2">
+        <Block title="SIGNAL · C/N0" freshness={fresh.sat} topic={g.topics.sat} className="xl:col-span-2">
           <div className="flex min-h-0 flex-1 flex-col gap-1.5">
             <div className="grid grid-cols-4 gap-1.5">
               <Stat label="Visible" value={g.sats?.visible} title="Satellites the receiver is aware of" />

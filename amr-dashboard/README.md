@@ -58,9 +58,16 @@ on load; connection state is shown live in the header.
 | **Auto-reconnect**   | Automatic (on link loss) | Retries rosbridge on its own — 1s→2→4→8→16→30s with jitter, **bounded at 6 attempts**. The header counts down (`AUTO-RETRY 3/6 · 4s`) and says so when it gives up. |
 | **Reconnect**        | Header (on link loss) | Re-establishes rosbridge without reloading the page, and resets a spent auto-retry budget.          |
 | **Light/dark theme** | Header sun/moon       | Persists in `localStorage`; first visit follows the OS setting.                                    |
-| **Edit layout**      | Settings gear         | Drag/resize every panel; the arrangement persists and `Reset to default` restores the shipped one. |
-| **Error reference**  | Settings gear → HELP  | Catalogue of all 13 fault states with the dialog each raises.                                      |
+| **Edit layout**      | Sidebar (hamburger icon) → DASHBOARD LAYOUT | Drag/resize every panel; the arrangement persists and `Reset to default` restores the shipped one. |
+| **Error reference**  | Sidebar → HELP        | Catalogue of all 13 fault states with the dialog each raises.                                      |
 | **Fault dialogs**    | Automatic             | Selecting a view with no data, or a command that failed to send, explains the cause and the fix.   |
+| **Data & Backups**   | Sidebar → DATA        | Record selected ROS topics to `.mcap` and capture periodic camera snapshots, entirely client-side — see below. |
+| **GNSS Quality**     | Sidebar → PANELS      | Fix-quality diagnostics — DOP, per-satellite C/N0, accuracy radii, RF front-end health. |
+| **Nav2 threshold tuning** | Sidebar → PANELS | Tune a curated set of Nav2 costmap/controller thresholds live over rosbridge — see below. |
+
+All four of the above open as full-view overlay pages from the **hamburger icon** at the top-left of the
+header — a single sidebar that replaced the old gear-icon dropdown, so GNSS Quality and Nav2 Threshold
+Tuning are no longer grid tiles an operator has to scroll below the fold to find.
 
 Full walkthrough and front-end architecture:
 [`docs/dashboard-ui-guide.md`](../docs/dashboard-ui-guide.md).
@@ -102,6 +109,79 @@ robot's actual interfaces in `src/services/RobotCommandService.js`):
 > **ROS1 actionlib**. A ROS2 action server does not expose those topics, so these
 > need switching to rosbridge's `send_action_goal` op when the robot side lands.
 
+## Data & Backups
+
+Sidebar (hamburger icon) → DATA → **Data & backups** opens a page that records selected ROS
+topics into `.mcap` files and captures periodic camera snapshots — both
+**entirely client-side**, using the browser's File System Access API to write
+to a folder on the operator's own machine over the rosbridge connection that
+already exists. There is no robot-side recording process and nothing to
+deploy on the robot for this feature.
+
+- **Chromium only** (Chrome/Edge) — the File System Access API doesn't exist in
+  Firefox or Safari. The page detects this and shows an explanatory message
+  instead of a broken folder picker.
+- **Message encoding is JSON, not CDR** — rosbridge already delivers topic
+  messages to the browser as plain JS objects, so `.mcap` files are written with
+  `schemaEncoding: 'jsonschema'` / `messageEncoding: 'json'`. They're valid MCAP
+  (readable by the `mcap` CLI and Foxglove Studio) but will not byte-match a
+  robot-side `ros2 bag record -s mcap` capture of the same topics.
+- **Rotation & retention**: a configurable rotation interval (minutes) closes
+  the current `.mcap` file and opens a new one; a configurable retention count
+  then deletes the oldest backups beyond that count — shared logic
+  (`BackupRotationService.js`) used by both the `.mcap` writer and camera
+  snapshots, so the two never drift into separate naming/cleanup behavior.
+- **Connection-loss handling**: a dropped rosbridge link pauses recording
+  (never corrupts the open file) and writes an explicit gap marker message on
+  both the pause and the automatic resume, so a later reader of the file can
+  tell data was missed and when.
+- **Camera snapshots depend on a robot-side CORS change** that has not
+  necessarily landed yet — see [`../docs/server-side-requests.md`](../docs/server-side-requests.md).
+  Until it does, the page feature-detects the resulting tainted-canvas
+  `SecurityError` on the first capture attempt and shows an explicit
+  "camera server does not allow snapshot capture yet" banner rather than
+  silently producing zero images while claiming to be capturing.
+
+## Nav2 threshold tuning
+
+Sidebar (hamburger icon) → PANELS → **Nav2 threshold tuning** opens a full-view page (same overlay
+pattern as GNSS Quality, Data & Backups, Error Reference) letting an operator tune a curated set of Nav2
+costmap/controller thresholds — inflation radius, obstacle range, velocity limits, goal tolerances —
+without SSH-ing into the robot or editing YAML. It is **not** a dashboard-grid tile — tuning is an
+occasional action, not something that needs a permanently-visible panel competing with the live views.
+
+- **Contract**: generic `rcl_interfaces/srv/GetParameters` / `SetParameters`
+  calls over rosbridge, targeted at a single robot-side whitelisting
+  **gatekeeper** node (`/nav2_param_gatekeeper`) rather than at Nav2's own
+  per-node services directly — that node fronts all three Nav2 nodes
+  (`controller_server`, `local_costmap`, `global_costmap`) behind one service
+  pair, so an unauthenticated rosbridge client can only touch the 7 curated
+  parameters below, not Nav2's entire parameter surface. See
+  [`../docs/robot-repo-tasks.md`](../docs/robot-repo-tasks.md) for why that
+  design was chosen over calling Nav2 directly, and for the gatekeeper node
+  itself (robot-side work, not yet deployed anywhere).
+- **Curated parameters** (default / safe range — `src/config/nav2Thresholds.js`):
+  `local_costmap.inflation_layer.inflation_radius` (0.55m, 0.05–2.0),
+  `local_costmap.obstacle_layer.scan.obstacle_max_range` (2.5m, 0.5–10.0),
+  `controller_server.FollowPath.max_vel_x` (0.5 m/s, 0.05–1.5),
+  `controller_server.FollowPath.min_vel_x` (0.0 m/s, -0.5–0.0),
+  `controller_server.FollowPath.max_vel_theta` (1.0 rad/s, 0.1–3.0),
+  `controller_server.general_goal_checker.xy_goal_tolerance` (0.25m, 0.05–1.0),
+  `controller_server.general_goal_checker.yaw_goal_tolerance` (0.25 rad, 0.05–1.0).
+- **Honesty**: since Nav2 (and the gatekeeper) aren't deployed on any robot
+  yet, every row starts empty — the safe default shows only as a greyed-out
+  placeholder, never as if it were a live reading — and the panel shows an
+  explicit "no Nav2 parameter server responding" banner rather than silently
+  displaying defaults as current values. APPLY only ever reports
+  `SENT_UNCONFIRMED` on success, never a false "confirmed"; an out-of-range
+  value is rejected client-side before any service call is made.
+- `src/services/Nav2ParameterService.js` (the rosbridge calls, with a hard
+  4-second response timeout since rosbridge itself never times out a call to
+  a nonexistent service) and `src/components/Nav2ThresholdPanel.jsx` (the UI)
+  implement this; see
+  [`../docs/data-handling-nav2-tasks.md`](../docs/data-handling-nav2-tasks.md)
+  Feature B for the full design/test writeup.
+
 ## Security model
 
 **rosbridge has no authentication, and this dashboard adds none of its own.**
@@ -125,13 +205,20 @@ worked around in this codebase. See
 src/
   components/      View + panel components (GpsMapView, LidarView, SlamView, CameraView,
                     UrdfWidget, StatusPanel, MissionPlanner, ControlPanel, DataFallback,
-                    ErrorBoundary, ErrorDialog, ErrorReference, DashboardGrid, ...)
+                    ErrorBoundary, ErrorDialog, ErrorReference, DataHandlingPage,
+                    GnssQualityPanel/Page, Nav2ThresholdPanel/Page, Sidebar, DashboardGrid, ...)
     ui/            Shared primitives: Dialog, SignalChip/SignalDot, FreshnessBadge,
                     PanelHeader, PanelFrame, signalTones (one tone→colour map)
   hooks/           useRosConnection, useRosTopic, useGps, useOdometry, useLaserScan,
                     useOccupancyGrid, useTF, useRobotMode, useUrdfViewer, useTheme,
-                    useLayout, useNow
-  services/        RosConnectionService (ROSBridge singleton), RobotCommandService (publishers)
+                    useLayout, useNow, useDataSourceSelection, useBackupSettings
+  services/        RosConnectionService (ROSBridge singleton), RobotCommandService (publishers),
+                    McapStorageService (folder picker/IndexedDB), McapRecordingService,
+                    CameraSnapshotService, BackupRotationService (naming/retention, shared
+                    by the previous two), Nav2ParameterService (Nav2 threshold get/set over
+                    the robot-side gatekeeper contract)
+  config/          dataSources.js (Data & Backups source picker), nav2Thresholds.js (curated
+                    Nav2 parameter list + safe ranges)
   errors/          catalog.js — every fault state (code, cause, remedy); one source of
                     truth behind the badges, the dialogs, and the error reference page
   utils/           freshness (LIVE/STALE/NO_DATA classifier), themeColor (canvas theming)

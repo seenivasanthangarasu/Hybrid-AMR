@@ -1,7 +1,22 @@
 import { useEffect, useState } from 'react';
 import useTheme from '../hooks/useTheme.js';
 import SignalChip from './ui/SignalChip.jsx';
-import SettingsMenu from './SettingsMenu.jsx';
+
+function HamburgerButton({ onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label="Open menu"
+      title="Menu — layout, panels, data & backups, error reference"
+      className="flex h-8 w-8 items-center justify-center rounded border border-deck-line text-ink-mid transition-colors hover:border-ink-low hover:text-ink-high"
+    >
+      <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+        <path d="M4 6h16M4 12h16M4 18h16" />
+      </svg>
+    </button>
+  );
+}
 
 function ThemeToggle() {
   const { theme, toggle } = useTheme();
@@ -78,17 +93,7 @@ function RetryIndicator({ retry, now }) {
   );
 }
 
-export default function Header({
-  connectionStatus,
-  mode,
-  isModeDefault,
-  onReconnect,
-  retry,
-  editMode,
-  onToggleEdit,
-  onResetLayout,
-  onOpenErrorReference,
-}) {
+export default function Header({ connectionStatus, mode, isModeDefault, onReconnect, retry, onOpenSidebar }) {
   const [now, setNow] = useState(new Date());
 
   useEffect(() => {
@@ -101,6 +106,7 @@ export default function Header({
   return (
     <header className="flex h-14 shrink-0 items-center justify-between border-b border-deck-line bg-deck-900 px-5">
       <div className="flex items-center gap-3">
+        <HamburgerButton onClick={onOpenSidebar} />
         <div className="flex h-8 w-8 items-center justify-center rounded border border-signal-cyan/40 bg-signal-cyan/10">
           <svg
             viewBox="0 0 24 24"
@@ -174,13 +180,6 @@ export default function Header({
         </div>
 
         <ThemeToggle />
-
-        <SettingsMenu
-          editMode={editMode}
-          onToggleEdit={onToggleEdit}
-          onReset={onResetLayout}
-          onOpenErrorReference={onOpenErrorReference}
-        />
       </div>
     </header>
   );

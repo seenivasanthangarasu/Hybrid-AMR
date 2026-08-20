@@ -16,7 +16,7 @@ const FOCUSABLE = 'a[href], button:not([disabled]), textarea, input, select, [ta
  * Sits at z-3000 — above the settings popover (z-2000) and the layout-edit
  * drag overlay (z-1100), so a fault is never rendered behind the UI it explains.
  */
-const SIZES = { md: 'max-w-lg', xl: 'max-w-3xl' };
+const SIZES = { md: 'max-w-lg', xl: 'max-w-3xl', '2xl': 'max-w-6xl' };
 
 export default function Dialog({ open, onClose, title, subtitle, icon, children, footer, size = 'md' }) {
   const panelRef = useRef(null);

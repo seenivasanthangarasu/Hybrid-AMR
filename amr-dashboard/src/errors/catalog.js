@@ -269,6 +269,27 @@ export const ERRORS = {
     ],
   },
 
+  NAV2_UNAVAILABLE: {
+    code: 'NAV2_UNAVAILABLE',
+    title: 'No Nav2 parameter server responding',
+    category: 'COMMAND',
+    tone: 'idle',
+    severity: 'Warning',
+    blocking: false,
+    summary:
+      'The rosbridge link is healthy, but no response arrived from the Nav2 parameter gatekeeper — either Nav2 is not deployed on the robot yet, or the gatekeeper node that fronts it is not running.',
+    causes: [
+      'Nav2 (nav2_bringup or equivalent) is not deployed on the robot — see docs/robot-repo-tasks.md.',
+      'The whitelisting gatekeeper node (nav2_param_gatekeeper) is not running, even if Nav2 itself is.',
+      'The request timed out waiting for a reply that never arrived.',
+    ],
+    remedies: [
+      'Confirm on the robot: ros2 node list | grep nav2_param_gatekeeper',
+      'If Nav2 itself is not deployed yet, this is expected — see docs/robot-repo-tasks.md for the bringup that is still pending.',
+      'Values shown here are the shipped safe defaults, not confirmed live readings, until this resolves.',
+    ],
+  },
+
   PANEL_CRASHED: {
     code: 'PANEL_CRASHED',
     title: 'Panel crashed',

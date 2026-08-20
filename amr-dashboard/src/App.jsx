@@ -8,7 +8,6 @@ import CameraView from './components/CameraView.jsx';
 import UrdfWidget from './components/UrdfWidget.jsx';
 import PreviewPanel from './components/PreviewPanel.jsx';
 import StatusPanel from './components/StatusPanel.jsx';
-import GnssQualityPanel from './components/GnssQualityPanel.jsx';
 import MissionPlanner from './components/MissionPlanner.jsx';
 import ControlPanel from './components/ControlPanel.jsx';
 import ErrorBoundary from './components/ErrorBoundary.jsx';
@@ -16,6 +15,10 @@ import DashboardGrid from './components/DashboardGrid.jsx';
 import PanelFrame from './components/ui/PanelFrame.jsx';
 import ErrorDialog from './components/ErrorDialog.jsx';
 import ErrorReference from './components/ErrorReference.jsx';
+import DataHandlingPage from './components/DataHandlingPage.jsx';
+import GnssQualityPage from './components/GnssQualityPage.jsx';
+import Nav2ThresholdPage from './components/Nav2ThresholdPage.jsx';
+import Sidebar from './components/Sidebar.jsx';
 import useRosConnection from './hooks/useRosConnection.js';
 import useRobotMode from './hooks/useRobotMode.js';
 import useLayout from './hooks/useLayout.js';
@@ -38,7 +41,11 @@ export default function App() {
   const { layout, setLayout, reset } = useLayout();
 
   const [fault, setFault] = useState(null); // { error, context } — explains an empty view
+  const [showSidebar, setShowSidebar] = useState(false);
   const [showErrorRef, setShowErrorRef] = useState(false);
+  const [showDataHandling, setShowDataHandling] = useState(false);
+  const [showGnssQuality, setShowGnssQuality] = useState(false);
+  const [showNav2Threshold, setShowNav2Threshold] = useState(false);
   const [cameraOnline, setCameraOnline] = useState(true);
 
   // These subscriptions are shared with the panels themselves (RosConnection
@@ -113,10 +120,7 @@ export default function App() {
         isModeDefault={isDefault}
         onReconnect={reconnect}
         retry={retry}
-        editMode={editMode}
-        onToggleEdit={() => setEditMode((v) => !v)}
-        onResetLayout={reset}
-        onOpenErrorReference={() => setShowErrorRef(true)}
+        onOpenSidebar={() => setShowSidebar(true)}
       />
 
       <AnimatePresence>
@@ -246,14 +250,6 @@ export default function App() {
               </PreviewPanel>
             </PanelFrame>
           </div>
-          {/* GNSS DIAGNOSTICS — DOP, per-satellite C/N0, accuracy radii, RF health */}
-          <div key="gnss" className="h-full w-full">
-            <PanelFrame title="GNSS QUALITY" editMode={editMode}>
-              <ErrorBoundary label="GNSS QUALITY">
-                <GnssQualityPanel />
-              </ErrorBoundary>
-            </PanelFrame>
-          </div>
         </DashboardGrid>
       </div>
 
@@ -281,6 +277,25 @@ export default function App() {
       />
 
       <ErrorReference open={showErrorRef} onClose={() => setShowErrorRef(false)} />
+      <DataHandlingPage open={showDataHandling} onClose={() => setShowDataHandling(false)} />
+      <GnssQualityPage open={showGnssQuality} onClose={() => setShowGnssQuality(false)} />
+      <Nav2ThresholdPage
+        open={showNav2Threshold}
+        onClose={() => setShowNav2Threshold(false)}
+        connectionStatus={connectionStatus}
+      />
+
+      <Sidebar
+        open={showSidebar}
+        onClose={() => setShowSidebar(false)}
+        editMode={editMode}
+        onToggleEdit={() => setEditMode((v) => !v)}
+        onResetLayout={reset}
+        onOpenGnssQuality={() => setShowGnssQuality(true)}
+        onOpenNav2Threshold={() => setShowNav2Threshold(true)}
+        onOpenDataHandling={() => setShowDataHandling(true)}
+        onOpenErrorReference={() => setShowErrorRef(true)}
+      />
     </div>
   );
 }

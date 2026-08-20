@@ -407,6 +407,45 @@ hardware interlock, not software velocity zeroing alone, and that lat/lon → ma
 conversion is deliberately left as a robot-side integration point rather than being
 computed client-side.
 
+**`McapStorageService.js`** — folder picker (`window.showDirectoryPicker`) +
+`FileSystemDirectoryHandle` persistence in IndexedDB (not `localStorage` —
+handles aren't JSON-serializable). `verifyPermission()` re-checks/re-requests
+write permission, since a stored handle can lose its grant across sessions.
+
+**`McapRecordingService.js`** — singleton. Subscribes to a configurable topic
+set through `RosConnectionService.getTopic()` (shared cache, no parallel
+subscription path) and writes `.mcap` files via `@mcap/core`, JSON-encoded
+(rosbridge already delivers JS objects — no CDR serializer). State machine
+`idle → recording → rotating → recording → stopped`, plus `paused` while the
+rosbridge link is down: writes are suspended (not corrupted) and an explicit
+gap-marker message is written on both the pause and the resume. All writes —
+messages, gap markers, rotation's close+reopen — are serialized through one
+queue, since `McapWriter` forbids concurrent calls.
+
+**`CameraSnapshotService.js`** — singleton. Periodically draws a frame from
+the `web_video_server` MJPEG stream onto an offscreen canvas and writes it as
+a JPEG into a `camera/` subfolder. The first capture attempt doubles as a
+feature-detection probe for the tainted-canvas `SecurityError` that occurs
+until the robot-side CORS change in `docs/server-side-requests.md` lands; on
+that error the service goes to `unavailable` rather than silently producing
+zero images.
+
+**`BackupRotationService.js`** — filename scheme (`prefix-YYYYMMDD-HHMMSS.ext`)
+and retention enforcement (delete oldest beyond N), shared by the two services
+above rather than duplicated in each.
+
+**`Nav2ParameterService.js`** — `getParameters(names)` / `getParameter(name)` /
+`setParameter(name, value)` over `rcl_interfaces/srv/GetParameters`/
+`SetParameters`, targeted at a robot-side whitelisting gatekeeper node
+(`/nav2_param_gatekeeper`, see docs/robot-repo-tasks.md) rather than Nav2's own
+per-node services — the gatekeeper fronts all three Nav2 nodes behind one
+service pair, bounding what an unauthenticated rosbridge client can touch to
+a curated 7-parameter whitelist instead of Nav2's full parameter surface.
+Wraps every call in a hard 4s timeout (`RESPONSE_TIMEOUT_MS`) since rosbridge
+does not itself time out a call to a nonexistent service — without it, a
+missing gatekeeper (true today, since Nav2 isn't deployed anywhere yet) would
+hang forever instead of surfacing unavailability.
+
 ### 6.4 Hooks
 
 | Hook | Topic | Notes |
@@ -421,6 +460,8 @@ computed client-side.
 | `useRobotMode` | `/robot_mode` | 3 s startup grace, then falls back to `OUTDOOR` with `isDefault: true` (a UI default, never presented as sensor data) |
 | `useCameraFeed` | auto-detect | polls `getTopicList()` every 5 s against a candidate list, subscribes to the first that is actually advertised |
 | `useUrdfViewer` | `/robot_description` | mounts `ROS3D.Viewer` + `ROS3D.UrdfClient` + grid, dynamic-imports ros3d/three, sets `window.THREE` for the UMD build |
+| `useDataSourceSelection` | — | persisted enabled/disabled set for the Data & Backups source picker (`src/config/dataSources.js`); backfills newly-added source ids from their shipped default rather than dropping unknown stored state |
+| `useBackupSettings` / `useSnapshotInterval` | — | persisted rotation interval + retention count (shared by `.mcap` and camera backups) and the separate camera capture interval |
 
 ### 6.5 Components
 
@@ -458,6 +499,37 @@ computed client-side.
   EMERGENCY STOP (3 s confirm window).
 - **`StatusPanel`** — mode, speed, heading, distance, GPS status/lat/lon, ROS link.
 - **`UrdfWidget`**, **`PreviewPanel`**, **`NoDataBadge`**, **`Header`**, **`GpsPreviewMap`**.
+- **`DataHandlingPage`** — full-view overlay (same `Dialog`-based structure as
+  `ErrorReference`), opened from Settings → DATA. Folder picker, the data-source
+  selection list grouped by category (topics + the synthetic `camera-snapshots`
+  entry, one picker for both — see `src/config/dataSources.js`), rotation/retention/
+  snapshot-interval inputs, start/stop with a live elapsed-time status line, the
+  camera-snapshot-unavailable banner, a live capture thumbnail, and a backup list
+  with per-file size/timestamp, running totals, and a two-step-confirm delete
+  (mirrors `MissionPlanner`'s `CLEAR ALL` pattern).
+- **`Nav2ThresholdPanel`** (wrapped by **`Nav2ThresholdPage`**, a `Dialog`-based full-view overlay opened
+  from the Sidebar — **not** a dashboard-grid panel; it started as one but was moved out in a later UX
+  pass, same reasoning as `GnssQualityPanel` below) — one row per curated Nav2 threshold: label, a
+  "LIVE `<value>`"/"NO LIVE VALUE" readout, a bounded numeric input (empty by default, safe default shown
+  only as a placeholder — never pre-filled as if it were a live reading), and a per-row APPLY reusing
+  `CommandFeedback`'s `SENDING`/`SENT_UNCONFIRMED`/`FAILED` states. Connection-gated like `ControlPanel`;
+  shows an inline `NAV2_UNAVAILABLE` banner when connected but the gatekeeper never responds. Out-of-range
+  input is rejected client-side with no service call made.
+- **`GnssQualityPanel`** (wrapped by **`GnssQualityPage`**) — also moved out of the grid into a Sidebar
+  overlay in the same pass, for the same reason: an occasional-use diagnostic doesn't need a
+  permanently-visible tile competing with the live views for the one-screen fold. Its internal stat grid
+  (SOLUTION/ACCURACY/GEOMETRY/SIGNAL/RF FRONT-END, `sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5`) is tuned
+  to the `Dialog` `2xl` size's actual capped width (`max-w-6xl` = 1152px) rather than plain viewport
+  breakpoints — a `lg:` (1024px viewport) trigger crushed every column into truncated, overlapping text
+  once the panel's real container was narrower than the viewport, since Tailwind breakpoints key off
+  viewport width, not the parent's actual rendered width. `Dialog.jsx`'s `SIZES` map gained the `2xl`
+  option for this.
+- **`Sidebar`** — replaced `SettingsMenu` (deleted). The dashboard's single navigation surface, opened by
+  a hamburger icon at the header's top-left (not the old gear icon). `Dialog`-style a11y (focus trap,
+  Esc, backdrop-click) but slides in from the left instead of centering. Sections: DASHBOARD LAYOUT (Edit
+  layout toggle, Reset — stay open after use, they're in-place toggles), PANELS (GNSS Quality, Nav2
+  Threshold Tuning), DATA (Data & Backups), HELP (Error Reference) — the latter three close the sidebar
+  before opening their page.
 
 ### 6.6 Theme
 
