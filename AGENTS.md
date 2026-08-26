@@ -222,3 +222,128 @@ On inspection, `git status` showed a large set of **pre-existing, uncommitted de
 
 ### 4. Single-Command Startup Script
 - Added `start_all.sh` at workspace root to launch ROSBridge WebSocket, Flask API backend, and Vite frontend daemonized in one command.
+
+---
+
+## 🚀 Session Log (2026-08-26) — Hiwonder GPS & 9-DOF IMU Node Swap
+
+### 1. Launch File & Stack Configuration (`navigation.launch.py`)
+- Removed old `ublox_gps_node` (`ublox_gps`) and old GY-80 `imu_serial_node` (`imu_node`).
+- Integrated **`hiwonder_gps`** (`gps_node` from `hiwonder_gps`) configured for `/dev/hiwonder_gps` at 9600 baud, publishing:
+  - `/hiwonder/gps/fix` (`sensor_msgs/NavSatFix`)
+  - `/hiwonder/gps/nmea` (`std_msgs/String`)
+- Integrated **`hiwonder_imu`** (`hiwonder_imu_node` from `hiwonder_imu`) configured for `/dev/hiwonder_imu` at 9600 baud, publishing:
+  - `/hiwonder/imu/data_raw` (`sensor_msgs/Imu`)
+  - `/hiwonder/imu/mag` (`sensor_msgs/MagneticField`)
+
+### 2. Dashboard Backend (`server/server.py`)
+- Updated `MANAGED_PROCESS_PATTERNS` to introspect `hiwonder_gps` and `hiwonder_imu` process instances.
+- Updated `/api/status` hardware checks to detect `/dev/hiwonder_gps` and `/dev/hiwonder_imu` serial ports alongside `/dev/amr_encoder` and `/dev/ttyUSB0`.
+
+### 3. Dashboard Frontend (`admin-dashboard/src`)
+- `ProcessHardwarePanel.jsx`:
+  - Updated GPS topic subscription from `/fix` $\rightarrow$ `/hiwonder/gps/fix`.
+  - Added dedicated hardware connection badges for `/dev/hiwonder_gps` (Hiwonder GPS Module) and `/dev/hiwonder_imu` (Hiwonder 9-DOF IMU).
+- `RobotControlPanel.jsx`:
+  - Updated stack module definitions to include `Hiwonder GPS (GNSS) Node` (`/hiwonder/gps/fix`) and `Hiwonder 9-DOF IMU Node` (`/hiwonder/imu/data_raw`).
+- `amr_data_recorder/record.py`:
+  - Added `/hiwonder/imu/data_raw`, `/hiwonder/imu/mag`, `/hiwonder/gps/fix`, and `/hiwonder/gps/nmea` to recorded telemetry topics.
+
+### 4. Build & Unit Test Verification
+- All 11 workspace packages (`amr_data_recorder`, `esp32_odom`, `gogo_description`, `hiwonder_gps`, `hiwonder_imu`, `hybrid_navigation`, `imu_node`, `indoor_amr`, `rock_bringup`, `ydlidar_ros2_driver`, `ydlidar_sdk`) built cleanly via `colcon build`.
+- 31 backend unit tests in `test_server.py` passed with 100% success rate.
+
+---
+
+## 🚀 Session Log (2026-08-26, continued) — YDLIDAR G2B Hardware Diagnostics & Driver Resolution
+
+### 1. Root Causes Identified
+- **Device Port & Permission Mismatch**:
+  - The CP2102 YDLidar G2B (Model code 15, serial `0001`) was on `/dev/ttyUSB3`, while `/dev/amr_lidar` symlink permissions were restricted to `0660`.
+- **Driver Node Lifecycle vs Normal Node Conflict**:
+  - `ydlidar_launch.py` initialized `ydlidar_ros2_driver_node` using `LifecycleNode` without a lifecycle manager, preventing execution transition into the active scanning state.
+- **Incompatible Sensor Parameters for G2B**:
+  - `support_motor_dtr` was set to `false`, preventing the motor spin trigger on the DTR pin.
+  - `intensity_bit` was set to `10` and `intensity: true` on a 0-bit stream, causing deserialization checksum errors.
+  - `m1_mode`, `m2_mode`, `m3_mode` (`setWorkMode`) were executed for non-GS lidars, corrupting triangulation packet framing.
+- **Uncaught Stream Parser Overrun**:
+  - Transient noisy frames caused `YdDataStream` to throw `std::out_of_range` ("read past end of buffer"), triggering `std::terminate()`.
+
+### 2. Applied Rectifications
+- **`ydlidar_launch.py`**: Switched from `LifecycleNode` to standard `Node` with dynamic port fallback (`/dev/amr_lidar` $\rightarrow$ `/dev/ttyUSB3` $\rightarrow$ `/dev/ttyUSB4` $\rightarrow$ `/dev/lidar`).
+- **`ydlidar.yaml`**: Set `support_motor_dtr: true`, `sample_rate: 5`, `intensity_bit: 0`, `intensity: false`, `fixed_resolution: false`, `reversion: false`, `inverted: false`, `frequency: 7.0`.
+- **`ydlidar_ros2_driver_node.cpp`**: Conditioned `setWorkMode` solely on `TYPE_GS`, added `laser.enableGlassNoise(false)` / `laser.enableSunNoise(false)`, and added `try ... catch` exception protection.
+- **`YDlidarDriver.cpp`**: Added frame bounds check and try-catch handling in `parsePoints()` to safely drop corrupted packets without node termination.
+- **Backend API & Tests**: Updated `/dev/amr_lidar` & `/dev/ttyUSB3` device check paths in `server.py` and synced `test_server.py` (31/31 unit tests passing).
+
+---
+
+## 🚀 Session Log (2026-08-26, continued) — ESP32 Odometry Serial Read & Port Collision Resolution
+
+### 1. Root Causes Identified
+- **Cross-Device Serial Port Conflict (udev Overlap)**:
+  - Legacy `99-amr-sensors.rules` matched `KERNELS=="1-2.1.3"` without serial matching. On current hub topologies, `2.1.3` was occupied by the YDLIDAR (`ttyUSB3`).
+  - As a consequence, `/dev/amr_encoder` and `/dev/amr_lidar` both pointed to `/dev/ttyUSB3`.
+  - Both `esp32_odom` and `ydlidar_ros2_driver` were attempting concurrent access to the same serial device, causing PySerial `device reports readiness to read but returned no data` warnings.
+- **Node Reconnection & Exception Handling**:
+  - `odom_node.py` had no parameter declarations, fallback candidate searches, or auto-reconnection logic when transient bus resets occurred.
+  - TF log messages were executing at 50Hz without throttling.
+
+### 2. Applied Rectifications
+- **Unified Udev Rule (`/etc/udev/rules.d/99-amr.rules`)**:
+  - Uniquely binds the ESP32 CP2102N by its hardware serial number: `ATTRS{serial}=="a8f8c998665df01189fd5e401045c30f"` $\rightarrow$ `/dev/amr_encoder`, `/dev/esp32`, `/dev/esp` with `MODE="0666"`.
+  - Uniquely binds the YDLIDAR CP2102 by its hardware serial number: `ATTRS{serial}=="0001"` $\rightarrow$ `/dev/amr_lidar`, `/dev/lidar` with `MODE="0666"`.
+  - Binds Hiwonder GPS to port `1-2.2` $\rightarrow$ `/dev/hiwonder_gps`, `/dev/amr_gps`.
+  - Binds Hiwonder IMU to port `1-2.3` $\rightarrow$ `/dev/hiwonder_imu`, `/dev/amr_imu`.
+  - Removed deprecated, conflicting rules files (`99-amr-sensors.rules`, `99-robot.rules`, `99-hiwonder-*.rules`).
+- **Resilient Odom Driver (`odom_node.py`)**:
+  - Added ROS 2 parameter declarations (`port`, `baudrate`).
+  - Implemented dynamic candidate discovery fallback (`/dev/amr_encoder` $\rightarrow$ `/dev/esp` $\rightarrow$ `/dev/esp32` $\rightarrow$ `/dev/ttyUSB2`).
+  - Added seamless auto-reconnection on bus disconnect / `SerialException`.
+  - Added `throttle_duration_sec=5.0` to TF publishing info logs.
+
+---
+
+## 🚀 Session Log (2026-08-26, continued) — Full Telemetry Stream, FastDDS UDP Transport & 5-Cycle Automated Bringup Validation
+
+### 1. Root Causes of Multi-Feed Dashboard Errors
+- **FastRTPS Shared Memory Transport Lockup (`/dev/shm`)**:
+  - FastDDS default shared memory transport (`SHM`) created corrupted mutex files (`fastrtps_port7001`) during rapid node restarts, completely silencing ROS 2 topic publication across publishers and subscribers.
+- **QoS Profile Incompatibility in Jazzy**:
+  - ROS 2 Jazzy rejects `RELIABLE` subscribers on `BEST_EFFORT` sensor topics.
+- **USB 2.0 Transaction Translator Overrun with RealSense**:
+  - Launching `rs_launch.py` with default infrared (`infra1`, `infra2`), gyro, and accelerometer streams caused USB Transaction Translator (`-110` / `-71`) buffer exhaustion on the physical hub, freezing USB 2.0 serial devices.
+- **DDS Participant Discovery Persistence**:
+  - Long-lived subscribers caching old publisher GUIDs failed to automatically discover new node instances spawned in subsequent bringup cycles.
+
+### 2. Applied Rectifications
+- **FastDDS UDPv4 Transport Architecture (`fastdds_udp.xml`)**:
+  - Configured UDPv4 loopback (`127.0.0.1`) transport, eliminating `/dev/shm` lock contention.
+  - Sourced `FASTRTPS_DEFAULT_PROFILES_FILE` and `RMW_IMPLEMENTATION=rmw_fastrtps_cpp` across `start_all.sh`, `server.py`, and test suites.
+- **RealSense Bandwidth & Motion Sensor Isolation**:
+  - Configured RealSense with `depth_profile:=424x240x15`, `color_profile:=424x240x15`, `initial_reset:=false`, `enable_gyro:=false`, `enable_accel:=false`, `enable_motion:=false`, `enable_sync:=false`, `enable_infra1:=false`, `enable_infra2:=false`.
+  - Added Depth Colorizer daemon (`depth_colorizer.py`) converting 16-bit millimeter depth maps into real-time RGB colormaps on `/camera/camera/depth/image_rect_raw/color` for Web Video Server streaming.
+- **Graceful Node Teardown & Udev Settle**:
+  - Updated all Python ROS nodes (`esp32_odom`, `hiwonder_imu`, `hiwonder_gps`) to safely close serial file descriptors in `finally:` blocks before shutdown.
+  - Added `udevadm settle --timeout=5` and root USB hub authorized reset during stack stops.
+- **Suite-Wide Verification**:
+  - All 117 frontend Vitest unit tests passed (100%).
+  - All 31 backend Pytest unit tests passed (100%).
+
+### 3. Automated 5-Cycle Bringup Validation Results (`test_5_cycles.py`)
+```
+================================================================================
+📊 5-CYCLE STABILITY & TELEMETRY TEST SUMMARY REPORT
+================================================================================
+Cycle    Status     Odom     IMU      GPS      Lidar    Camera   Depth    TF       Teardown  
+--------------------------------------------------------------------------------
+1        PASS       215      302      145      63       26       22       756      CLEAN     
+2        PASS       214      337      161      66       27       20       772      CLEAN     
+3        PASS       217      282      139      64       31       26       760      CLEAN     
+4        PASS       214      331      165      66       30       31       765      CLEAN     
+5        PASS       211      315      157      67       28       23       763      CLEAN     
+================================================================================
+🏁 FINAL OUTCOME: 5/5 CYCLES PASSED PERFECTLY!
+```
+
+

@@ -13,18 +13,21 @@ const VIDEO_SERVER_URL = getVideoServerUrl();
 
 // Common camera topic options for ROS 2 + web_video_server
 const TOPIC_PRESETS = [
-  { label: 'RGB Camera (compressed)', topic: '/camera/color/image_raw' },
-  { label: 'Depth Camera', topic: '/camera/depth/image_raw' },
-  { label: 'Camera Raw', topic: '/image_raw' },
-  { label: 'USB Camera', topic: '/usb_cam/image_raw' },
+  { label: 'RealSense RGB (/camera/camera/color/image_raw)', topic: '/camera/camera/color/image_raw' },
+  { label: 'RealSense Depth (/camera/camera/depth/image_rect_raw)', topic: '/camera/camera/depth/image_rect_raw' },
+  { label: 'RGB Camera (/camera/color/image_raw)', topic: '/camera/color/image_raw' },
+  { label: 'Camera Raw (/image_raw)', topic: '/image_raw' },
+  { label: 'USB Camera (/usb_cam/image_raw)', topic: '/usb_cam/image_raw' },
 ];
 
 export default function CameraPanel({ backendConnected }) {
   const [topic, setTopic] = useState(TOPIC_PRESETS[0].topic);
   const [customTopic, setCustomTopic] = useState('');
   const [useCustom, setUseCustom] = useState(false);
-  const [streamKey, setStreamKey] = useState(0); // increment to remount <img>
-  const [streamStatus, setStreamStatus] = useState('loading'); // 'loading' | 'live' | 'error'
+  const [transport, setTransport] = useState('raw');
+  const [playerMode, setPlayerMode] = useState('img'); // 'img' | 'iframe'
+  const [streamKey, setStreamKey] = useState(0); // increment to remount <img> or <iframe>
+  const [streamStatus, setStreamStatus] = useState('live'); // 'loading' | 'live' | 'error'
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [quality, setQuality] = useState(70);
@@ -36,23 +39,52 @@ export default function CameraPanel({ backendConnected }) {
 
   const activeTopic = useCustom && customTopic.trim() ? customTopic.trim() : topic;
 
-  // Build MJPEG stream URL: web_video_server format
-  const streamUrl = `${VIDEO_SERVER_URL}/stream?topic=${encodeURIComponent(activeTopic)}&quality=${quality}&default_transport=compressed&framerate=${fps}`;
+  // Map raw 16-bit depth topic (16UC1) to colorized depth stream (bgr8) for web_video_server
+  const streamTopic = activeTopic === '/camera/camera/depth/image_rect_raw'
+    ? '/camera/camera/depth/image_rect_raw/color'
+    : activeTopic;
+
+  // Build MJPEG stream URL: web_video_server requires raw unescaped topic paths
+  const streamUrl = `${VIDEO_SERVER_URL}/stream?topic=${streamTopic}&quality=${quality}&default_transport=${transport}&framerate=${fps}`;
+  const streamViewerUrl = `${VIDEO_SERVER_URL}/stream_viewer?topic=${streamTopic}`;
 
   const reload = useCallback(() => {
-    setStreamStatus('loading');
+    setStreamStatus(playerMode === 'iframe' ? 'live' : 'loading');
     setStreamKey((k) => k + 1);
-  }, []);
+  }, [playerMode]);
 
-  // Stale-load watchdog: if image hasn't loaded within 6s → error
+  // Frame arrival detector & error handling
   useEffect(() => {
+    if (playerMode === 'iframe') {
+      setStreamStatus('live');
+      return;
+    }
+
     setStreamStatus('loading');
-    clearTimeout(loadTimerRef.current);
-    loadTimerRef.current = setTimeout(() => {
-      setStreamStatus((s) => (s === 'loading' ? 'error' : s));
+    let isMounted = true;
+
+    // Check if naturalWidth is populated (for img mode)
+    const checkInterval = setInterval(() => {
+      if (imgRef.current && imgRef.current.naturalWidth > 0) {
+        if (isMounted) {
+          setStreamStatus('live');
+        }
+      }
+    }, 200);
+
+    // Timeout: only mark as error if after 6s no frame has arrived
+    const timeout = setTimeout(() => {
+      if (isMounted) {
+        setStreamStatus((s) => (s === 'loading' ? 'error' : s));
+      }
     }, 6000);
-    return () => clearTimeout(loadTimerRef.current);
-  }, [streamKey, activeTopic]);
+
+    return () => {
+      isMounted = false;
+      clearInterval(checkInterval);
+      clearTimeout(timeout);
+    };
+  }, [streamKey, activeTopic, quality, fps, transport, playerMode]);
 
   // Fullscreen handler
   const toggleFullscreen = () => {
@@ -148,8 +180,34 @@ export default function CameraPanel({ backendConnected }) {
             />
           </div>
 
-          {/* Quality & FPS sliders */}
+          {/* Transport & Player Mode & Quality sliders */}
           <div className="col-span-1 space-y-2">
+            <div>
+              <label className="block text-[11px] font-mono text-slate-400 mb-1">
+                Player Mode:
+              </label>
+              <select
+                value={playerMode}
+                onChange={(e) => { setPlayerMode(e.target.value); reload(); }}
+                className="w-full bg-slate-950 border border-slate-800 text-xs text-slate-200 font-mono rounded-lg px-3 py-1.5 focus:outline-none focus:border-cyan-500"
+              >
+                <option value="iframe">Stream Viewer (Iframe — Guaranteed for Firefox)</option>
+                <option value="img">Direct MJPEG Stream (&lt;img&gt;)</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-[11px] font-mono text-slate-400 mb-1">
+                Transport:
+              </label>
+              <select
+                value={transport}
+                onChange={(e) => { setTransport(e.target.value); reload(); }}
+                className="w-full bg-slate-950 border border-slate-800 text-xs text-slate-200 font-mono rounded-lg px-3 py-1.5 focus:outline-none focus:border-cyan-500"
+              >
+                <option value="raw">Raw (Standard sensor_msgs/Image)</option>
+                <option value="compressed">Compressed (sensor_msgs/CompressedImage)</option>
+              </select>
+            </div>
             <div>
               <label className="block text-[11px] font-mono text-slate-400 mb-1">
                 JPEG Quality: <span className="text-cyan-400">{quality}%</span>
@@ -174,12 +232,22 @@ export default function CameraPanel({ backendConnected }) {
             </div>
           </div>
 
-          {/* Active URL readout */}
-          <div className="col-span-full">
-            <label className="block text-[11px] font-mono text-slate-500 mb-1">Active Stream URL</label>
-            <code className="text-[11px] font-mono text-cyan-400 bg-slate-950 border border-slate-800 rounded px-3 py-1 block truncate">
-              {streamUrl}
-            </code>
+          {/* Active URL readout & Direct Stream Viewer Link */}
+          <div className="col-span-full flex flex-col md:flex-row items-start md:items-center justify-between gap-2 pt-2 border-t border-slate-800">
+            <div className="flex-1 min-w-0">
+              <label className="block text-[11px] font-mono text-slate-500 mb-0.5">Active Stream URL</label>
+              <code className="text-[11px] font-mono text-cyan-400 bg-slate-950 border border-slate-800 rounded px-2.5 py-1 block truncate">
+                {playerMode === 'iframe' ? streamViewerUrl : streamUrl}
+              </code>
+            </div>
+            <a
+              href={streamViewerUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-2 md:mt-4 text-xs font-mono text-cyan-400 hover:text-cyan-300 underline flex items-center gap-1"
+            >
+              Open stream_viewer in new tab &rarr;
+            </a>
           </div>
         </div>
       )}
@@ -187,27 +255,30 @@ export default function CameraPanel({ backendConnected }) {
       {/* Video Stream Window */}
       <div
         ref={containerRef}
-        className="relative bg-slate-950 border border-slate-800 rounded-xl overflow-hidden"
-        style={{ minHeight: '400px' }}
+        className={`relative bg-black rounded-xl overflow-hidden flex items-center justify-center w-full transition-all ${
+          isFullscreen
+            ? 'fixed inset-0 z-50 h-screen w-screen rounded-none border-0'
+            : 'border border-slate-800 min-h-[380px] h-[65vh] max-h-[850px]'
+        }`}
       >
         {/* Fullscreen toggle */}
         <button
           onClick={toggleFullscreen}
-          className="absolute top-3 right-3 z-20 p-1.5 bg-slate-900/80 backdrop-blur border border-slate-700 text-slate-300 hover:text-cyan-400 rounded-lg transition"
+          className="absolute top-3 right-3 z-30 p-2 bg-slate-900/80 hover:bg-slate-800 backdrop-blur border border-slate-700 text-slate-300 hover:text-cyan-400 rounded-lg transition shadow-lg"
           title={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
         >
-          {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+          {isFullscreen ? <Minimize2 className="w-5 h-5" /> : <Maximize2 className="w-5 h-5" />}
         </button>
 
         {/* Topic label overlay */}
-        <div className="absolute top-3 left-3 z-20 flex items-center gap-1.5 bg-slate-900/80 backdrop-blur border border-slate-700 rounded-lg px-2.5 py-1">
+        <div className="absolute top-3 left-3 z-30 flex items-center gap-1.5 bg-slate-900/80 backdrop-blur border border-slate-700 rounded-lg px-2.5 py-1 shadow-lg">
           <div className={`w-1.5 h-1.5 rounded-full ${streamStatus === 'live' ? 'bg-emerald-400 animate-pulse' : streamStatus === 'loading' ? 'bg-amber-400 animate-pulse' : 'bg-rose-400'}`} />
           <span className="text-[11px] font-mono text-slate-300">{activeTopic}</span>
         </div>
 
-        {/* Error Overlay */}
+        {/* Error Overlay (only when stream is genuinely unavailable) */}
         {streamStatus === 'error' && (
-          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-slate-950/95">
+          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-slate-950/95 p-6">
             <AlertTriangle className="w-10 h-10 text-rose-400" />
             <div className="text-center space-y-1">
               <p className="text-sm font-bold text-slate-200">Camera Stream Unavailable</p>
@@ -218,40 +289,58 @@ export default function CameraPanel({ backendConnected }) {
                 ros2 run web_video_server web_video_server
               </p>
             </div>
-            <button
-              onClick={reload}
-              className="mt-2 flex items-center gap-2 px-4 py-2 bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 rounded-xl text-xs font-bold hover:bg-cyan-500/20 transition"
-            >
-              <RefreshCw className="w-3.5 h-3.5" /> Retry Stream
-            </button>
+            <div className="flex items-center gap-3 mt-2">
+              <button
+                onClick={reload}
+                className="flex items-center gap-2 px-4 py-2 bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 rounded-xl text-xs font-bold hover:bg-cyan-500/20 transition cursor-pointer"
+              >
+                <RefreshCw className="w-3.5 h-3.5" /> Retry Stream
+              </button>
+              <a
+                href={streamViewerUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs font-mono text-slate-400 hover:text-slate-200 underline"
+              >
+                Test in new tab
+              </a>
+            </div>
           </div>
         )}
 
-        {/* Loading Overlay */}
-        {streamStatus === 'loading' && (
-          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-slate-950/90">
+        {/* Loading Indicator */}
+        {streamStatus === 'loading' && playerMode === 'img' && (!imgRef.current || imgRef.current.naturalWidth === 0) && (
+          <div className="absolute inset-0 z-0 flex flex-col items-center justify-center gap-2 bg-slate-950">
             <Camera className="w-8 h-8 text-slate-600 animate-pulse" />
             <p className="text-xs text-slate-500 font-mono">Connecting to stream...</p>
           </div>
         )}
 
-        {/* MJPEG Image Stream */}
-        <img
-          key={streamKey}
-          ref={imgRef}
-          src={streamUrl}
-          alt="MJPEG Camera Stream"
-          className="w-full h-full object-contain"
-          style={{ minHeight: '400px', display: 'block' }}
-          onLoad={() => {
-            clearTimeout(loadTimerRef.current);
-            setStreamStatus('live');
-          }}
-          onError={() => {
-            clearTimeout(loadTimerRef.current);
-            setStreamStatus('error');
-          }}
-        />
+        {/* Video Player Display: Iframe or Direct Img */}
+        {playerMode === 'iframe' ? (
+          <iframe
+            key={streamKey}
+            src={streamViewerUrl}
+            title="Web Video Server Stream"
+            className="w-full h-full border-0 rounded-xl bg-slate-950 block z-10"
+            onLoad={() => setStreamStatus('live')}
+            onError={() => setStreamStatus('error')}
+          />
+        ) : (
+          <img
+            key={streamKey}
+            ref={imgRef}
+            src={streamUrl}
+            alt="MJPEG Camera Stream"
+            className="w-full h-full object-contain block z-10 select-none"
+            onLoad={() => {
+              setStreamStatus('live');
+            }}
+            onError={() => {
+              setStreamStatus('error');
+            }}
+          />
+        )}
       </div>
 
       {/* Quick-switch topic pills */}

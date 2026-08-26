@@ -116,14 +116,16 @@ class TestApiStatus:
         hw = client.get("/api/status").get_json()["hardware"]
         assert "esp32" in hw
         assert "ydlidar" in hw
+        assert "hiwonder_gps" in hw
+        assert "hiwonder_imu" in hw
 
     def test_esp32_device_missing_when_path_absent(self, client, monkeypatch, tmp_path):
-        """When /dev/esp does not exist, esp32.exists must be False."""
+        """When ESP serial device paths do not exist, esp32.exists must be False."""
         import server
-        # Patch os.path.exists so only /dev/esp returns False
+        # Patch os.path.exists so all esp paths return False
         real_exists = os.path.exists
         def fake_exists(p):
-            if p == "/dev/esp":
+            if p in ("/dev/esp", "/dev/esp32", "/dev/amr_encoder", "/dev/ttyUSB2"):
                 return False
             return real_exists(p)
         monkeypatch.setattr("server.os.path.exists", fake_exists)

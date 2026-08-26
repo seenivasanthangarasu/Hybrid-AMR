@@ -18,9 +18,10 @@ export default function RobotControlPanel({ statusData, startStack, stopStack, t
     { key: 'urdf_proc', name: 'Robot State Publisher (URDF / TF)', topic: '/robot_description', desc: 'Publishes 3D robot transform tree' },
     { key: 'joint_state_proc', name: 'Joint State Publisher', topic: '/joint_states', desc: 'Publishes wheel joint states' },
     { key: 'odom_proc', name: 'ESP32 Odometry Node', topic: '/odom', desc: 'Serial wheel encoder odometry' },
-    { key: 'imu_proc', name: 'GY-80 IMU Serial Node', topic: '/imu/data_raw', desc: '9-DOF gyro, accel, magnetometer' },
+    { key: 'imu_proc', name: 'Hiwonder 9-DOF IMU Node', topic: '/hiwonder/imu/data_raw', desc: 'Acceleration, gyro, angle, & magnetometer' },
     { key: 'lidar_proc', name: 'YDLIDAR Driver Node', topic: '/scan', desc: '2D 360° laser range scan' },
     { key: 'slam_proc', name: 'SLAM Toolbox (Localization)', topic: '/map', desc: 'Lifelong SLAM & pose localization' },
+    { key: 'gps_proc', name: 'Hiwonder GPS (GNSS) Node', topic: '/hiwonder/gps/fix', desc: 'Global GPS coordinates & /hiwonder/gps/fix telemetry' },
   ];
 
   const runningCount = autoStackNodes.filter(n => managedProcs[n.key]?.running).length;
@@ -59,7 +60,7 @@ export default function RobotControlPanel({ statusData, startStack, stopStack, t
     }, 1000);
 
     const stageTimer2 = setTimeout(() => {
-      setLaunchProgressStage('Starting Odom, GY-80 IMU, YDLIDAR, URDF, and SLAM nodes...');
+      setLaunchProgressStage('Starting Hiwonder GPS, Odom, Hiwonder IMU, YDLIDAR, URDF, and SLAM nodes...');
     }, 2200);
 
     try {
@@ -138,14 +139,14 @@ export default function RobotControlPanel({ statusData, startStack, stopStack, t
           type: 'success',
           title: targetState ? 'Camera Activated' : 'Camera Deactivated',
           text: res.message || `Camera module turned ${targetState ? 'ON' : 'OFF'}.`,
-          details: targetState ? `Driver: v4l2_camera_node · Stream: /camera/color/image_raw` : 'Camera node terminated.'
+          details: targetState ? `Driver: realsense2_camera · Stream: /camera/camera/color/image_raw` : 'Camera node terminated.'
         });
       } else {
         setFeedback({
           type: 'error',
           title: 'Camera Command Failed',
           text: res.message || `Failed to turn ${targetState ? 'ON' : 'OFF'} camera module.`,
-          details: 'Check if /dev/video0 is present and not locked by another process.'
+          details: 'Check if Intel RealSense D435i is connected via USB 3.0.'
         });
       }
     } catch (err) {
@@ -328,11 +329,11 @@ export default function RobotControlPanel({ statusData, startStack, stopStack, t
             <div className="bg-slate-950 border border-slate-800 rounded-lg p-3 space-y-1.5 font-mono text-xs">
               <div className="flex justify-between text-slate-400">
                 <span>Driver:</span>
-                <span className="text-slate-200">v4l2_camera_node</span>
+                <span className="text-slate-200">realsense2_camera (D435i)</span>
               </div>
               <div className="flex justify-between text-slate-400">
-                <span>Device:</span>
-                <span className="text-slate-200">/dev/video0</span>
+                <span>Stream Topic:</span>
+                <span className="text-cyan-400 truncate">/camera/camera/color/image_raw</span>
               </div>
               <div className="flex justify-between text-slate-400">
                 <span>Status:</span>
@@ -341,6 +342,17 @@ export default function RobotControlPanel({ statusData, startStack, stopStack, t
                 </span>
               </div>
             </div>
+
+            {/* Live Camera Stream Preview when ON */}
+            {isCameraRunning && (
+              <div className="mt-3 rounded-lg overflow-hidden border border-slate-800 bg-slate-950">
+                <iframe
+                  src={`${typeof window !== 'undefined' && window.location?.hostname ? `http://${window.location.hostname}:8080` : 'http://localhost:8080'}/stream_viewer?topic=/camera/camera/color/image_raw`}
+                  title="Live Camera Preview"
+                  className="w-full h-48 border-0 bg-slate-950 block"
+                />
+              </div>
+            )}
           </div>
 
           <div className="flex items-center gap-3 pt-4 border-t border-slate-800">

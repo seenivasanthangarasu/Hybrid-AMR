@@ -21,7 +21,7 @@ class IMUSerialNode(Node):
 
         self.declare_parameter(
             'port',
-            '/dev/esp-imu'
+            '/dev/amr_imu'
         )
 
         self.declare_parameter(

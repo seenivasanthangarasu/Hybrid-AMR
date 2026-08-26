@@ -10,7 +10,7 @@ import LogsPanel from '../../components/LogsPanel.jsx';
 // ─────────────────────────────────────────────────────────────────────────────
 
 beforeEach(() => {
-  vi.useFakeTimers();
+  vi.useFakeTimers({ shouldAdvanceTime: true });
 });
 
 afterEach(() => {

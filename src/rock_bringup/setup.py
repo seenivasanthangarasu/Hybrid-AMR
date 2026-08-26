@@ -12,6 +12,8 @@ setup(
         ('share/' + package_name, ['package.xml']),
         ('share/' + package_name + '/launch',
             ['launch/navigation.launch.py']),
+        ('share/' + package_name + '/config',
+            ['config/mapper_localization.yaml', 'config/ublox_gps.yaml']),
     ],
     install_requires=['setuptools'],
     zip_safe=True,

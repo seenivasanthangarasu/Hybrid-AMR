@@ -33,6 +33,8 @@ class AMRDataRecorder(Node):
             '/scan',
 
             # IMU
+            '/hiwonder/imu/data_raw',
+            '/hiwonder/imu/mag',
             '/imu/data_raw',
             '/imu/mag',
 
@@ -41,6 +43,8 @@ class AMRDataRecorder(Node):
             '/joint_states',
 
             # GPS
+            '/hiwonder/gps/fix',
+            '/hiwonder/gps/nmea',
             '/fix',
 
             # Robot command

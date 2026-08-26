@@ -1,3 +1,4 @@
+import os
 import rclpy
 from rclpy.node import Node
 
@@ -16,6 +17,13 @@ class ESP32OdomNode(Node):
     def __init__(self):
         super().__init__('esp32_odom')
 
+        self.declare_parameter('port', '/dev/amr_encoder')
+        self.declare_parameter('baudrate', 115200)
+
+        self.configured_port = self.get_parameter('port').value
+        self.baudrate = self.get_parameter('baudrate').value
+        self.port = self.configured_port
+
         self.pub_odom = self.create_publisher(Odometry, '/odom', 10)
         self.joint_pub = self.create_publisher(JointState, '/joint_states', 10)
 
@@ -27,34 +35,61 @@ class ESP32OdomNode(Node):
         self.right_ticks = 0
 
         self.start_time = time.time()
+        self.last_reconnect_time = 0.0
+        self.ser = None
+
+        self.connect_serial()
 
         self.timer = self.create_timer(0.02, self.read_serial)
 
-        self.ser = None
-        self.port = '/dev/esp'
-        self.baudrate = 115200
+    def connect_serial(self):
+        candidate_ports = [
+            self.configured_port,
+            '/dev/amr_encoder',
+            '/dev/esp',
+            '/dev/esp32',
+            '/dev/ttyUSB2',
+            '/dev/ttyUSB1',
+            '/dev/ttyUSB0',
+            '/dev/ttyUSB3'
+        ]
+        # Remove duplicates preserving order
+        ports_to_try = []
+        for p in candidate_ports:
+            if p and p not in ports_to_try:
+                ports_to_try.append(p)
 
-        try:
-            self.ser = serial.Serial(self.port, self.baudrate, timeout=0.2)
-            self.get_logger().info(f"Connected to {self.port}")
-        except Exception as e:
-            self.get_logger().error(f"Serial connection failed: {e}")
+        for p in ports_to_try:
+            if os.path.exists(p):
+                try:
+                    self.ser = serial.Serial(p, self.baudrate, timeout=0.1)
+                    self.port = p
+                    self.get_logger().info(f"Successfully connected to ESP32 on {p} @ {self.baudrate} baud")
+                    return True
+                except Exception as e:
+                    self.get_logger().warn(f"Port {p} exists but open failed: {e}", throttle_duration_sec=5.0)
+
+        self.get_logger().warn(f"ESP32 device not accessible on candidates: {ports_to_try}", throttle_duration_sec=5.0)
+        return False
 
     def cmd_vel_callback(self, msg):
-        if not self.ser:
+        if not self.ser or not self.ser.is_open:
             return
 
         try:
             packet = f"CMD,{msg.linear.x:.3f},{msg.angular.z:.3f}\n"
             self.ser.write(packet.encode())
         except Exception as e:
-            self.get_logger().warn(f"TX Error: {e}")
+            self.get_logger().warn(f"TX Error: {e}", throttle_duration_sec=2.0)
 
     def read_serial(self):
-        if time.time() - self.start_time < 3.0:
+        if time.time() - self.start_time < 1.5:
             return
 
-        if not self.ser:
+        if not self.ser or not self.ser.is_open:
+            if time.time() - self.last_reconnect_time > 2.0:
+                self.last_reconnect_time = time.time()
+                self.connect_serial()
             return
 
         try:
@@ -66,7 +101,7 @@ class ESP32OdomNode(Node):
             data = line.split(',')
 
             if len(data) != 8:
-                self.get_logger().warn(f"Bad ODOM packet: {line}")
+                self.get_logger().warn(f"Bad ODOM packet: {line}", throttle_duration_sec=2.0)
                 return
 
             x = float(data[1])
@@ -80,8 +115,16 @@ class ESP32OdomNode(Node):
 
             self.publish_odom(x, y, theta, v, w)
 
+        except serial.SerialException as e:
+            self.get_logger().warn(f"Serial connection interrupted on {self.port}: {e}. Reconnecting...", throttle_duration_sec=5.0)
+            try:
+                if self.ser:
+                    self.ser.close()
+            except Exception:
+                pass
+            self.ser = None
         except Exception as e:
-            self.get_logger().warn(f"Serial read error: {e}")
+            self.get_logger().warn(f"Serial read error: {e}", throttle_duration_sec=2.0)
 
     def publish_odom(self, x, y, theta, v, w):
 
@@ -122,7 +165,7 @@ class ESP32OdomNode(Node):
         tf_msg.transform.rotation.w = math.cos(theta / 2.0)
 
         self.tf_broadcaster.sendTransform(tf_msg)
-        self.get_logger().info("Publishing odom TF")
+        self.get_logger().info("Publishing odom TF", throttle_duration_sec=5.0)
 
         # ---------------- JOINT STATES ----------------
         js = JointState()
@@ -141,9 +184,20 @@ class ESP32OdomNode(Node):
 def main(args=None):
     rclpy.init(args=args)
     node = ESP32OdomNode()
-    rclpy.spin(node)
-    node.destroy_node()
-    rclpy.shutdown()
+    try:
+        rclpy.spin(node)
+    except Exception:
+        pass
+    finally:
+        try:
+            node.destroy_node()
+        except Exception:
+            pass
+        if rclpy.ok():
+            try:
+                rclpy.shutdown()
+            except Exception:
+                pass
 
 
 if __name__ == '__main__':
