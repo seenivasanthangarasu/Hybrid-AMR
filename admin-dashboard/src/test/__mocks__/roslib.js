@@ -35,6 +35,11 @@ export class MockRos {
     else if (this._getNodesError) onError(this._getNodesError);
   }
 
+  getTopics(onSuccess, onError) {
+    if (this._getTopicsResult !== undefined) onSuccess(this._getTopicsResult);
+    else if (this._getTopicsError) onError(this._getTopicsError);
+  }
+
   getTopicsAndTypes(onSuccess, onError) {
     if (this._getTopicsResult !== undefined) onSuccess(this._getTopicsResult);
     else if (this._getTopicsError) onError(this._getTopicsError);

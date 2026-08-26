@@ -7,9 +7,9 @@ export default function ProcessHardwarePanel({ statusData, restartProcess, backe
   const [restarting, setRestarting] = useState(false);
   const [feedback, setFeedback] = useState(null);
 
-  // Subscribe to /fix for live GPS status
+  // Subscribe to /hiwonder/gps/fix for live GPS status
   const { data: gpsData, hasData: hasGps, stale: gpsStale } = useRosTopic({
-    name: '/fix',
+    name: '/hiwonder/gps/fix',
     messageType: 'sensor_msgs/NavSatFix',
     throttle_rate: 500,
   });
@@ -65,11 +65,51 @@ export default function ProcessHardwarePanel({ statusData, restartProcess, backe
       )}
 
       {/* Serial Hardware & Ports Reachability */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
+        {/* /dev/hiwonder_gps */}
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-mono text-slate-400">/dev/hiwonder_gps</span>
+            {hardware.hiwonder_gps?.exists ? (
+              <span className="px-2 py-0.5 text-[10px] font-bold bg-emerald-500/10 text-emerald-400 rounded border border-emerald-500/30">
+                Connected
+              </span>
+            ) : (
+              <span className="px-2 py-0.5 text-[10px] font-bold bg-rose-500/10 text-rose-400 rounded border border-rose-500/30">
+                Missing
+              </span>
+            )}
+          </div>
+          <p className="text-sm font-semibold text-slate-200">Hiwonder GPS Module</p>
+          <p className="text-xs text-slate-400 mt-1">
+            Access: <span className="font-mono text-slate-300">{hardware.hiwonder_gps?.accessible ? 'Read/Write' : 'Permission Denied / Missing'}</span>
+          </p>
+        </div>
+
+        {/* /dev/hiwonder_imu */}
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-mono text-slate-400">/dev/hiwonder_imu</span>
+            {hardware.hiwonder_imu?.exists ? (
+              <span className="px-2 py-0.5 text-[10px] font-bold bg-emerald-500/10 text-emerald-400 rounded border border-emerald-500/30">
+                Connected
+              </span>
+            ) : (
+              <span className="px-2 py-0.5 text-[10px] font-bold bg-rose-500/10 text-rose-400 rounded border border-rose-500/30">
+                Missing
+              </span>
+            )}
+          </div>
+          <p className="text-sm font-semibold text-slate-200">Hiwonder 9-DOF IMU</p>
+          <p className="text-xs text-slate-400 mt-1">
+            Access: <span className="font-mono text-slate-300">{hardware.hiwonder_imu?.accessible ? 'Read/Write' : 'Permission Denied / Missing'}</span>
+          </p>
+        </div>
+
         {/* /dev/esp */}
         <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-mono text-slate-400">/dev/esp</span>
+            <span className="text-xs font-mono text-slate-400">/dev/amr_encoder</span>
             {hardware.esp32?.exists ? (
               <span className="px-2 py-0.5 text-[10px] font-bold bg-emerald-500/10 text-emerald-400 rounded border border-emerald-500/30">
                 Connected
@@ -148,7 +188,7 @@ export default function ProcessHardwarePanel({ statusData, restartProcess, backe
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-base font-bold text-slate-100 flex items-center gap-2">
             <MapPin className="w-5 h-5 text-cyan-400" />
-            Live GPS Satellite Telemetry (/fix)
+            Live Hiwonder GPS Satellite Telemetry (/hiwonder/gps/fix)
           </h2>
           <span
             className={`px-2.5 py-1 rounded-full text-xs font-bold ${

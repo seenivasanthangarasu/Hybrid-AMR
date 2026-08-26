@@ -58,7 +58,7 @@ function makeFetchOk(sysBody = MOCK_SYSTEM, statusBody = MOCK_STATUS) {
 let useBackendApi;
 
 beforeEach(async () => {
-  vi.useFakeTimers();
+  vi.useFakeTimers({ shouldAdvanceTime: true });
   vi.resetModules();
   const mod = await import('../../hooks/useBackendApi.js');
   useBackendApi = mod.default;
@@ -90,9 +90,9 @@ describe('useBackendApi – backend unreachable', () => {
 
     const { result } = renderHook(() => useBackendApi(5000));
 
-    await waitFor(() => expect(result.current.backendConnected).toBe(false));
+    await waitFor(() => expect(result.current.error).toMatch(/ECONNREFUSED/));
+    expect(result.current.backendConnected).toBe(false);
     expect(result.current.systemData).toBeNull();
-    expect(result.current.error).toMatch(/ECONNREFUSED/);
   });
 
   it('sets backendConnected=false when server returns non-OK response', async () => {

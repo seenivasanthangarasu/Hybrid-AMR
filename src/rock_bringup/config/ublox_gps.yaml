@@ -1,0 +1,28 @@
+# Configuration settings for u-blox NEO-M9N GPS receiver
+ublox_gps_node:
+  ros__parameters:
+    debug: 0
+    device: /dev/amr_gps
+    frame_id: gps
+    rate: 4.0
+    nav_rate: 1
+    dynamic_model: portable
+    fix_mode: auto
+    uart1:
+      baudrate: 115200
+    gnss:
+      gps: true
+      glonass: true
+      galileo: true
+      beidou: true
+      qzss: true
+      sbas: true
+    publish:
+      all: true
+      nav:
+        all: true
+      aid:
+        hui: false
+
+
+

@@ -8,6 +8,7 @@ import subprocess
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 import psutil
+import signal
 
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
@@ -16,15 +17,16 @@ PORT = int(os.environ.get("ADMIN_BACKEND_PORT", 5001))
 
 MANAGED_PROCESS_PATTERNS = {
     "hybrid_manager": ["hybrid_manager.py", "hybrid_navigation"],
-    "gps_proc": ["ublox_gps_node", "ublox_gps"],
+    "gps_proc": ["hiwonder_gps_node", "hiwonder_gps", "gps_node", "ublox_gps_node", "ublox_gps"],
     "urdf_proc": ["robot_state_publisher"],
     "joint_state_proc": ["joint_state_publisher"],
     "lidar_proc": ["ydlidar_ros2_driver", "ydlidar_ros2_driver_node"],
     "odom_proc": ["esp32_odom", "odom_node", "arrow_teleop"],
-    "imu_proc": ["imu_serial_node", "imu_node"],
+    "imu_proc": ["hiwonder_imu_node", "hiwonder_imu", "imu_serial_node", "imu_node"],
     "slam_proc": ["slam_toolbox", "localization_slam_toolbox_node", "async_slam_toolbox_node"],
     "rviz_proc": ["rviz2"],
-    "camera_proc": ["v4l2_camera_node", "v4l2_camera"],
+    "camera_proc": ["realsense2_camera_node", "realsense2_camera", "rs_launch", "v4l2_camera_node", "v4l2_camera"],
+    "video_server_proc": ["web_video_server"],
     "rosbridge_proc": ["rosbridge_websocket"],
 }
 
@@ -142,14 +144,24 @@ def get_system_metrics():
 @app.route("/api/status", methods=["GET"])
 def get_hardware_and_processes():
     # 1. Serial device status
-    esp_device = "/dev/esp"
-    ttyusb_device = "/dev/ttyUSB0"
-    
-    dev_esp_exists = os.path.exists(esp_device)
-    dev_esp_access = os.access(esp_device, os.R_OK | os.W_OK) if dev_esp_exists else False
-    
-    dev_usb0_exists = os.path.exists(ttyusb_device)
-    dev_usb0_access = os.access(ttyusb_device, os.R_OK | os.W_OK) if dev_usb0_exists else False
+    def check_dev_path(*paths):
+        for p in paths:
+            if os.path.exists(p):
+                return {
+                    "path": p,
+                    "exists": True,
+                    "accessible": os.access(p, os.R_OK | os.W_OK)
+                }
+        return {
+            "path": paths[0],
+            "exists": False,
+            "accessible": False
+        }
+
+    hw_esp = check_dev_path("/dev/esp", "/dev/amr_encoder", "/dev/ttyUSB2", "/dev/esp32")
+    hw_lidar = check_dev_path("/dev/amr_lidar", "/dev/ttyUSB3", "/dev/ttyUSB4", "/dev/lidar")
+    hw_gps = check_dev_path("/dev/hiwonder_gps", "/dev/amr_gps", "/dev/gps", "/dev/ttyUSB0")
+    hw_imu = check_dev_path("/dev/hiwonder_imu", "/dev/amr_imu", "/dev/esp-imu", "/dev/ttyUSB1")
     
     # 2. Port reachability
     rosbridge_reachable = check_port_reachable("127.0.0.1", 9090)
@@ -195,16 +207,10 @@ def get_hardware_and_processes():
         "status": "ok",
         "timestamp": time.time(),
         "hardware": {
-            "esp32": {
-                "path": esp_device,
-                "exists": dev_esp_exists,
-                "accessible": dev_esp_access
-            },
-            "ydlidar": {
-                "path": ttyusb_device,
-                "exists": dev_usb0_exists,
-                "accessible": dev_usb0_access
-            }
+            "esp32": hw_esp,
+            "ydlidar": hw_lidar,
+            "hiwonder_gps": hw_gps,
+            "hiwonder_imu": hw_imu
         },
         "services": {
             "rosbridge_9090": rosbridge_reachable,
@@ -266,6 +272,9 @@ def start_robot_stack():
         })
 
     cmd_str = (
+        "export FASTRTPS_DEFAULT_PROFILES_FILE=/home/ubuntu/Desktop/Xtrmbly/fastdds_udp.xml && "
+        "export RMW_IMPLEMENTATION=rmw_fastrtps_cpp && "
+        "export ROS_LOG_DIR=/tmp/ros_log && "
         "source /opt/ros/jazzy/setup.bash && "
         "source /home/ubuntu/Desktop/Xtrmbly/install/setup.bash && "
         f"ros2 launch rock_bringup navigation.launch.py start_camera:={'true' if include_camera else 'false'}"
@@ -273,11 +282,12 @@ def start_robot_stack():
 
     try:
         # Clear/open log file
-        log_out = open(BRINGUP_LOG_FILE, "w")
+        log_out = open(BRINGUP_LOG_FILE, "w", buffering=1)
         GLOBAL_STACK_PROC = subprocess.Popen(
             ["/bin/bash", "-c", cmd_str],
             stdout=log_out,
-            stderr=subprocess.STDOUT
+            stderr=subprocess.STDOUT,
+            preexec_fn=os.setsid
         )
         return jsonify({
             "status": "ok",
@@ -307,36 +317,79 @@ def stop_robot_stack():
     global GLOBAL_STACK_PROC, GLOBAL_CAMERA_PROC
     killed_pids = []
 
+    # 1. Stop main stack process group with gentle SIGINT then SIGTERM/SIGKILL
     if GLOBAL_STACK_PROC and GLOBAL_STACK_PROC.poll() is None:
         try:
-            GLOBAL_STACK_PROC.terminate()
+            pgid = os.getpgid(GLOBAL_STACK_PROC.pid)
+            os.killpg(pgid, signal.SIGINT)   # Allow nodes to close serial handles
+            time.sleep(0.4)
+            os.killpg(pgid, signal.SIGTERM)
+            time.sleep(0.2)
+            os.killpg(pgid, signal.SIGKILL)
             killed_pids.append(GLOBAL_STACK_PROC.pid)
         except Exception:
-            pass
+            try:
+                GLOBAL_STACK_PROC.kill()
+                killed_pids.append(GLOBAL_STACK_PROC.pid)
+            except Exception:
+                pass
         GLOBAL_STACK_PROC = None
 
     if GLOBAL_CAMERA_PROC and GLOBAL_CAMERA_PROC.poll() is None:
         try:
-            GLOBAL_CAMERA_PROC.terminate()
+            pgid = os.getpgid(GLOBAL_CAMERA_PROC.pid)
+            os.killpg(pgid, signal.SIGINT)
+            time.sleep(0.2)
+            os.killpg(pgid, signal.SIGKILL)
             killed_pids.append(GLOBAL_CAMERA_PROC.pid)
         except Exception:
-            pass
+            try:
+                GLOBAL_CAMERA_PROC.kill()
+                killed_pids.append(GLOBAL_CAMERA_PROC.pid)
+            except Exception:
+                pass
         GLOBAL_CAMERA_PROC = None
 
-    # Terminate any running stack processes by pattern
+    # 2. Terminate any remaining stack processes by pattern
+    to_kill = []
     for proc_key, patterns in MANAGED_PROCESS_PATTERNS.items():
+        if proc_key in ["rosbridge_proc", "video_server_proc"]:
+            continue  # Keep infrastructure servers alive
         for p in psutil.process_iter(['pid', 'name', 'cmdline']):
             try:
                 cmdline_str = " ".join(p.info['cmdline'] or [])
                 pname = p.info['name'] or ""
                 full_str = f"{pname} {cmdline_str}"
                 for pat in patterns:
-                    if pat in full_str:
-                        p.terminate()
-                        killed_pids.append(p.info['pid'])
+                    if pat in full_str and p.pid != os.getpid():
+                        try:
+                            p.terminate()
+                            to_kill.append(p)
+                            killed_pids.append(p.pid)
+                        except Exception:
+                            pass
                         break
             except (psutil.NoSuchProcess, psutil.AccessDenied):
                 continue
+
+    if to_kill:
+        gone, alive = psutil.wait_procs(to_kill, timeout=0.8)
+        for p in alive:
+            try:
+                p.kill()
+            except Exception:
+                pass
+        if alive:
+            psutil.wait_procs(alive, timeout=0.5)
+
+    # 3. Clean USB bus transaction translator state and wait for udev to settle
+    try:
+        subprocess.run(
+            ["sudo", "bash", "-c", "echo 0 > /sys/bus/usb/devices/usb1/authorized && sleep 0.2 && echo 1 > /sys/bus/usb/devices/usb1/authorized && udevadm settle --timeout=5"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=6.0
+        )
+    except Exception:
+        pass
 
     return jsonify({
         "status": "ok",
@@ -351,7 +404,6 @@ def toggle_camera_module():
     enable = data.get("enable", True)
 
     if enable:
-        # Stop existing standalone camera process if running
         if GLOBAL_CAMERA_PROC and GLOBAL_CAMERA_PROC.poll() is None:
             return jsonify({
                 "status": "ok",
@@ -360,12 +412,18 @@ def toggle_camera_module():
             })
 
         cmd_str = (
+            "export FASTRTPS_DEFAULT_PROFILES_FILE=/home/ubuntu/Desktop/Xtrmbly/fastdds_udp.xml && "
+            "export RMW_IMPLEMENTATION=rmw_fastrtps_cpp && "
+            "export ROS_LOG_DIR=/tmp/ros_log && "
             "source /opt/ros/jazzy/setup.bash && "
             "source /home/ubuntu/Desktop/Xtrmbly/install/setup.bash && "
-            "ros2 run v4l2_camera v4l2_camera_node --ros-args -p video_device:=/dev/video0"
+            "ros2 launch realsense2_camera rs_launch.py initial_reset:=false enable_gyro:=false enable_accel:=false enable_motion:=false enable_sync:=false enable_infra1:=false enable_infra2:=false depth_module.depth_profile:=424x240x15 rgb_camera.color_profile:=424x240x15"
         )
         try:
-            GLOBAL_CAMERA_PROC = subprocess.Popen(["/bin/bash", "-c", cmd_str])
+            GLOBAL_CAMERA_PROC = subprocess.Popen(
+                ["/bin/bash", "-c", cmd_str],
+                preexec_fn=os.setsid
+            )
             return jsonify({
                 "status": "ok",
                 "message": "Camera module turned ON.",
@@ -377,10 +435,14 @@ def toggle_camera_module():
         killed = []
         if GLOBAL_CAMERA_PROC and GLOBAL_CAMERA_PROC.poll() is None:
             try:
-                GLOBAL_CAMERA_PROC.terminate()
+                os.killpg(os.getpgid(GLOBAL_CAMERA_PROC.pid), 15)
                 killed.append(GLOBAL_CAMERA_PROC.pid)
             except Exception:
-                pass
+                try:
+                    GLOBAL_CAMERA_PROC.terminate()
+                    killed.append(GLOBAL_CAMERA_PROC.pid)
+                except Exception:
+                    pass
             GLOBAL_CAMERA_PROC = None
 
         patterns = MANAGED_PROCESS_PATTERNS["camera_proc"]
