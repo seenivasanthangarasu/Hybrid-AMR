@@ -16,6 +16,12 @@ def generate_launch_description():
     # -----------------------------
     # Launch Arguments
     # -----------------------------
+    start_gps_arg = DeclareLaunchArgument(
+        'start_gps',
+        default_value='true',
+        description='Whether to start the Hiwonder GPS node to publish /hiwonder/gps/fix'
+    )
+
     start_camera_arg = DeclareLaunchArgument(
         'start_camera',
         default_value='false',
@@ -42,6 +48,22 @@ def generate_launch_description():
     )
 
     # -----------------------------
+    # Hiwonder GPS -> /hiwonder/gps/fix & /hiwonder/gps/nmea
+    # -----------------------------
+    gps_node = Node(
+        package='hiwonder_gps',
+        executable='gps_node',
+        name='hiwonder_gps_node',
+        output='screen',
+        parameters=[{
+            'port': '/dev/hiwonder_gps',
+            'baud_rate': 9600,
+            'frame_id': 'gps_link'
+        }],
+        condition=IfCondition(LaunchConfiguration('start_gps'))
+    )
+
+    # -----------------------------
     # YDLIDAR
     # -----------------------------
     lidar_launch = IncludeLaunchDescription(
@@ -64,13 +86,17 @@ def generate_launch_description():
     )
 
     # -----------------------------
-    # GY-80 IMU
+    # Hiwonder 9-DOF IMU -> /hiwonder/imu/data_raw & /hiwonder/imu/mag
     # -----------------------------
     imu_node = Node(
-        package='imu_node',
-        executable='imu_serial_node',
-        name='imu_serial_node',
-        output='screen'
+        package='hiwonder_imu',
+        executable='hiwonder_imu_node',
+        name='hiwonder_imu_node',
+        output='screen',
+        parameters=[{
+            'port': '/dev/hiwonder_imu',
+            'baudrate': 9600
+        }]
     )
 
     # -----------------------------
@@ -104,30 +130,39 @@ def generate_launch_description():
         condition=IfCondition(LaunchConfiguration('start_rviz'))
     )
 
-    # -----------------------------
-    # Camera Node (Optional)
-    # -----------------------------
-    camera_node = Node(
-        package='v4l2_camera',
-        executable='v4l2_camera_node',
-        name='v4l2_camera_node',
-        output='screen',
-        parameters=[{
-            'video_device': '/dev/video0',
-            'image_size': [640, 480],
-            'time_per_frame': [1, 30]
-        }],
+    camera_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(
+                get_package_share_directory('realsense2_camera'),
+                'launch',
+                'rs_launch.py'
+            )
+        ),
+        launch_arguments={
+            'initial_reset': 'false',
+            'enable_gyro': 'false',
+            'enable_accel': 'false',
+            'enable_motion': 'false',
+            'enable_sync': 'false',
+            'enable_color': 'true',
+            'enable_depth': 'true',
+            'depth_module.depth_profile': '424x240x15',
+            'rgb_camera.color_profile': '424x240x15',
+        }.items(),
         condition=IfCondition(LaunchConfiguration('start_camera'))
     )
 
     return LaunchDescription([
+        start_gps_arg,
         start_camera_arg,
         start_rviz_arg,
         robot_launch,
+        gps_node,
         lidar_launch,
         odom_node,
         imu_node,
         slam_node,
         rviz_node,
-        camera_node
+        camera_launch
     ])
+

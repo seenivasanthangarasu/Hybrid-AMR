@@ -121,10 +121,19 @@ class RosService {
       if (!this.ros || this.status !== 'connected') {
         return resolve({ topics: [], types: [] });
       }
-      this.ros.getTopicsAndTypes(
-        (res) => resolve(res || { topics: [], types: [] }),
-        (err) => reject(err)
-      );
+      if (typeof this.ros.getTopics === 'function') {
+        this.ros.getTopics(
+          (res) => resolve(res || { topics: [], types: [] }),
+          (err) => reject(err)
+        );
+      } else if (typeof this.ros.getTopicsAndRawTypes === 'function') {
+        this.ros.getTopicsAndRawTypes(
+          (res) => resolve(res || { topics: [], types: [] }),
+          (err) => reject(err)
+        );
+      } else {
+        resolve({ topics: [], types: [] });
+      }
     });
   }
 
