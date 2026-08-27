@@ -9,20 +9,28 @@ import { useCallback, useEffect, useState } from 'react';
  * position/size are editable, and unknown/missing ids are reconciled on load
  * so adding a panel in a future build doesn't strand a saved layout.
  */
-const STORAGE_KEY = 'amr-layout-v1';
+const STORAGE_KEY = 'amr-layout-v3';
 
-// 12-col grid, 12 rows tall by default so it fills one screen (DashboardGrid
-// derives rowHeight from the container height). Mirrors the original layout:
-// big main view + right-rail previews, telemetry/controls along the bottom.
+// 12-col grid. Rows 0–7: main view + right-rail previews.
+// Rows 8–11: four equal telemetry panels (status / mission / control / imu),
+// each identical to the others in size.
+// Row 12+: URDF widget (below fold, scrolls in on demand).
 export const DEFAULT_LAYOUT = [
-  { i: 'main', x: 0, y: 0, w: 9, h: 8, minW: 4, minH: 4 },
-  { i: 'status', x: 0, y: 8, w: 3, h: 4, minW: 2, minH: 3 },
-  { i: 'mission', x: 3, y: 8, w: 3, h: 4, minW: 2, minH: 3 },
-  { i: 'control', x: 6, y: 8, w: 3, h: 4, minW: 2, minH: 3 },
-  { i: 'gps', x: 9, y: 0, w: 3, h: 3, minW: 2, minH: 2 },
-  { i: 'lidar', x: 9, y: 3, w: 3, h: 3, minW: 2, minH: 2 },
-  { i: 'camera', x: 9, y: 6, w: 3, h: 3, minW: 2, minH: 2 },
-  { i: 'urdf', x: 9, y: 9, w: 3, h: 3, minW: 2, minH: 2 },
+  { i: 'main',    x: 0,  y: 0,  w: 9, h: 8,  minW: 4, minH: 4 },
+
+  // Right-rail previews: fill rows 0–7 (total h=8) without overlap.
+  { i: 'gps',    x: 9,  y: 0,  w: 3, h: 3,  minW: 2, minH: 2 },
+  { i: 'lidar',  x: 9,  y: 3,  w: 3, h: 3,  minW: 2, minH: 2 },
+  { i: 'camera', x: 9,  y: 6,  w: 3, h: 2,  minW: 2, minH: 2 },
+
+  // Bottom telemetry band — all four panels identical size.
+  { i: 'status',  x: 0,  y: 8,  w: 3, h: 4,  minW: 2, minH: 3 },
+  { i: 'mission', x: 3,  y: 8,  w: 3, h: 4,  minW: 2, minH: 3 },
+  { i: 'control', x: 6,  y: 8,  w: 3, h: 4,  minW: 2, minH: 3 },
+  { i: 'imu',     x: 9,  y: 8,  w: 3, h: 4,  minW: 2, minH: 3 },
+
+  // URDF: below the one-screen fold, scrolls in — no longer competes with IMU.
+  { i: 'urdf',   x: 0,  y: 12, w: 3, h: 3,  minW: 2, minH: 2 },
 ];
 // GNSS Quality and Nav2 Threshold Tuning are NOT grid panels — both are
 // occasional-use diagnostic/tuning views, opened as full-view overlays from

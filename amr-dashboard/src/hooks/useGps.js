@@ -2,15 +2,15 @@ import useRosTopic from './useRosTopic.js';
 
 /**
  * useGps
- * Subscribes to /fix (sensor_msgs/NavSatFix). Only real fix data is ever
- * returned — if the topic has no live publisher, hasData is false and
- * callers must render NO DATA instead of inventing coordinates.
+ * Subscribes to /hiwonder/gps/fix (sensor_msgs/NavSatFix). Only real fix
+ * data is ever returned — if the topic has no live publisher, hasData is
+ * false and callers must render NO DATA instead of inventing coordinates.
  *
  * NavSatFix.status.status values: -1 = NO_FIX, 0 = FIX, 1 = SBAS_FIX, 2 = GBAS_FIX
  */
 export default function useGps() {
   const { data, hasData, stale, lastReceivedAt } = useRosTopic({
-    name: '/fix',
+    name: '/hiwonder/gps/fix',
     messageType: 'sensor_msgs/NavSatFix',
     throttle_rate: 200,
   });

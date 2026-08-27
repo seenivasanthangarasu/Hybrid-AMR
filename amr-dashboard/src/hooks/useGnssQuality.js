@@ -40,6 +40,7 @@ import {
  * `ros2 run ublox_gps ublox_gps_node` — the same reason /fix is unprefixed.
  * VITE_UBLOX_NS covers a deployment that launches the driver inside a
  * namespace (e.g. "/ublox").
+ * NOTE: the GPS fix itself comes from /hiwonder/gps/fix (see useGps.js).
  */
 const NS = (import.meta.env?.VITE_UBLOX_NS || '').replace(/\/$/, '');
 const topic = (name) => `${NS}${name}`;
@@ -243,7 +244,7 @@ export default function useGnssQuality() {
       hw: timingOf(hwTopic),
     },
     topics: {
-      fix: '/fix',
+      fix: '/hiwonder/gps/fix',
       pvt: topic('/navpvt'),
       dop: topic('/navdop'),
       sat: topic('/navsat'),

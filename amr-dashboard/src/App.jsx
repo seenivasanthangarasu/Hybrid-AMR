@@ -19,6 +19,7 @@ import DataHandlingPage from './components/DataHandlingPage.jsx';
 import GnssQualityPage from './components/GnssQualityPage.jsx';
 import Nav2ThresholdPage from './components/Nav2ThresholdPage.jsx';
 import Sidebar from './components/Sidebar.jsx';
+import ImuPanel from './components/ImuPanel.jsx';
 import useRosConnection from './hooks/useRosConnection.js';
 import useRobotMode from './hooks/useRobotMode.js';
 import useLayout from './hooks/useLayout.js';
@@ -57,7 +58,7 @@ export default function App() {
 
   // Is the view the operator just picked actually able to draw anything?
   const viewHealth = {
-    gps: { live: gps.hasData, seen: gps.hasEverData, label: 'GPS · /fix' },
+    gps: { live: gps.hasData, seen: gps.hasEverData, label: 'GPS · /hiwonder/gps/fix' },
     lidar: { live: scan.hasData, seen: scan.hasEverData, label: 'LIDAR · /scan' },
     slam: { live: map.hasData, seen: map.hasEverData, label: 'SLAM · /map' },
     camera: { live: cameraOnline, seen: cameraOnline, label: 'CAMERA · MJPEG stream', isCamera: true },
@@ -194,6 +195,14 @@ export default function App() {
             <PanelFrame title="CONTROL PANEL" editMode={editMode}>
               <ErrorBoundary label="CONTROL PANEL">
                 <ControlPanel connectionStatus={connectionStatus} />
+              </ErrorBoundary>
+            </PanelFrame>
+          </div>
+
+          <div key="imu" className="h-full w-full">
+            <PanelFrame title="IMU" editMode={editMode}>
+              <ErrorBoundary label="IMU">
+                <ImuPanel />
               </ErrorBoundary>
             </PanelFrame>
           </div>

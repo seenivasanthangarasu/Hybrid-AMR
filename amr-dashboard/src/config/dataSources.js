@@ -17,7 +17,10 @@ export const dataSources = [
   { id: '/scan', label: 'Laser scan', category: 'Perception', kind: 'topic', messageType: 'sensor_msgs/LaserScan', defaultEnabled: true },
   { id: '/map', label: 'Occupancy map', category: 'Perception', kind: 'topic', messageType: 'nav_msgs/OccupancyGrid', defaultEnabled: false },
 
-  { id: '/fix', label: 'GNSS fix', category: 'Positioning', kind: 'topic', messageType: 'sensor_msgs/NavSatFix', defaultEnabled: true },
+  { id: '/hiwonder/gps/fix', label: 'GNSS fix', category: 'Positioning', kind: 'topic', messageType: 'sensor_msgs/NavSatFix', defaultEnabled: true },
+
+  { id: '/hiwonder/imu/data_raw', label: 'IMU (accel / gyro / orientation)', category: 'Sensors', kind: 'topic', messageType: 'sensor_msgs/Imu', defaultEnabled: true },
+  { id: '/hiwonder/imu/mag', label: 'IMU magnetometer', category: 'Sensors', kind: 'topic', messageType: 'sensor_msgs/MagneticField', defaultEnabled: true },
 
   { id: '/robot_description', label: 'Robot description (URDF)', category: 'Robot model', kind: 'topic', messageType: 'std_msgs/String', defaultEnabled: false },
   { id: '/joint_states', label: 'Joint states', category: 'Robot model', kind: 'topic', messageType: 'sensor_msgs/JointState', defaultEnabled: false },
@@ -31,6 +34,7 @@ export const CATEGORY_ORDER = [
   'Localization',
   'Perception',
   'Positioning',
+  'Sensors',
   'Robot model',
   'Commands',
   'Imagery',
