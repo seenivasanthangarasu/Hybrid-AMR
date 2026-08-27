@@ -28,6 +28,14 @@ ros2_ws/
   exposing `rosbridge_server` (WebSocket, default port 9090) and, optionally,
   `web_video_server` (MJPEG, default port 8080) for the camera panel.
 
+To point a dashboard machine at a robot without guessing IPs/ports by hand,
+use the two standardized handshake prompts in
+[`docs/prompts/`](docs/prompts/): run
+[`S.Prompt`](docs/prompts/S.Prompt.md) on the robot to discover its
+connection details, then feed that output into
+[`C.Prompt`](docs/prompts/C.Prompt.md) on the dashboard machine to configure
+and verify the link.
+
 ## Operator dashboard
 
 The ground control station lives in [`amr-dashboard/`](amr-dashboard/README.md)

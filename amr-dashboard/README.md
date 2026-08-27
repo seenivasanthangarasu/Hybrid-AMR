@@ -29,6 +29,9 @@ confirm. Missing data is reported by _cause_ — `OFFLINE` (no link) vs `NO SIGN
    cp .env.example .env
    # edit VITE_ROSBRIDGE_URL if rosbridge runs elsewhere
    ```
+   To discover and set these values without guessing, use the
+   [`S.Prompt`](../docs/prompts/S.Prompt.md) / [`C.Prompt`](../docs/prompts/C.Prompt.md)
+   handshake in [`../docs/prompts/`](../docs/prompts/) instead of editing `.env` by hand.
 
 ## Install & run
 
@@ -178,9 +181,7 @@ occasional action, not something that needs a permanently-visible panel competin
 - `src/services/Nav2ParameterService.js` (the rosbridge calls, with a hard
   4-second response timeout since rosbridge itself never times out a call to
   a nonexistent service) and `src/components/Nav2ThresholdPanel.jsx` (the UI)
-  implement this; see
-  [`../docs/data-handling-nav2-tasks.md`](../docs/data-handling-nav2-tasks.md)
-  Feature B for the full design/test writeup.
+  implement this.
 
 ## Security model
 

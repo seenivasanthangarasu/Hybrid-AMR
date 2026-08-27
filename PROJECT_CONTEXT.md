@@ -500,7 +500,7 @@ hang forever instead of surfacing unavailability.
 - **`StatusPanel`** — mode, speed, heading, distance, GPS status/lat/lon, ROS link.
 - **`UrdfWidget`**, **`PreviewPanel`**, **`NoDataBadge`**, **`Header`**, **`GpsPreviewMap`**.
 - **`DataHandlingPage`** — full-view overlay (same `Dialog`-based structure as
-  `ErrorReference`), opened from Settings → DATA. Folder picker, the data-source
+  `ErrorReference`), opened from the Sidebar → DATA. Folder picker, the data-source
   selection list grouped by category (topics + the synthetic `camera-snapshots`
   entry, one picker for both — see `src/config/dataSources.js`), rotation/retention/
   snapshot-interval inputs, start/stop with a live elapsed-time status line, the
@@ -579,6 +579,15 @@ npm install && npm run dev                             # in amr-dashboard/
 `roslib` is a pure-JS client speaking rosbridge's JSON-over-WebSocket protocol.
 ROS 2 must exist somewhere reachable on the network, exposing ports 9090 and 8080.
 
+Rather than hand-copying the robot's IP/ports into `.env`, use the standardized
+two-prompt handshake in [`docs/prompts/`](docs/prompts/): run
+[`S.Prompt`](docs/prompts/S.Prompt.md) on the robot to discover and confirm what's
+actually listening, then feed its output into
+[`C.Prompt`](docs/prompts/C.Prompt.md) on the dashboard machine, which writes
+`.env`, restarts the dev server, and verifies `ROSBRIDGE LINKED` plus per-topic
+signal against what S.Prompt reported as active — rather than assuming a clean
+process start means the link works.
+
 ---
 
 ## 8. KNOWN ISSUES / GAPS
@@ -600,7 +609,12 @@ Grouped by severity. All of these are real observations from the source.
 4. **Nav2 is not in the workspace at all.** `RobotCommandService` calls
    `/navigate_to_pose` and `/follow_gps_waypoints`, but no `nav2_bringup`,
    costmaps, planner or controller is launched anywhere. The robot can localize
-   but cannot autonomously navigate.
+   but cannot autonomously navigate. The dashboard's `Nav2ThresholdPanel` (§6.5)
+   is built and tested against this same gap — it calls a `/nav2_param_gatekeeper`
+   service contract that doesn't exist on any robot yet either, and shows an
+   honest "unavailable" state until both Nav2 and that gatekeeper node are
+   deployed. See `docs/robot-repo-tasks.md` for the drafted (unexecuted)
+   bringup config and gatekeeper node source.
 5. **The action paths speak the wrong protocol.** roslib 1.4.1's `ActionClient`
    is ROS1 actionlib, so `sendWaypoints`, `returnHome` and `stop`'s goal-cancel
    cannot reach a ROS2 action server regardless of whether Nav2 is running. This

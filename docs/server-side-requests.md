@@ -2,7 +2,10 @@
 
 **Date:** 2026-08-20
 **Origin:** the operator dashboard repo (`amr-dashboard/`, this workspace's `ros2_ws/`), while implementing
-two new dashboard features documented in [`data-handling-nav2-tasks.md`](data-handling-nav2-tasks.md).
+two new dashboard features (MCAP/camera data recording and Nav2 threshold tuning — both now shipped and
+merged; see `PROJECT_CONTEXT.md` §6.3–6.5). The concrete, ready-to-run version of the asks below is
+[`robot-repo-tasks.md`](robot-repo-tasks.md) — read that one first if you're about to actually execute
+this; this file is the original context brief it was derived from.
 **Audience:** whoever (human or agent) works in the **separate robot-side ROS 2 workspace/repo** — the one
 that runs on the robot itself, referred to below as "the robot repo." That repo is not part of this one and
 was never tracked here; this file exists so it can be handed over with full context and acted on without
