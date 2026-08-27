@@ -146,7 +146,9 @@ def generate_launch_description():
             'enable_sync': 'false',
             'enable_color': 'true',
             'enable_depth': 'true',
-            'depth_module.depth_profile': '424x240x15',
+            'color_qos': 'DEFAULT',
+            'depth_qos': 'DEFAULT',
+            'depth_module.depth_profile': '480x270x15',
             'rgb_camera.color_profile': '424x240x15',
         }.items(),
         condition=IfCondition(LaunchConfiguration('start_camera'))

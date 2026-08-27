@@ -69,7 +69,13 @@ export default function App() {
         )}
         {activeTab === 'system' && <SystemHealthPanel systemData={systemData} />}
         {activeTab === 'logs' && <LogsPanel fetchLogs={fetchLogs} />}
-        {activeTab === 'camera' && <CameraPanel backendConnected={backendConnected} />}
+        {activeTab === 'camera' && (
+          <CameraPanel
+            backendConnected={backendConnected}
+            statusData={statusData}
+            toggleCamera={toggleCamera}
+          />
+        )}
       </main>
 
       <footer className="bg-slate-900 border-t border-slate-800 py-3 text-center text-xs text-slate-500 font-mono">

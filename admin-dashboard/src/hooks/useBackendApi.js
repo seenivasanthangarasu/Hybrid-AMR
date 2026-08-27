@@ -102,12 +102,37 @@ export default function useBackendApi(pollIntervalMs = 2000) {
     }
   };
 
-  const toggleCamera = async (enable) => {
+  const toggleCamera = async (enable, mode = 'auto') => {
     try {
       const res = await fetch(`${BACKEND_URL}/api/camera/toggle`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enable }),
+        body: JSON.stringify({ enable, mode }),
+      });
+      const data = await res.json();
+      fetchMetrics();
+      return data;
+    } catch (err) {
+      return { status: 'error', message: err.message };
+    }
+  };
+
+  const fetchCameraStatus = async () => {
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/camera/status`);
+      if (res.ok) {
+        return await res.json();
+      }
+      return { status: 'error', running: false };
+    } catch (err) {
+      return { status: 'error', message: err.message };
+    }
+  };
+
+  const rescanCamera = async () => {
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/camera/rescan`, {
+        method: 'POST',
       });
       const data = await res.json();
       fetchMetrics();
@@ -142,6 +167,8 @@ export default function useBackendApi(pollIntervalMs = 2000) {
     startStack,
     stopStack,
     toggleCamera,
+    fetchCameraStatus,
+    rescanCamera,
     backendUrl: BACKEND_URL
   };
 }

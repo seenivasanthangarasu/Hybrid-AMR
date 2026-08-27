@@ -25,7 +25,13 @@ MANAGED_PROCESS_PATTERNS = {
     "imu_proc": ["hiwonder_imu_node", "hiwonder_imu", "imu_serial_node", "imu_node"],
     "slam_proc": ["slam_toolbox", "localization_slam_toolbox_node", "async_slam_toolbox_node"],
     "rviz_proc": ["rviz2"],
-    "camera_proc": ["realsense2_camera_node", "realsense2_camera", "rs_launch", "v4l2_camera_node", "v4l2_camera"],
+    "camera_proc": [
+        "realsense2_camera_node", "realsense2_camera", "rs_launch",
+        "v4l2_camera_node", "v4l2_camera",
+        "camera_streamer.py", "camera_streamer_node",
+        "depth_colorizer.py",
+        "diagnostic_cam.py", "diagnostic_camera_node"
+    ],
     "video_server_proc": ["web_video_server"],
     "rosbridge_proc": ["rosbridge_websocket"],
 }
@@ -141,6 +147,51 @@ def get_system_metrics():
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
+def detect_camera_hardware():
+    realsense_found = False
+    realsense_name = "Intel RealSense"
+    for path in glob.glob("/sys/bus/usb/devices/*"):
+        try:
+            vendor_file = os.path.join(path, "idVendor")
+            if os.path.exists(vendor_file):
+                with open(vendor_file, "r") as f:
+                    if f.read().strip().lower() == "8086":
+                        realsense_found = True
+                        prod_file = os.path.join(path, "product")
+                        if os.path.exists(prod_file):
+                            with open(prod_file, "r") as pf:
+                                realsense_name = pf.read().strip() or "Intel RealSense"
+                        break
+        except Exception:
+            pass
+
+    v4l2_devices = []
+    for dev in sorted(glob.glob("/dev/video*")):
+        base = os.path.basename(dev)
+        if base in ["video32", "video33"]:
+            continue
+        if os.path.exists(dev):
+            v4l2_devices.append(dev)
+
+    if realsense_found:
+        hw_type = "realsense"
+        label = f"{realsense_name} (USB 3D Camera)"
+    elif v4l2_devices:
+        hw_type = "v4l2"
+        label = f"V4L2 USB Camera ({v4l2_devices[0]})"
+    else:
+        hw_type = "diagnostic"
+        label = "Diagnostic Pro-Max HUD Streamer"
+
+    return {
+        "realsense": realsense_found,
+        "realsense_name": realsense_name if realsense_found else None,
+        "v4l2_devices": v4l2_devices,
+        "type": hw_type,
+        "label": label,
+        "physical_camera_connected": (realsense_found or len(v4l2_devices) > 0)
+    }
+
 @app.route("/api/status", methods=["GET"])
 def get_hardware_and_processes():
     # 1. Serial device status
@@ -162,6 +213,7 @@ def get_hardware_and_processes():
     hw_lidar = check_dev_path("/dev/amr_lidar", "/dev/ttyUSB3", "/dev/ttyUSB4", "/dev/lidar")
     hw_gps = check_dev_path("/dev/hiwonder_gps", "/dev/amr_gps", "/dev/gps", "/dev/ttyUSB0")
     hw_imu = check_dev_path("/dev/hiwonder_imu", "/dev/amr_imu", "/dev/esp-imu", "/dev/ttyUSB1")
+    hw_camera = detect_camera_hardware()
     
     # 2. Port reachability
     rosbridge_reachable = check_port_reachable("127.0.0.1", 9090)
@@ -210,7 +262,8 @@ def get_hardware_and_processes():
             "esp32": hw_esp,
             "ydlidar": hw_lidar,
             "hiwonder_gps": hw_gps,
-            "hiwonder_imu": hw_imu
+            "hiwonder_imu": hw_imu,
+            "camera": hw_camera
         },
         "services": {
             "rosbridge_9090": rosbridge_reachable,
@@ -397,73 +450,155 @@ def stop_robot_stack():
         "killed_pids": list(set(killed_pids))
     })
 
-@app.route("/api/camera/toggle", methods=["POST"])
-def toggle_camera_module():
-    global GLOBAL_CAMERA_PROC
-    data = request.json or {}
-    enable = data.get("enable", True)
+GLOBAL_CAMERA_MODE = "auto"
 
-    if enable:
-        if GLOBAL_CAMERA_PROC and GLOBAL_CAMERA_PROC.poll() is None:
-            return jsonify({
-                "status": "ok",
-                "message": "Camera module is already running.",
-                "pid": GLOBAL_CAMERA_PROC.pid
-            })
-
-        cmd_str = (
-            "export FASTRTPS_DEFAULT_PROFILES_FILE=/home/ubuntu/Desktop/Xtrmbly/fastdds_udp.xml && "
-            "export RMW_IMPLEMENTATION=rmw_fastrtps_cpp && "
-            "export ROS_LOG_DIR=/tmp/ros_log && "
-            "source /opt/ros/jazzy/setup.bash && "
-            "source /home/ubuntu/Desktop/Xtrmbly/install/setup.bash && "
-            "ros2 launch realsense2_camera rs_launch.py initial_reset:=false enable_gyro:=false enable_accel:=false enable_motion:=false enable_sync:=false enable_infra1:=false enable_infra2:=false depth_module.depth_profile:=424x240x15 rgb_camera.color_profile:=424x240x15"
-        )
-        try:
-            GLOBAL_CAMERA_PROC = subprocess.Popen(
-                ["/bin/bash", "-c", cmd_str],
-                preexec_fn=os.setsid
-            )
-            return jsonify({
-                "status": "ok",
-                "message": "Camera module turned ON.",
-                "pid": GLOBAL_CAMERA_PROC.pid
-            })
-        except Exception as e:
-            return jsonify({"status": "error", "message": str(e)}), 500
+@app.route("/api/camera/status", methods=["GET"])
+def get_camera_status():
+    global GLOBAL_CAMERA_PROC, GLOBAL_CAMERA_MODE
+    hw = detect_camera_hardware()
+    
+    is_running = False
+    proc_pid = None
+    if GLOBAL_CAMERA_PROC and GLOBAL_CAMERA_PROC.poll() is None:
+        is_running = True
+        proc_pid = GLOBAL_CAMERA_PROC.pid
     else:
-        killed = []
-        if GLOBAL_CAMERA_PROC and GLOBAL_CAMERA_PROC.poll() is None:
-            try:
-                os.killpg(os.getpgid(GLOBAL_CAMERA_PROC.pid), 15)
-                killed.append(GLOBAL_CAMERA_PROC.pid)
-            except Exception:
-                try:
-                    GLOBAL_CAMERA_PROC.terminate()
-                    killed.append(GLOBAL_CAMERA_PROC.pid)
-                except Exception:
-                    pass
-            GLOBAL_CAMERA_PROC = None
-
-        patterns = MANAGED_PROCESS_PATTERNS["camera_proc"]
         for p in psutil.process_iter(['pid', 'name', 'cmdline']):
             try:
-                cmdline_str = " ".join(p.info['cmdline'] or [])
-                pname = p.info['name'] or ""
-                full_str = f"{pname} {cmdline_str}"
-                for pat in patterns:
+                full_str = " ".join(p.info['cmdline'] or [])
+                for pat in MANAGED_PROCESS_PATTERNS["camera_proc"]:
                     if pat in full_str:
-                        p.terminate()
-                        killed.append(p.info['pid'])
+                        is_running = True
+                        proc_pid = p.info['pid']
                         break
-            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                if is_running:
+                    break
+            except Exception:
                 continue
 
+    active_topic = "/camera/color/image_raw"
+    if GLOBAL_CAMERA_MODE == "realsense" or (GLOBAL_CAMERA_MODE == "auto" and hw["realsense"]):
+        active_topic = "/camera/camera/color/image_raw"
+    elif GLOBAL_CAMERA_MODE == "diagnostic":
+        active_topic = "/camera/color/image_raw"
+
+    return jsonify({
+        "status": "ok",
+        "running": is_running,
+        "pid": proc_pid,
+        "mode": GLOBAL_CAMERA_MODE,
+        "active_topic": active_topic,
+        "hardware": hw
+    })
+
+@app.route("/api/camera/rescan", methods=["POST"])
+def rescan_camera_devices():
+    try:
+        subprocess.run(["udevadm", "settle", "--timeout=1"], timeout=2)
+    except Exception:
+        pass
+    hw = detect_camera_hardware()
+    return jsonify({
+        "status": "ok",
+        "message": "USB and camera device bus rescanned.",
+        "hardware": hw
+    })
+
+@app.route("/api/camera/toggle", methods=["POST"])
+def toggle_camera_module():
+    global GLOBAL_CAMERA_PROC, GLOBAL_CAMERA_MODE
+    data = request.json or {}
+    enable = data.get("enable", True)
+    req_mode = data.get("mode", "auto")
+
+    # Stop any running camera process first
+    killed = []
+    if GLOBAL_CAMERA_PROC and GLOBAL_CAMERA_PROC.poll() is None:
+        try:
+            os.killpg(os.getpgid(GLOBAL_CAMERA_PROC.pid), 15)
+            killed.append(GLOBAL_CAMERA_PROC.pid)
+        except Exception:
+            try:
+                GLOBAL_CAMERA_PROC.terminate()
+                killed.append(GLOBAL_CAMERA_PROC.pid)
+            except Exception:
+                pass
+        GLOBAL_CAMERA_PROC = None
+
+    patterns = MANAGED_PROCESS_PATTERNS["camera_proc"]
+    for p in psutil.process_iter(['pid', 'name', 'cmdline']):
+        try:
+            cmdline_str = " ".join(p.info['cmdline'] or [])
+            pname = p.info['name'] or ""
+            full_str = f"{pname} {cmdline_str}"
+            for pat in patterns:
+                if pat in full_str:
+                    p.terminate()
+                    killed.append(p.info['pid'])
+                    break
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            continue
+
+    if not enable:
+        GLOBAL_CAMERA_MODE = "off"
         return jsonify({
             "status": "ok",
             "message": "Camera module turned OFF.",
+            "mode": "off",
             "killed_pids": list(set(killed))
         })
+
+    # Enable requested mode
+    hw = detect_camera_hardware()
+    chosen_mode = req_mode
+    if req_mode == "auto":
+        chosen_mode = hw["type"]
+
+    GLOBAL_CAMERA_MODE = chosen_mode
+
+    prefix = (
+        "export FASTRTPS_DEFAULT_PROFILES_FILE=/home/ubuntu/Desktop/Xtrmbly/fastdds_udp.xml && "
+        "export RMW_IMPLEMENTATION=rmw_fastrtps_cpp && "
+        "export ROS_LOG_DIR=/tmp/ros_log && "
+        "source /opt/ros/jazzy/setup.bash && "
+        "source /home/ubuntu/Desktop/Xtrmbly/install/setup.bash && "
+    )
+
+    if chosen_mode == "realsense":
+        cmd_str = (
+            prefix +
+            "ros2 launch realsense2_camera rs_launch.py initial_reset:=false enable_gyro:=false enable_accel:=false enable_motion:=false enable_sync:=false enable_infra1:=false enable_infra2:=false color_qos:=DEFAULT depth_qos:=DEFAULT depth_module.depth_profile:=480x270x15 rgb_camera.color_profile:=424x240x15"
+        )
+        active_topic = "/camera/camera/color/image_raw"
+    elif chosen_mode == "v4l2":
+        dev = hw["v4l2_devices"][0] if hw["v4l2_devices"] else "/dev/video0"
+        cmd_str = (
+            prefix +
+            f"ros2 run v4l2_camera v4l2_camera_node --ros-args -p video_device:={dev} -p image_size:=[640,480] -r image_raw:=/camera/color/image_raw"
+        )
+        active_topic = "/camera/color/image_raw"
+    else:  # diagnostic
+        cmd_str = (
+            prefix +
+            "python3 /home/ubuntu/Desktop/Xtrmbly/admin-dashboard/server/diagnostic_cam.py"
+        )
+        active_topic = "/camera/color/image_raw"
+
+    try:
+        GLOBAL_CAMERA_PROC = subprocess.Popen(
+            ["/bin/bash", "-c", cmd_str],
+            preexec_fn=os.setsid
+        )
+        return jsonify({
+            "status": "ok",
+            "message": f"Camera module turned ON ({chosen_mode} mode).",
+            "mode": chosen_mode,
+            "active_topic": active_topic,
+            "hardware": hw,
+            "pid": GLOBAL_CAMERA_PROC.pid
+        })
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route("/api/logs", methods=["GET"])
 def get_logs():

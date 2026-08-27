@@ -20,22 +20,10 @@ mkdir -p /tmp/ros_log
 export FASTRTPS_DEFAULT_PROFILES_FILE="$WORKSPACE_DIR/fastdds_udp.xml"
 export RMW_IMPLEMENTATION=rmw_fastrtps_cpp
 
-# Disable USB autosuspend on all USB and PCI controller devices & refresh root hub
-sudo bash -c '
-echo 0 > /sys/module/usbcore/parameters/autosuspend 2>/dev/null || true
-for f in /sys/bus/usb/devices/usb*/power/control /sys/bus/pci/devices/*/power/control; do
-    [ -f "$f" ] && echo on > "$f" 2>/dev/null || true
-done
-for f in /sys/bus/usb/devices/*/power/autosuspend_delay_ms; do
-    [ -f "$f" ] && echo -1 > "$f" 2>/dev/null || true
-done
-if [ -f /sys/bus/usb/devices/usb1/authorized ]; then
-    echo 0 > /sys/bus/usb/devices/usb1/authorized 2>/dev/null || true
-    sleep 0.5
-    echo 1 > /sys/bus/usb/devices/usb1/authorized 2>/dev/null || true
-    sleep 1.5
+# Run USB auto-healing & host controller check
+if [ -f "$WORKSPACE_DIR/scripts/usb_heal.sh" ]; then
+    sudo "$WORKSPACE_DIR/scripts/usb_heal.sh" || true
 fi
-' 2>/dev/null || true
 
 # 2. Cleanup any stale processes on ports 9090, 8080, 5001, 3000 and helper nodes
 echo "🧹 Checking & freeing ports (9090, 8080, 5001, 3000)..."
@@ -44,36 +32,39 @@ fuser -k 8080/tcp 2>/dev/null || true
 fuser -k 5001/tcp 2>/dev/null || true
 fuser -k 3000/tcp 2>/dev/null || true
 pkill -f depth_colorizer.py 2>/dev/null || true
+pkill -f diagnostic_cam.py 2>/dev/null || true
 sleep 0.5
 
 # 3. Start ROSBridge WebSocket Server (Port 9090)
 echo "📡 Launching ROSBridge WebSocket Server (port 9090)..."
-nohup ros2 launch rosbridge_server rosbridge_websocket_launch.xml port:=9090 </dev/null > /tmp/rosbridge.log 2>&1 &
+setsid ros2 launch rosbridge_server rosbridge_websocket_launch.xml port:=9090 </dev/null > /tmp/rosbridge.log 2>&1 &
 ROSBRIDGE_PID=$!
 echo "   ↳ ROSBridge PID: $ROSBRIDGE_PID"
 
 # 4. Start Web Video Server for MJPEG Video Streaming (Port 8080)
 echo "📹 Launching Web Video Server (port 8080)..."
-nohup ros2 run web_video_server web_video_server </dev/null > /tmp/web_video_server.log 2>&1 &
+setsid ros2 run web_video_server web_video_server </dev/null > /tmp/web_video_server.log 2>&1 &
 VIDEO_SERVER_PID=$!
 echo "   ↳ Video Server PID: $VIDEO_SERVER_PID"
 
-# 4b. Start Depth Image Colorizer (Colorizes 16UC1 depth to bgr8 for streaming)
-echo "🌈 Starting Depth Image Colorizer..."
-nohup python3 "$WORKSPACE_DIR/admin-dashboard/server/depth_colorizer.py" </dev/null > /tmp/depth_colorizer.log 2>&1 &
-DEPTH_PID=$!
-echo "   ↳ Depth Colorizer PID: $DEPTH_PID"
+# 4b. Start Universal Camera Streamer (RealSense RGB/Depth + Telemetry HUD Streamer)
+echo "🌈 Starting Universal Camera Streamer..."
+pkill -9 -f camera_streamer.py 2>/dev/null || true
+pkill -9 -f depth_colorizer.py 2>/dev/null || true
+setsid python3 "$WORKSPACE_DIR/admin-dashboard/server/camera_streamer.py" </dev/null > /tmp/camera_streamer.log 2>&1 &
+CAMERA_STREAM_PID=$!
+echo "   ↳ Camera Streamer PID: $CAMERA_STREAM_PID"
 
 # 5. Start Admin Backend Server (Port 5001)
 echo "⚙️  Starting Flask Admin Backend API (port 5001)..."
 cd "$WORKSPACE_DIR/admin-dashboard"
-nohup python3 server/server.py </dev/null > /tmp/admin_server.log 2>&1 &
+setsid python3 server/server.py </dev/null > /tmp/admin_server.log 2>&1 &
 BACKEND_PID=$!
 echo "   ↳ Backend PID: $BACKEND_PID"
 
 # 6. Start Vite Frontend Server (Port 3000)
 echo "🌐 Starting Vite Dashboard Frontend (port 3000)..."
-nohup npm run dev -- --host 0.0.0.0 --port 3000 </dev/null > /tmp/admin_frontend.log 2>&1 &
+setsid npm run dev -- --host 0.0.0.0 --port 3000 </dev/null > /tmp/admin_frontend.log 2>&1 &
 FRONTEND_PID=$!
 echo "   ↳ Frontend PID: $FRONTEND_PID"
 

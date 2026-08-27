@@ -346,4 +346,87 @@ Cycle    Status     Odom     IMU      GPS      Lidar    Camera   Depth    TF    
 🏁 FINAL OUTCOME: 5/5 CYCLES PASSED PERFECTLY!
 ```
 
+---
+
+## 🚀 Session Log (2026-08-27) — Pro-Max Camera Stream Architecture & Telemetry HUD Integration
+
+### 1. Root Cause Analysis
+- **Missing Physical Optical Sensor on Boot**:
+  - The onboard system was booted without physical USB camera hardware connected (Intel RealSense or standard USB webcam).
+  - Launching `realsense2_camera` without connected hardware resulted in `[camera.camera]: No RealSense devices were found!`, causing `web_video_server` to have no active `/camera/camera/color/image_raw` frame pipeline, displaying a persistent disconnected error in the UI.
+
+### 2. Applied Rectifications
+- **Pro-Max Diagnostic HUD Camera (`server/diagnostic_cam.py`)**:
+  - Implemented a synthetic telemetry HUD camera daemon publishing 640x360 @ 15 FPS frames on `/camera/color/image_raw` and `/camera/camera/color/image_raw`.
+  - Displays real-time live sensor pipeline statuses (ESP32 Odom, YDLidar G2B, Hiwonder IMU, Hiwonder GPS), animated radar sweep reticle, odometry velocities, coordinates, and robot heading.
+- **Dynamic Camera Hardware Detection (`server.py`)**:
+  - Added `detect_camera_hardware()` detecting Intel RealSense (USB vendor `8086`), generic USB V4L2 webcams (`/dev/video*`), and diagnostic HUD mode.
+  - Updated `/api/status` to expose `hardware.camera` metadata.
+  - Added `GET /api/camera/status` and `POST /api/camera/rescan` endpoints.
+  - Upgraded `POST /api/camera/toggle` to support mode selection (`"auto"`, `"realsense"`, `"v4l2"`, `"diagnostic"`) with automatic topic alignment.
+- **Pro-Max Frontend Experience (`CameraPanel.jsx`)**:
+  - Added live Hardware Detection badge (`RealSense Connected`, `USB Cam`, or `Pro-Max Diagnostic HUD`).
+  - Added stream mode selector (`Auto`, `RealSense 3D`, `USB Webcam`, `Telemetry HUD`).
+  - Added 1-click camera feed power switch, topic presets, quality/FPS adjusters, and direct full-screen mode.
+- **Package Installation**:
+  - Installed `ros-jazzy-v4l2-camera` to support generic USB webcams.
+
+### 3. Verification & Test Results
+- **Pytest Backend Tests**: 32/32 Passed (100%).
+- **Vitest Frontend Tests**: 117/117 Passed (100%).
+- **Live Stream Verification**: `web_video_server` confirmed streaming `multipart/x-mixed-replace` on port `8080` with topic `/camera/color/image_raw`.
+
+---
+
+## 🚀 Session Log (2026-08-27, continued) — YDLIDAR G2B Port Stability & USB Host Controller Auto-Healing
+
+### 1. Root Causes of Frequent LiDAR Disconnections & Port Collisions
+- **Dangerous Fallback Candidates in `ydlidar_launch.py`**:
+  - When `/dev/amr_lidar` was not ready in the initial millisecond of bringup, `ydlidar_launch.py` iterated through `['/dev/ttyUSB3', '/dev/ttyUSB4', '/dev/lidar', '/dev/ttyUSB0']`.
+  - `/dev/ttyUSB3` physically belongs to the **ESP32 motor controller**, and `/dev/ttyUSB0` belongs to the **Hiwonder GPS**.
+  - The LiDAR driver grabbed the ESP32 serial port at 230400 baud, corrupting odometry and failing LiDAR initialization.
+- **USB 2.0 Hub Brownout (`error -71` / `EPROTO`)**:
+  - Connecting high-current USB devices (e.g. Intel RealSense) or LiDAR motor spin-up caused voltage dips on the 4-port USB 2.0 hub (`Genesys Logic 05e3:0610`), causing the Linux kernel to report `usb 1-2: device not accepting address, error -71` and disable the hub until the PCIe xHCI host controller was rebound.
+
+### 2. Applied Rectifications
+- **Hardware-Aware Dynamic Port Resolver (`ydlidar_launch.py`)**:
+  - Replaced the blind fallback list with hardware attribute inspection (`vendor: 10c4`, `serial: 0001`), ensuring it **never** claims the ESP32 (`serial: a8f8c998665df01189fd5e401045c30f`) or GPS/IMU (`vendor: 1a86`).
+- **USB Host Controller Auto-Healer (`scripts/usb_heal.sh`)**:
+  - Implemented an automated PCIe xHCI host controller (`0000:01:00.0`) unbind/rebind and udev settle script that recovers USB hubs stuck in `error -71` without rebooting.
+  - Integrated `usb_heal.sh` into `start_all.sh`.
+- **Rebuilt Workspace Packages**:
+  - Rebuilt `ydlidar_ros2_driver` cleanly with `colcon build --symlink-install`.
+
+### 3. Verification
+- **LiDAR Startup**: Model G2B (Firmware v3.5, Hardware v3, Serial `2023022400070163`) initialized cleanly on `/dev/amr_lidar:230400`.
+- **Laser Scan Active**: Verified `turnOn() result: 1 (Laser scan active)` publishing at 7.00 Hz / 5.00K sample rate.
+- **Port Isolation**: ESP32 (`/dev/amr_encoder`), GPS (`/dev/amr_gps`), IMU (`/dev/amr_imu`), and LiDAR (`/dev/amr_lidar`) all maintain 100% distinct, conflict-free symlinks.
+
+---
+
+## 🚀 Session Log (2026-08-27, continued) — Live Video Streaming & Camera Streamer Node
+
+### 1. Root Causes of Missing Dashboard Live Video
+- **QoS Incompatibility**:
+  - `realsense2_camera` publishes `/camera/camera/color/image_raw` using `SensorDataQoS` (`BEST_EFFORT`).
+  - `web_video_server` (port 8080) subscribes with `DEFAULT` (`RELIABLE`) QoS profile. In ROS 2 / FastDDS, a `RELIABLE` subscriber cannot receive messages from a `BEST_EFFORT` publisher, causing 0 frames to reach the MJPEG stream.
+- **V4L2 Sensor Device Mapping**:
+  - On the Intel RealSense D435i, `/dev/video0` and `/dev/video1` are 16-bit depth/infrared sensors (`Z16`/`GREY`), while `/dev/video4` is the actual hardware RGB optical color sensor (`YUYV 4:2:2`).
+- **Subshell Background Process Reaping**:
+  - Launch scripts using basic `nohup ... &` in subshells had background daemons reaped upon shell termination.
+
+### 2. Applied Rectifications
+- **High-Performance Universal Camera Streamer (`admin-dashboard/server/camera_streamer.py`)**:
+  - Discovers RealSense RGB (`/dev/video4`) and standard USB webcams via direct V4L2 capture.
+  - Publishes 424x240 @ 15 FPS BGR color frames with `RELIABLE` QoS to both `/camera/color/image_raw` and `/camera/camera/color/image_raw`.
+  - Integrates Depth Colormapping (16UC1 $\rightarrow$ TURBO colormap) on `/camera/camera/depth/image_rect_raw/color`.
+  - Seamlessly renders a Pro-Max Telemetry HUD overlay if the optical sensor is detached.
+- **`start_all.sh` Daemon Hardening**:
+  - Switched background launches to `setsid`, preventing subshell process group reaping.
+- **Frontend & Backend Test Verification**:
+  - 100% pass rate: 32/32 Pytest backend tests and 117/117 Vitest frontend tests.
+
+
+
+
 

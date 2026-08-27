@@ -275,15 +275,34 @@ class TestApiStackAndCamera:
                 return None
 
         monkeypatch.setattr("server.subprocess.Popen", lambda *a, **kw: FakeSubprocess())
-        rv_on = client.post("/api/camera/toggle", json={"enable": True})
+        rv_on = client.post("/api/camera/toggle", json={"enable": True, "mode": "diagnostic"})
         assert rv_on.status_code == 200
-        assert rv_on.get_json()["status"] == "ok"
+        body = rv_on.get_json()
+        assert body["status"] == "ok"
+        assert body["mode"] == "diagnostic"
+        assert body["active_topic"] == "/camera/color/image_raw"
 
         import psutil
         monkeypatch.setattr(psutil, "process_iter", lambda fields: iter([]))
         rv_off = client.post("/api/camera/toggle", json={"enable": False})
         assert rv_off.status_code == 200
         assert rv_off.get_json()["status"] == "ok"
+
+    def test_camera_status_and_rescan(self, client, monkeypatch):
+        import psutil
+        monkeypatch.setattr(psutil, "process_iter", lambda fields: iter([]))
+        rv_status = client.get("/api/camera/status")
+        assert rv_status.status_code == 200
+        st = rv_status.get_json()
+        assert st["status"] == "ok"
+        assert "hardware" in st
+        assert "running" in st
+
+        rv_rescan = client.post("/api/camera/rescan")
+        assert rv_rescan.status_code == 200
+        res = rv_rescan.get_json()
+        assert res["status"] == "ok"
+        assert "hardware" in res
 
 
 # ─────────────────────────────────────────────────────────────────────────────
