@@ -247,6 +247,10 @@ class TestApiProcessRestart:
 class TestApiStackAndCamera:
 
     def test_start_stack(self, client, monkeypatch):
+        import server
+        server.GLOBAL_STACK_PROC = None
+        server.GLOBAL_CAMERA_PROC = None
+
         class FakeSubprocess:
             pid = 1234
             def poll(self):
@@ -260,6 +264,9 @@ class TestApiStackAndCamera:
         assert "launched successfully" in body["message"]
 
     def test_stop_stack(self, client, monkeypatch):
+        import server
+        server.GLOBAL_STACK_PROC = None
+        server.GLOBAL_CAMERA_PROC = None
         import psutil
         monkeypatch.setattr(psutil, "process_iter", lambda fields: iter([]))
         rv = client.post("/api/stack/stop")

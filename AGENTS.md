@@ -426,6 +426,47 @@ Cycle    Status     Odom     IMU      GPS      Lidar    Camera   Depth    TF    
 - **Frontend & Backend Test Verification**:
   - 100% pass rate: 32/32 Pytest backend tests and 117/117 Vitest frontend tests.
 
+---
+
+## 🚀 Session Log (2026-08-31) — HOT RC DS-600 FA-06 Radio & Sabertooth 2x32 Integration
+
+### 1. Hardware Identification & GPIO Pinmux
+- **HOT RC DS-600 FA-06 RC Receiver**:
+  - CH1 (Steering / Roll) physically wired to Board Pin 11 $\rightarrow$ Qualcomm TLMM `GPIO8` (`gpiochip4` Line 8).
+  - CH2 (Throttle / Pitch) physically wired to Board Pin 13 $\rightarrow$ Qualcomm TLMM `GPIO24` (`gpiochip4` Line 24).
+  - Protocol verified: Active-High RC PWM at ~330 Hz frame rate.
+  - Empirically calibrated limits:
+    - CH1: Min = 802.9 µs, Neutral = 1493.6 µs, Max = 2199.6 µs.
+    - CH2: Min = 873.7 µs, Resting/Neutral = 1903.9 µs, Max = 2199.7 µs.
+- **Sabertooth 2x32 Motor Controller**:
+  - Dimension Engineering Sabertooth 2x32 (Serial `160091F3C484`, USB Vendor: `0x268b`, Product: `0x0201`).
+  - Enumerated on `/dev/ttyACM0`. Added persistent udev rules in `/etc/udev/rules.d/99-amr.rules` generating symlinks `/dev/sabertooth` and `/dev/amr_motors`.
+
+### 2. ROS 2 Node Implementations
+- **`radio_receiver_node` (`radio_receiver` package)**:
+  - Background edge poller using `libgpiod` character device on `gpiochip4` lines 8 and 24.
+  - Normalizes raw microsecond pulses into $[-1.0, +1.0]$ with deadband suppression.
+  - Publishes:
+    - `/radio/channels` (`sensor_msgs/Joy`)
+    - `/radio/status` (`std_msgs/String`)
+    - `/cmd_vel` & `/radio/cmd_vel` (`geometry_msgs/Twist`)
+  - Integrated 350ms signal loss watchdog / failsafe (zeros all outputs when transmitter signal is disconnected).
+- **`sabertooth_node` (`sabertooth_driver` package)**:
+  - Subscribes to `/cmd_vel` and converts linear/angular velocity to differential drive motor outputs.
+  - Communicates directly with Sabertooth 2x32 over `/dev/sabertooth` using native DEScribe / Plain Text commands (`M1: <power>`, `M2: <power>`, `MD: <drive>, <turn>`) or Packet Serial.
+  - Features:
+    - Zero-power initial startup.
+    - 250ms command timeout watchdog (automatically halts motors if ROS 2 commands cease).
+    - Emergency stop on shutdown / disconnect.
+
+### 3. Launch & Verification
+- **Combined Teleop Launch**: `ros2 launch sabertooth_driver manual_radio_drive.launch.py`.
+- **Live Verification**:
+  - Verified concurrent execution of `radio_receiver_node` and `sabertooth_node`.
+  - Confirmed `/cmd_vel` updates in real time with joystick movement (Forward, Reverse, Left, Right).
+  - 32/32 Pytest backend tests passing with full process introspection integration.
+
+
 
 
 

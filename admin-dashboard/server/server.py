@@ -34,6 +34,8 @@ MANAGED_PROCESS_PATTERNS = {
     ],
     "video_server_proc": ["web_video_server"],
     "rosbridge_proc": ["rosbridge_websocket"],
+    "radio_proc": ["radio_receiver_node", "radio_receiver"],
+    "sabertooth_proc": ["sabertooth_node", "sabertooth_driver"],
 }
 
 def check_port_reachable(host="127.0.0.1", port=9090, timeout=1.0):
@@ -213,6 +215,12 @@ def get_hardware_and_processes():
     hw_lidar = check_dev_path("/dev/amr_lidar", "/dev/ttyUSB3", "/dev/ttyUSB4", "/dev/lidar")
     hw_gps = check_dev_path("/dev/hiwonder_gps", "/dev/amr_gps", "/dev/gps", "/dev/ttyUSB0")
     hw_imu = check_dev_path("/dev/hiwonder_imu", "/dev/amr_imu", "/dev/esp-imu", "/dev/ttyUSB1")
+    hw_sabertooth = check_dev_path("/dev/sabertooth", "/dev/amr_motors", "/dev/ttyACM0")
+    hw_radio = {
+        "path": "GPIO8 (CH1) & GPIO24 (CH2)",
+        "exists": os.path.exists("/dev/gpiochip4"),
+        "accessible": os.access("/dev/gpiochip4", os.R_OK | os.W_OK) if os.path.exists("/dev/gpiochip4") else False
+    }
     hw_camera = detect_camera_hardware()
     
     # 2. Port reachability
@@ -263,6 +271,8 @@ def get_hardware_and_processes():
             "ydlidar": hw_lidar,
             "hiwonder_gps": hw_gps,
             "hiwonder_imu": hw_imu,
+            "sabertooth": hw_sabertooth,
+            "radio": hw_radio,
             "camera": hw_camera
         },
         "services": {
