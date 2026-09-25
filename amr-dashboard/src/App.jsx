@@ -61,7 +61,7 @@ export default function App() {
     gps: { live: gps.hasData, seen: gps.hasEverData, label: 'GPS · /hiwonder/gps/fix' },
     lidar: { live: scan.hasData, seen: scan.hasEverData, label: 'LIDAR · /scan' },
     slam: { live: map.hasData, seen: map.hasEverData, label: 'SLAM · /map' },
-    camera: { live: cameraOnline, seen: cameraOnline, label: 'CAMERA · MJPEG stream', isCamera: true },
+    camera: { live: cameraOnline, seen: cameraOnline, label: 'CAMERA · /camera/color/image_raw (MJPEG)', isCamera: true },
   };
 
   // A manual pin now SURVIVES a robot-mode change (spec F5). When the view is
@@ -237,13 +237,13 @@ export default function App() {
           </div>
 
           <div key="camera" className="h-full w-full">
-            <PanelFrame title="DEPTH CAMERA PREVIEW" editMode={editMode}>
+            <PanelFrame title="LOGITECH C270 HD (720P)" editMode={editMode}>
               <PreviewPanel
-                title="DEPTH CAMERA PREVIEW"
+                title="LOGITECH C270 HD (720P)"
                 active={resolvedView === 'camera'}
                 onClick={() => selectView('camera')}
               >
-                <ErrorBoundary label="CAMERA PREVIEW">
+                <ErrorBoundary label="LOGITECH C270 CAMERA PREVIEW">
                   <CameraView compact onStreamState={setCameraOnline} />
                 </ErrorBoundary>
               </PreviewPanel>

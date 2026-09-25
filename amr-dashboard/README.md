@@ -91,19 +91,21 @@ Full walkthrough and front-end architecture:
 | `/radio/cmd_vel`                                                | `geometry_msgs/Twist`                  | Radio velocity command                               |
 | `/radio/channels`                                               | `sensor_msgs/Joy`                      | Radio RC channels (DS-600)                           |
 | `/radio/status`                                                 | `std_msgs/String`                      | Radio link status                                    |
+| `/battery_state`                                                | `sensor_msgs/BatteryState`             | Battery state & power telemetry                      |
+| `/amr/session`                                                  | `std_msgs/String`                      | Session heartbeat and bringup info                   |
 | `/tf`, `/tf_static`                                             | `tf2_msgs/TFMessage`                   | Robot pose (SLAM view + URDF widget)                 |
 | `/robot_description`                                            | `std_msgs/String` (URDF XML)           | URDF widget                                          |
 | `/joint_states`                                                 | `sensor_msgs/JointState`               | URDF widget                                          |
-| `/camera/camera/color/image_raw` (via `web_video_server` MJPEG) | `sensor_msgs/Image`                    | Camera preview                                       |
+| `/camera/color/image_raw` (via `web_video_server` MJPEG)        | `sensor_msgs/Image`                    | Logitech C270 HD Camera (720p @ 30 FPS)              |
 | `/robot_mode`                                                   | `std_msgs/String` (`INDOOR`/`OUTDOOR`) | Main view selection; defaults to `OUTDOOR` if absent |
 
-> **Camera:** the camera panel does **not** subscribe to the image topic over
-> rosbridge. It renders the MJPEG stream served by
-> [`web_video_server`](https://wiki.ros.org/web_video_server) at
-> `VITE_WEB_VIDEO_URL` (default `http://localhost:8080`) for the hardcoded topic
-> `/camera/camera/color/image_raw`. Run `web_video_server` on the robot and set
-> `VITE_WEB_VIDEO_URL` if it is not on localhost. If the stream is unreachable
-> the panel shows `NO CAMERA STREAM` and retries automatically.
+> **Camera:** the camera panel renders the MJPEG stream served by
+> [`web_video_server`](https://wiki.ros.org/web_video_server) dynamically from
+> `VITE_WEB_VIDEO_URL` (or `window.location.hostname:8080`) for the active topic
+> `/camera/color/image_raw` (`quality=75`, `framerate=30`, `default_transport=raw`).
+> If the stream is unreachable, the panel shows `NO LOGITECH C270 CAMERA STREAM`,
+> provides an inline retry button, a pop-out stream viewer fallback, and an independent
+> V4L2 toggle button via the robot REST API (`http://<ROBOT_IP>:5001/api/camera/toggle`).
 
 Publishers expected from the operator UI (architecture only — wire to your
 robot's actual interfaces in `src/services/RobotCommandService.js`):

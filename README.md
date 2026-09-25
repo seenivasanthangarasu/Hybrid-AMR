@@ -70,6 +70,8 @@ Hybrid-AMR/
 | `/odom` | `nav_msgs/Odometry` | Status |
 | `/scan` | `sensor_msgs/LaserScan` | LiDAR Preview |
 | `/map` | `nav_msgs/OccupancyGrid` | SLAM View |
+| `/battery_state` | `sensor_msgs/BatteryState` | Status / Power Telemetry |
+| `/amr/session` | `std_msgs/String` | Session Heartbeat |
 | `/cmd_vel` | `geometry_msgs/Twist` | Control Panel |
 | `/radio/cmd_vel` | `geometry_msgs/Twist` | Commands / Radio Teleop |
 | `/radio/channels` | `sensor_msgs/Joy` | Radio RC Channels (DS-600) |
@@ -78,7 +80,7 @@ Hybrid-AMR/
 | `/tf_static` | `tf2_msgs/TFMessage` | URDF Widget |
 | `/robot_description` | `std_msgs/String` | URDF Widget |
 | `/joint_states` | `sensor_msgs/JointState` | URDF Widget |
-| `/camera/camera/color/image_raw` | `sensor_msgs/Image` | Camera (MJPEG via `web_video_server`) |
+| `/camera/color/image_raw` | `sensor_msgs/Image` | Logitech C270 HD Camera (MJPEG @ 30 FPS) |
 
 ---
 
@@ -86,14 +88,14 @@ Hybrid-AMR/
 
 | Panel | Description |
 |---|---|
-| **Main View** | Switchable: GPS Map / SLAM / LiDAR / Camera |
+| **Main View** | Switchable: GPS Map / SLAM / LiDAR / Logitech C270 Camera (720p @ 30 FPS) |
 | **Status** | Speed, heading, GPS fix, lat/lon, HDOP, satellites |
 | **IMU** | Roll/pitch/yaw, accel XYZ, gyro XYZ, magnetometer XYZ |
 | **Mission Planner** | GPS waypoint mission control |
 | **Control Panel** | Velocity joystick / keyboard teleop |
 | **GPS Preview** | Thumbnail GPS map |
 | **LiDAR Preview** | Thumbnail LaserScan polar plot |
-| **Camera Preview** | Live MJPEG thumbnail |
+| **Camera Preview** | Logitech C270 720p HD live stream thumbnail |
 | **URDF Widget** | 3D robot model (requires mesh server) |
 | **GNSS Quality** | Full DOP / satellite / RTK quality page (sidebar) |
 | **Nav2 Tuning** | Nav2 cost/inflation threshold sliders (sidebar) |

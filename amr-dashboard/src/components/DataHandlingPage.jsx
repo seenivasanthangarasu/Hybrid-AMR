@@ -7,10 +7,10 @@ import useDataSourceSelection from '../hooks/useDataSourceSelection.js';
 import useBackupSettings, { useSnapshotInterval } from '../hooks/useBackupSettings.js';
 import { dataSourcesByCategory } from '../config/dataSources.js';
 import useNow from '../hooks/useNow.js';
+import { DEFAULT_CAMERA_TOPIC, getCameraStreamUrl } from '../config/endpoints.js';
 
-const VIDEO_SERVER_URL = import.meta.env.VITE_WEB_VIDEO_URL || 'http://localhost:8080';
-const CAMERA_TOPIC = '/camera/camera/color/image_raw';
-const CAMERA_STREAM = `${VIDEO_SERVER_URL}/stream?topic=${CAMERA_TOPIC}`;
+const CAMERA_TOPIC = DEFAULT_CAMERA_TOPIC;
+const CAMERA_STREAM = getCameraStreamUrl({ topic: CAMERA_TOPIC, quality: 75, framerate: 30 });
 
 /** Stable short label for the current topic set, used in the .mcap filename. */
 function topicSetLabel(sourceIds) {
@@ -351,21 +351,42 @@ export default function DataHandlingPage({ open, onClose }) {
             {startDisabledReason && !sessionActive && <DisabledReason>{startDisabledReason}</DisabledReason>}
           </section>
 
-          {/* Camera snapshot status — this is the one failure mode that depends
-              on the other repo (docs/server-side-requests.md CORS ask), so it
-              must be impossible to miss. */}
+          {/* Camera snapshot / live preview status */}
           {cameraEnabled && cameraState.status === 'unavailable' && (
             <div className="rounded-md border border-signal-amber/40 bg-signal-amber/10 p-3 font-mono text-[11px] text-signal-amber" role="alert">
               Camera server does not allow snapshot capture yet — see docs/server-side-requests.md. Display-only
               viewing elsewhere in the dashboard is unaffected.
             </div>
           )}
-          {cameraEnabled && cameraState.status === 'capturing' && thumbnail && (
-            <section>
-              <h3 className="mb-2 font-display text-[11px] font-bold tracking-[0.14em] text-signal-cyan">
-                LATEST SNAPSHOT
-              </h3>
-              <img src={thumbnail} alt="Most recent camera snapshot" className="h-32 w-auto rounded border border-deck-line" />
+
+          {/* Live stream preview thumbnail when recording is active or snapshots are enabled */}
+          {(sessionActive || cameraEnabled) && (
+            <section className="rounded border border-deck-line bg-deck-900/50 p-3">
+              <div className="mb-2 flex items-center justify-between">
+                <h3 className="font-display text-[11px] font-bold tracking-[0.14em] text-signal-cyan">
+                  {thumbnail ? 'LATEST SNAPSHOT & LIVE FEED' : 'LIVE CAMERA TELEMETRY FEED'}
+                </h3>
+                <span className="font-mono text-[9px] text-signal-green">
+                  ● {CAMERA_TOPIC}
+                </span>
+              </div>
+              <div className="flex flex-wrap items-center gap-4">
+                {thumbnail && (
+                  <div className="flex flex-col gap-1">
+                    <span className="font-mono text-[9px] text-ink-low">SAVED SNAPSHOT</span>
+                    <img src={thumbnail} alt="Most recent camera snapshot" className="h-28 w-auto rounded border border-deck-line object-cover" />
+                  </div>
+                )}
+                <div className="flex flex-col gap-1">
+                  <span className="font-mono text-[9px] text-ink-low">LIVE STREAM (LOGITECH C270)</span>
+                  <img
+                    src={CAMERA_STREAM}
+                    alt="Live Logitech C270 stream preview"
+                    className="h-28 w-auto rounded border border-deck-line bg-deck-950 object-cover"
+                    onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                  />
+                </div>
+              </div>
             </section>
           )}
 

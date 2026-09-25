@@ -173,7 +173,7 @@ export const ERRORS = {
     remedies: [
       'On the robot: ros2 run web_video_server web_video_server',
       'Open the stream URL directly in a browser tab to confirm it serves video.',
-      'Check the camera topic is publishing: ros2 topic hz /camera/camera/color/image_raw',
+      'Check the camera topic is publishing: ros2 topic hz /camera/color/image_raw',
       'Note: the camera does NOT use rosbridge — a healthy LINKED chip says nothing about it.',
     ],
   },

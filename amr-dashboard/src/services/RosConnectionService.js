@@ -1,4 +1,5 @@
 import ROSLIB from 'roslib';
+import { getRosbridgeUrl } from '../config/endpoints.js';
 
 /**
  * RosConnectionService
@@ -17,7 +18,7 @@ import ROSLIB from 'roslib';
  * loudly (`retry.exhausted`) and the header's manual RECONNECT is the way back.
  */
 
-const ROSBRIDGE_URL = import.meta.env.VITE_ROSBRIDGE_URL || 'ws://localhost:9090';
+const ROSBRIDGE_URL = getRosbridgeUrl();
 
 export const RECONNECT_BASE_MS = 1000;
 export const RECONNECT_MAX_DELAY_MS = 30000;
