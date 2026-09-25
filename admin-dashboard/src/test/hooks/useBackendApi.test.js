@@ -219,3 +219,82 @@ describe('useBackendApi – fetchLogs()', () => {
     expect(lines[0]).toMatch(/503/);
   });
 });
+
+describe('useBackendApi – stack, teleop, motor, and radio toggles', () => {
+  it('calls /api/stack/start with correct payload options', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ status: 'ok', pid: 5678 })
+    });
+    const { result } = renderHook(() => useBackendApi(5000));
+
+    let res;
+    await act(async () => {
+      res = await result.current.startStack({ includeCamera: true, includeMotors: true, includeRadio: false });
+    });
+
+    const call = global.fetch.mock.calls.find(([url]) => url.includes('/api/stack/start'));
+    expect(call).toBeDefined();
+    expect(JSON.parse(call[1].body)).toEqual({
+      include_camera: true,
+      include_motors: true,
+      include_radio: false
+    });
+    expect(res.status).toBe('ok');
+  });
+
+  it('calls /api/teleop/toggle with enable flag', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ status: 'ok', running: true })
+    });
+    const { result } = renderHook(() => useBackendApi(5000));
+
+    let res;
+    await act(async () => {
+      res = await result.current.toggleTeleop(true);
+    });
+
+    const call = global.fetch.mock.calls.find(([url]) => url.includes('/api/teleop/toggle'));
+    expect(call).toBeDefined();
+    expect(JSON.parse(call[1].body)).toEqual({ enable: true });
+    expect(res.status).toBe('ok');
+  });
+
+  it('calls /api/motor/toggle with enable flag', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ status: 'ok', running: true })
+    });
+    const { result } = renderHook(() => useBackendApi(5000));
+
+    let res;
+    await act(async () => {
+      res = await result.current.toggleMotor(false);
+    });
+
+    const call = global.fetch.mock.calls.find(([url]) => url.includes('/api/motor/toggle'));
+    expect(call).toBeDefined();
+    expect(JSON.parse(call[1].body)).toEqual({ enable: false });
+    expect(res.status).toBe('ok');
+  });
+
+  it('calls /api/radio/toggle with enable flag', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ status: 'ok', running: true })
+    });
+    const { result } = renderHook(() => useBackendApi(5000));
+
+    let res;
+    await act(async () => {
+      res = await result.current.toggleRadio(true);
+    });
+
+    const call = global.fetch.mock.calls.find(([url]) => url.includes('/api/radio/toggle'));
+    expect(call).toBeDefined();
+    expect(JSON.parse(call[1].body)).toEqual({ enable: true });
+    expect(res.status).toBe('ok');
+  });
+});
+

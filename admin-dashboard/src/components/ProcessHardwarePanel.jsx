@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import useRosTopic from '../hooks/useRosTopic';
-import { Cpu, HardDrive, MapPin, Radio, AlertTriangle, CheckCircle2, XCircle, RotateCcw, ShieldAlert, Server } from 'lucide-react';
+import { Cpu, HardDrive, MapPin, Radio, AlertTriangle, CheckCircle2, XCircle, RotateCcw, ShieldAlert, Server, Zap, Battery } from 'lucide-react';
 
-export default function ProcessHardwarePanel({ statusData, restartProcess, backendConnected }) {
+export default function ProcessHardwarePanel({ statusData, batteryVoltage, restartProcess, backendConnected }) {
   const [confirmModal, setConfirmModal] = useState(null); // process key to confirm
   const [restarting, setRestarting] = useState(false);
   const [feedback, setFeedback] = useState(null);
@@ -36,6 +36,12 @@ export default function ProcessHardwarePanel({ statusData, restartProcess, backe
   const services = statusData?.services || {};
   const processes = statusData?.managed_processes || {};
 
+  const currentVoltage =
+    batteryVoltage ??
+    statusData?.battery?.voltage ??
+    hardware.sabertooth?.battery_voltage ??
+    null;
+
   // Map GPS status int to readable string
   let gpsStatusText = 'No Fix / Unknown';
   if (hasGps && gpsData?.status?.status !== undefined) {
@@ -45,6 +51,16 @@ export default function ProcessHardwarePanel({ statusData, restartProcess, backe
     else if (s === 1) gpsStatusText = 'SBAS / DGPS Fix';
     else if (s === 2) gpsStatusText = 'RTK Precision Fix';
   }
+
+  const batStatusText = currentVoltage !== null
+    ? currentVoltage >= 14.0
+      ? 'Fully Charged / 14V+'
+      : currentVoltage >= 12.0
+      ? 'Nominal / Healthy'
+      : currentVoltage >= 11.0
+      ? 'Low Voltage Alert'
+      : 'Critical (<11V)'
+    : 'No Voltage Telemetry';
 
   return (
     <div className="space-y-6">
@@ -65,7 +81,7 @@ export default function ProcessHardwarePanel({ statusData, restartProcess, backe
       )}
 
       {/* Serial Hardware & Ports Reachability */}
-      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-7 gap-4">
         {/* /dev/hiwonder_gps */}
         <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
           <div className="flex items-center justify-between mb-2">
@@ -126,10 +142,10 @@ export default function ProcessHardwarePanel({ statusData, restartProcess, backe
           </p>
         </div>
 
-        {/* /dev/ttyUSB0 */}
+        {/* /dev/amr_lidar */}
         <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-mono text-slate-400">/dev/ttyUSB0</span>
+            <span className="text-xs font-mono text-slate-400">/dev/amr_lidar</span>
             {hardware.ydlidar?.exists ? (
               <span className="px-2 py-0.5 text-[10px] font-bold bg-emerald-500/10 text-emerald-400 rounded border border-emerald-500/30">
                 Connected
@@ -140,9 +156,29 @@ export default function ProcessHardwarePanel({ statusData, restartProcess, backe
               </span>
             )}
           </div>
-          <p className="text-sm font-semibold text-slate-200">YDLidar Serial Sensor</p>
+          <p className="text-sm font-semibold text-slate-200">YDLIDAR G4 Laser Scanner</p>
           <p className="text-xs text-slate-400 mt-1">
             Access: <span className="font-mono text-slate-300">{hardware.ydlidar?.accessible ? 'Read/Write' : 'Permission Denied / Missing'}</span>
+          </p>
+        </div>
+
+        {/* /dev/sabertooth */}
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-mono text-slate-400">/dev/sabertooth</span>
+            {hardware.sabertooth?.exists ? (
+              <span className="px-2 py-0.5 text-[10px] font-bold bg-emerald-500/10 text-emerald-400 rounded border border-emerald-500/30">
+                Connected
+              </span>
+            ) : (
+              <span className="px-2 py-0.5 text-[10px] font-bold bg-rose-500/10 text-rose-400 rounded border border-rose-500/30">
+                Missing
+              </span>
+            )}
+          </div>
+          <p className="text-sm font-semibold text-slate-200">Sabertooth 2x32 Driver</p>
+          <p className="text-xs text-slate-400 mt-1">
+            Voltage: <span className="font-mono text-cyan-400 font-bold">{currentVoltage !== null ? `${typeof currentVoltage === 'number' ? currentVoltage.toFixed(1) : currentVoltage}V` : 'N/A'}</span>
           </p>
         </div>
 
@@ -183,49 +219,101 @@ export default function ProcessHardwarePanel({ statusData, restartProcess, backe
         </div>
       </div>
 
-      {/* GPS Telemetry Card */}
-      <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-base font-bold text-slate-100 flex items-center gap-2">
-            <MapPin className="w-5 h-5 text-cyan-400" />
-            Live Hiwonder GPS Satellite Telemetry (/hiwonder/gps/fix)
-          </h2>
-          <span
-            className={`px-2.5 py-1 rounded-full text-xs font-bold ${
-              hasGps && !gpsStale
-                ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
-                : 'bg-rose-500/10 text-rose-400 border border-rose-500/30'
-            }`}
-          >
-            {hasGps && !gpsStale ? 'GPS Stream Active' : 'No Data / Stale'}
-          </span>
+      {/* Telemetry Cards: Motor Driver Battery & GPS */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Motor Driver Battery Telemetry Box */}
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-base font-bold text-slate-100 flex items-center gap-2">
+              <Zap className="w-5 h-5 text-emerald-400" />
+              Motor Driver Battery Telemetry (/battery_state)
+            </h2>
+            <span
+              className={`px-2.5 py-1 rounded-full text-xs font-bold ${
+                currentVoltage !== null
+                  ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
+                  : 'bg-rose-500/10 text-rose-400 border border-rose-500/30'
+              }`}
+            >
+              {currentVoltage !== null ? 'Telemetry Active' : 'Offline / Standby'}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 bg-slate-950 p-4 rounded-xl border border-slate-800 font-mono text-xs">
+            <div>
+              <span className="text-slate-500 text-[11px] block">Battery Voltage</span>
+              <span className="text-emerald-400 font-bold text-sm mt-0.5 block">
+                {currentVoltage !== null ? `${typeof currentVoltage === 'number' ? currentVoltage.toFixed(1) : currentVoltage} V` : '0.0 V'}
+              </span>
+            </div>
+
+            <div>
+              <span className="text-slate-500 text-[11px] block">Power Health</span>
+              <span className="text-slate-200 font-bold text-sm mt-0.5 block truncate">
+                {batStatusText}
+              </span>
+            </div>
+
+            <div>
+              <span className="text-slate-500 text-[11px] block">Driver Protocol</span>
+              <span className="text-cyan-400 font-bold text-sm mt-0.5 block">
+                DEScribe USB
+              </span>
+            </div>
+
+            <div>
+              <span className="text-slate-500 text-[11px] block">Controller Port</span>
+              <span className="text-slate-200 font-bold text-sm mt-0.5 block">
+                {hardware.sabertooth?.path ? hardware.sabertooth.path.split('/').pop() : 'ttyACM0'}
+              </span>
+            </div>
+          </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-slate-950 p-4 rounded-xl border border-slate-800 font-mono text-xs">
-          <div>
-            <span className="text-slate-500 text-[11px] block">Fix Type</span>
-            <span className="text-slate-200 font-bold text-sm mt-0.5 block">{gpsStatusText}</span>
-          </div>
-
-          <div>
-            <span className="text-slate-500 text-[11px] block">Latitude</span>
-            <span className="text-cyan-400 font-bold text-sm mt-0.5 block">
-              {hasGps ? gpsData.latitude?.toFixed(7) : '0.0000000'}
+        {/* GPS Telemetry Card */}
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-base font-bold text-slate-100 flex items-center gap-2">
+              <MapPin className="w-5 h-5 text-cyan-400" />
+              Live Hiwonder GPS Satellite Telemetry (/hiwonder/gps/fix)
+            </h2>
+            <span
+              className={`px-2.5 py-1 rounded-full text-xs font-bold ${
+                hasGps && !gpsStale
+                  ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
+                  : 'bg-rose-500/10 text-rose-400 border border-rose-500/30'
+              }`}
+            >
+              {hasGps && !gpsStale ? 'GPS Stream Active' : 'No Data / Stale'}
             </span>
           </div>
 
-          <div>
-            <span className="text-slate-500 text-[11px] block">Longitude</span>
-            <span className="text-cyan-400 font-bold text-sm mt-0.5 block">
-              {hasGps ? gpsData.longitude?.toFixed(7) : '0.0000000'}
-            </span>
-          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 bg-slate-950 p-4 rounded-xl border border-slate-800 font-mono text-xs">
+            <div>
+              <span className="text-slate-500 text-[11px] block">Fix Type</span>
+              <span className="text-slate-200 font-bold text-sm mt-0.5 block">{gpsStatusText}</span>
+            </div>
 
-          <div>
-            <span className="text-slate-500 text-[11px] block">Altitude</span>
-            <span className="text-slate-200 font-bold text-sm mt-0.5 block">
-              {hasGps ? `${gpsData.altitude?.toFixed(2)} m` : '0.00 m'}
-            </span>
+            <div>
+              <span className="text-slate-500 text-[11px] block">Latitude</span>
+              <span className="text-cyan-400 font-bold text-sm mt-0.5 block">
+                {hasGps ? gpsData.latitude?.toFixed(7) : '0.0000000'}
+              </span>
+            </div>
+
+            <div>
+              <span className="text-slate-500 text-[11px] block">Longitude</span>
+              <span className="text-cyan-400 font-bold text-sm mt-0.5 block">
+                {hasGps ? gpsData.longitude?.toFixed(7) : '0.0000000'}
+              </span>
+            </div>
+
+            <div>
+              <span className="text-slate-500 text-[11px] block">Altitude</span>
+              <span className="text-slate-200 font-bold text-sm mt-0.5 block">
+                {hasGps ? `${gpsData.altitude?.toFixed(2)} m` : '0.00 m'}
+              </span>
+            </div>
           </div>
         </div>
       </div>

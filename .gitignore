@@ -12,6 +12,7 @@ __pycache__/
 .DS_Store/
 
 'Output Data/'
+.ros_log/
 branch_structure.json
 temp_auto_push.bat
 temp_interactive_push.bat

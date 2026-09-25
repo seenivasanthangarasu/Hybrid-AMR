@@ -1,0 +1,10 @@
+{
+  "ch1_min_us": 1490.7,
+  "ch1_neutral_us": 1509.7,
+  "ch1_max_us": 1558.9,
+  "ch1_deadband_us": 117.3,
+  "ch2_min_us": 1406.6,
+  "ch2_neutral_us": 1494.7,
+  "ch2_max_us": 1547.8,
+  "ch2_deadband_us": 226.8
+}

@@ -125,7 +125,7 @@ class TestApiStatus:
         # Patch os.path.exists so all esp paths return False
         real_exists = os.path.exists
         def fake_exists(p):
-            if p in ("/dev/esp", "/dev/esp32", "/dev/amr_encoder", "/dev/ttyUSB2"):
+            if p in ("/dev/ttyACM1", "/dev/esp", "/dev/esp32", "/dev/amr_encoder", "/dev/ttyUSB2"):
                 return False
             return real_exists(p)
         monkeypatch.setattr("server.os.path.exists", fake_exists)
@@ -247,6 +247,10 @@ class TestApiProcessRestart:
 class TestApiStackAndCamera:
 
     def test_start_stack(self, client, monkeypatch):
+        import server
+        server.GLOBAL_STACK_PROC = None
+        server.GLOBAL_CAMERA_PROC = None
+
         class FakeSubprocess:
             pid = 1234
             def poll(self):
@@ -260,6 +264,9 @@ class TestApiStackAndCamera:
         assert "launched successfully" in body["message"]
 
     def test_stop_stack(self, client, monkeypatch):
+        import server
+        server.GLOBAL_STACK_PROC = None
+        server.GLOBAL_CAMERA_PROC = None
         import psutil
         monkeypatch.setattr(psutil, "process_iter", lambda fields: iter([]))
         rv = client.post("/api/stack/stop")
@@ -275,15 +282,34 @@ class TestApiStackAndCamera:
                 return None
 
         monkeypatch.setattr("server.subprocess.Popen", lambda *a, **kw: FakeSubprocess())
-        rv_on = client.post("/api/camera/toggle", json={"enable": True})
+        rv_on = client.post("/api/camera/toggle", json={"enable": True, "mode": "diagnostic"})
         assert rv_on.status_code == 200
-        assert rv_on.get_json()["status"] == "ok"
+        body = rv_on.get_json()
+        assert body["status"] == "ok"
+        assert body["mode"] == "diagnostic"
+        assert body["active_topic"] == "/camera/color/image_raw"
 
         import psutil
         monkeypatch.setattr(psutil, "process_iter", lambda fields: iter([]))
         rv_off = client.post("/api/camera/toggle", json={"enable": False})
         assert rv_off.status_code == 200
         assert rv_off.get_json()["status"] == "ok"
+
+    def test_camera_status_and_rescan(self, client, monkeypatch):
+        import psutil
+        monkeypatch.setattr(psutil, "process_iter", lambda fields: iter([]))
+        rv_status = client.get("/api/camera/status")
+        assert rv_status.status_code == 200
+        st = rv_status.get_json()
+        assert st["status"] == "ok"
+        assert "hardware" in st
+        assert "running" in st
+
+        rv_rescan = client.post("/api/camera/rescan")
+        assert rv_rescan.status_code == 200
+        res = rv_rescan.get_json()
+        assert res["status"] == "ok"
+        assert "hardware" in res
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -367,3 +393,33 @@ class TestApiLogs:
         assert "source" in data
         assert "lines" in data
         assert isinstance(data["lines"], list)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# /api/battery
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestApiBattery:
+
+    def test_battery_endpoint_returns_200(self, client):
+        rv = client.get("/api/battery")
+        assert rv.status_code == 200
+        data = rv.get_json()
+        assert data["status"] == "ok"
+        assert "voltage" in data
+        assert "unit" in data
+        assert "present" in data
+        assert "timestamp" in data
+
+    def test_battery_in_api_status(self, client):
+        data = client.get("/api/status").get_json()
+        assert "battery" in data
+        assert "voltage" in data["battery"]
+        assert "unit" in data["battery"]
+        assert "sabertooth" in data["hardware"]
+
+    def test_battery_in_api_system(self, client):
+        data = client.get("/api/system").get_json()
+        assert "battery" in data
+        assert "voltage" in data["battery"]
+        assert "unit" in data["battery"]
