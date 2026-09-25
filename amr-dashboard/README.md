@@ -79,12 +79,20 @@ Full walkthrough and front-end architecture:
 
 | Topic                                                           | Type                                   | Used by                                              |
 | --------------------------------------------------------------- | -------------------------------------- | ---------------------------------------------------- |
-| `/fix`                                                          | `sensor_msgs/NavSatFix`                | GPS map, status panel                                |
+| `/hiwonder/gps/fix`                                             | `sensor_msgs/NavSatFix`                | GPS map, status panel, GNSS Quality panel            |
+| `/hiwonder/gps/nmea`                                            | `std_msgs/String`                      | Raw NMEA stream (MCAP recording / telemetry)         |
+| `/hiwonder/imu/data_raw`                                        | `sensor_msgs/Imu`                      | IMU panel (accel / gyro / orientation)               |
+| `/hiwonder/imu/mag`                                             | `sensor_msgs/MagneticField`            | IMU panel (magnetometer)                             |
 | `/odom`                                                         | `nav_msgs/Odometry`                    | Speed, heading, distance, GPS heading arrow          |
 | `/scan`                                                         | `sensor_msgs/LaserScan`                | LiDAR view, safety zone                              |
 | `/map`                                                          | `nav_msgs/OccupancyGrid`               | SLAM indoor main view                                |
+| `/cmd_vel`                                                      | `geometry_msgs/Twist`                  | Control panel / velocity commands                    |
+| `/radio/cmd_vel`                                                | `geometry_msgs/Twist`                  | Radio velocity command                               |
+| `/radio/channels`                                               | `sensor_msgs/Joy`                      | Radio RC channels (DS-600)                           |
+| `/radio/status`                                                 | `std_msgs/String`                      | Radio link status                                    |
 | `/tf`, `/tf_static`                                             | `tf2_msgs/TFMessage`                   | Robot pose (SLAM view + URDF widget)                 |
 | `/robot_description`                                            | `std_msgs/String` (URDF XML)           | URDF widget                                          |
+| `/joint_states`                                                 | `sensor_msgs/JointState`               | URDF widget                                          |
 | `/camera/camera/color/image_raw` (via `web_video_server` MJPEG) | `sensor_msgs/Image`                    | Camera preview                                       |
 | `/robot_mode`                                                   | `std_msgs/String` (`INDOOR`/`OUTDOOR`) | Main view selection; defaults to `OUTDOOR` if absent |
 

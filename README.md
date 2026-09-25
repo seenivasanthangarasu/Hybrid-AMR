@@ -63,18 +63,22 @@ Hybrid-AMR/
 
 | Topic | Message Type | Panel |
 |---|---|---|
-| `/hiwonder/gps/fix` | `sensor_msgs/NavSatFix` | Status, GPS Map |
+| `/hiwonder/gps/fix` | `sensor_msgs/NavSatFix` | Status, GPS Map, GNSS Quality |
+| `/hiwonder/gps/nmea` | `std_msgs/String` | Positioning (MCAP / Telemetry) |
 | `/hiwonder/imu/data_raw` | `sensor_msgs/Imu` | IMU Panel |
 | `/hiwonder/imu/mag` | `sensor_msgs/MagneticField` | IMU Panel |
 | `/odom` | `nav_msgs/Odometry` | Status |
 | `/scan` | `sensor_msgs/LaserScan` | LiDAR Preview |
 | `/map` | `nav_msgs/OccupancyGrid` | SLAM View |
 | `/cmd_vel` | `geometry_msgs/Twist` | Control Panel |
+| `/radio/cmd_vel` | `geometry_msgs/Twist` | Commands / Radio Teleop |
+| `/radio/channels` | `sensor_msgs/Joy` | Radio RC Channels (DS-600) |
+| `/radio/status` | `std_msgs/String` | Radio Link Status |
 | `/tf` | `tf2_msgs/TFMessage` | URDF Widget |
 | `/tf_static` | `tf2_msgs/TFMessage` | URDF Widget |
 | `/robot_description` | `std_msgs/String` | URDF Widget |
 | `/joint_states` | `sensor_msgs/JointState` | URDF Widget |
-| `/camera/camera/color/image_raw` | `sensor_msgs/Image` | Camera (MJPEG) |
+| `/camera/camera/color/image_raw` | `sensor_msgs/Image` | Camera (MJPEG via `web_video_server`) |
 
 ---
 
@@ -105,7 +109,7 @@ All panels show **LIVE / STALE / NO DATA** freshness badges — no synthetic zer
 
 | Tool | Minimum version | Check |
 |---|---|---|
-| Node.js | **18** | `node --version` |
+| Node.js | **18** (20+ recommended) | `node --version` |
 | npm | **9** (bundled with Node) | `npm --version` |
 | Git | any | `git --version` |
 
@@ -137,8 +141,13 @@ npm --version
 ### Step 2 — Clone the repository
 
 ```powershell
+# Option A: seenivasanthangarasu repo
 git clone https://github.com/seenivasanthangarasu/Hybrid-AMR.git
 cd "Hybrid-AMR"
+
+# Option B: Rishi-ZAiFi repo
+# git clone https://github.com/Rishi-ZAiFi/Xtrembly.git
+# cd "Xtrembly"
 ```
 
 ### Step 3 — Install dependencies
@@ -204,8 +213,13 @@ node --version
 ### Step 2 — Clone the repository
 
 ```bash
+# Option A: seenivasanthangarasu repo
 git clone https://github.com/seenivasanthangarasu/Hybrid-AMR.git
 cd Hybrid-AMR
+
+# Option B: Rishi-ZAiFi repo
+# git clone https://github.com/Rishi-ZAiFi/Xtrembly.git
+# cd Xtrembly
 ```
 
 ### Step 3 — Install dependencies
