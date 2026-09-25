@@ -26,6 +26,7 @@ export default function CameraView({ compact = false, onStreamState }) {
   const [quality, setQuality] = useState(75);
   const [framerate, setFramerate] = useState(30);
   const [showSettings, setShowSettings] = useState(false);
+  const [useSnapshotMode, setUseSnapshotMode] = useState(false);
   const [toggleMsg, setToggleMsg] = useState(null);
 
   const { backendConnected, cameraHardware, toggleCamera, loading: backendLoading } = useBackendApi();
@@ -57,13 +58,17 @@ export default function CameraView({ compact = false, onStreamState }) {
     return () => clearInterval(id);
   }, [errored]);
 
-  const src = reloadKey === 0 ? streamUrl : `${streamUrl}&_r=${reloadKey}`;
+  const activeSrc = useSnapshotMode
+    ? `${snapshotUrl}&_snap=${reloadKey}`
+    : reloadKey === 0
+      ? streamUrl
+      : `${streamUrl}&_r=${reloadKey}`;
 
-  const handleToggleV4l2 = async (enable = true) => {
-    setToggleMsg('Sending V4L2 camera toggle...');
-    const res = await toggleCamera(enable, 'v4l2');
+  const handleToggleMode = async (mode = 'v4l2') => {
+    setToggleMsg(`Switching camera to ${mode}...`);
+    const res = await toggleCamera(true, mode);
     if (res.status === 'ok' || res.success) {
-      setToggleMsg(enable ? 'V4L2 Camera Enabled' : 'Camera Stopped');
+      setToggleMsg(`Camera active (${mode})`);
       setTimeout(() => {
         setReloadKey((k) => k + 1);
         setToggleMsg(null);
@@ -79,7 +84,7 @@ export default function CameraView({ compact = false, onStreamState }) {
       <div className="relative h-full w-full overflow-hidden bg-deck-900">
         <img
           key={reloadKey}
-          src={src}
+          src={activeSrc}
           alt="Logitech C270 Preview"
           className={`h-full w-full object-cover ${errored ? 'invisible' : ''}`}
           onError={() => setErrored(true)}
@@ -104,9 +109,9 @@ export default function CameraView({ compact = false, onStreamState }) {
   return (
     <div className="relative flex h-full w-full flex-col overflow-hidden bg-deck-950 font-mono">
       {/* Top Header Bar for Main View */}
-      <div className="z-10 flex shrink-0 items-center justify-between border-b border-deck-line bg-deck-900/95 px-3 py-1.5 backdrop-blur-sm">
+      <div className="z-10 flex shrink-0 items-center justify-between border-b border-deck-line bg-deck-900 px-3 py-1.5 shadow-sm">
         <div className="flex items-center gap-2">
-          <span className={`h-2 w-2 rounded-full ${!errored ? 'bg-signal-green shadow-[0_0_8px_#37e29a]' : 'bg-signal-amber animate-pulse'}`} />
+          <span className={`h-2.5 w-2.5 rounded-full ${!errored ? 'bg-signal-green shadow-[0_0_8px_#37e29a]' : 'bg-signal-amber animate-pulse'}`} />
           <span className="font-display text-[11px] font-bold tracking-wider text-ink-high">
             {CAMERA_NAME}
           </span>
@@ -122,8 +127,17 @@ export default function CameraView({ compact = false, onStreamState }) {
 
         <div className="flex items-center gap-2 text-[10px]">
           {toggleMsg && (
-            <span className="text-signal-cyan animate-pulse">{toggleMsg}</span>
+            <span className="text-signal-cyan animate-pulse font-bold">{toggleMsg}</span>
           )}
+
+          <button
+            type="button"
+            onClick={() => setUseSnapshotMode((v) => !v)}
+            className={`rounded border px-2 py-0.5 ${useSnapshotMode ? 'border-signal-cyan bg-signal-cyan/20 text-signal-cyan font-bold' : 'border-deck-line bg-deck-800 text-ink-mid hover:text-ink-high'}`}
+          >
+            {useSnapshotMode ? 'Snapshot Mode' : 'MJPEG Stream'}
+          </button>
+
           <button
             type="button"
             onClick={() => setShowSettings((v) => !v)}
@@ -131,6 +145,7 @@ export default function CameraView({ compact = false, onStreamState }) {
           >
             {quality}% · {framerate} FPS ⚙
           </button>
+
           <a
             href={viewerUrl}
             target="_blank"
@@ -145,7 +160,7 @@ export default function CameraView({ compact = false, onStreamState }) {
 
       {/* Settings Overlay Drawer */}
       {showSettings && (
-        <div className="z-20 flex items-center justify-between border-b border-deck-line bg-deck-900/95 px-3 py-2 text-xs">
+        <div className="z-20 flex flex-wrap items-center justify-between border-b border-deck-line bg-deck-900 px-3 py-2 text-xs">
           <div className="flex items-center gap-4">
             <label className="flex items-center gap-1.5">
               <span className="text-[10px] text-ink-low">QUALITY</span>
@@ -180,10 +195,19 @@ export default function CameraView({ compact = false, onStreamState }) {
               <button
                 type="button"
                 disabled={backendLoading}
-                onClick={() => handleToggleV4l2(true)}
+                onClick={() => handleToggleMode('v4l2')}
                 className="rounded bg-signal-cyan/15 px-2 py-1 text-[10px] font-semibold text-signal-cyan hover:bg-signal-cyan/25 disabled:opacity-50"
               >
-                Restart V4L2 Stream
+                Restart V4L2
+              </button>
+              <button
+                type="button"
+                disabled={backendLoading}
+                onClick={() => handleToggleMode('diagnostic')}
+                title="Generates test color bars to verify display pipeline"
+                className="rounded border border-signal-amber/40 bg-signal-amber/15 px-2 py-1 text-[10px] font-semibold text-signal-amber hover:bg-signal-amber/25 disabled:opacity-50"
+              >
+                Test Color Bars
               </button>
             </div>
           )}
@@ -193,8 +217,8 @@ export default function CameraView({ compact = false, onStreamState }) {
       {/* Main Video Stream Container */}
       <div className="relative flex flex-1 items-center justify-center overflow-hidden bg-black">
         <img
-          key={reloadKey}
-          src={src}
+          key={`${reloadKey}-${useSnapshotMode}`}
+          src={activeSrc}
           alt="Logitech C270 Live Camera Stream"
           className={`h-full w-full object-contain ${errored ? 'invisible' : ''}`}
           onError={() => setErrored(true)}
@@ -208,14 +232,14 @@ export default function CameraView({ compact = false, onStreamState }) {
               ● LIVE
             </span>
             <span className="rounded bg-deck-950/80 px-2 py-0.5 text-[9px] text-ink-mid backdrop-blur-sm border border-deck-line">
-              720p · {framerate} FPS · {quality}% Q
+              {useSnapshotMode ? 'SNAPSHOT' : `720p · ${framerate} FPS · ${quality}% Q`}
             </span>
           </div>
         )}
 
         {/* Fallback Screen when Stream is Down */}
         {errored && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-deck-900/90 p-4 text-center">
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-deck-900/95 p-4 text-center">
             <DataFallback
               topic={DEFAULT_CAMERA_TOPIC}
               label="NO LOGITECH C270 CAMERA STREAM"
@@ -256,7 +280,7 @@ export default function CameraView({ compact = false, onStreamState }) {
                 <button
                   type="button"
                   disabled={backendLoading}
-                  onClick={() => handleToggleV4l2(true)}
+                  onClick={() => handleToggleMode('v4l2')}
                   className="rounded border border-signal-green/40 bg-signal-green/15 px-3 py-1 text-[11px] text-signal-green hover:bg-signal-green/25 disabled:opacity-50"
                 >
                   Start V4L2 Camera Node
