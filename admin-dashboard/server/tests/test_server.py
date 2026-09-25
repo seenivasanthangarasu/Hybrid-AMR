@@ -125,7 +125,7 @@ class TestApiStatus:
         # Patch os.path.exists so all esp paths return False
         real_exists = os.path.exists
         def fake_exists(p):
-            if p in ("/dev/esp", "/dev/esp32", "/dev/amr_encoder", "/dev/ttyUSB2"):
+            if p in ("/dev/ttyACM1", "/dev/esp", "/dev/esp32", "/dev/amr_encoder", "/dev/ttyUSB2"):
                 return False
             return real_exists(p)
         monkeypatch.setattr("server.os.path.exists", fake_exists)
@@ -393,3 +393,33 @@ class TestApiLogs:
         assert "source" in data
         assert "lines" in data
         assert isinstance(data["lines"], list)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# /api/battery
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestApiBattery:
+
+    def test_battery_endpoint_returns_200(self, client):
+        rv = client.get("/api/battery")
+        assert rv.status_code == 200
+        data = rv.get_json()
+        assert data["status"] == "ok"
+        assert "voltage" in data
+        assert "unit" in data
+        assert "present" in data
+        assert "timestamp" in data
+
+    def test_battery_in_api_status(self, client):
+        data = client.get("/api/status").get_json()
+        assert "battery" in data
+        assert "voltage" in data["battery"]
+        assert "unit" in data["battery"]
+        assert "sabertooth" in data["hardware"]
+
+    def test_battery_in_api_system(self, client):
+        data = client.get("/api/system").get_json()
+        assert "battery" in data
+        assert "voltage" in data["battery"]
+        assert "unit" in data["battery"]

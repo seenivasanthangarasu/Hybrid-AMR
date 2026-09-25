@@ -1,17 +1,45 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Power, Camera, Cpu, Navigation, Compass, Radio, CheckCircle2, XCircle, AlertTriangle, RefreshCw, Layers, Terminal, Activity, Clock } from 'lucide-react';
+import { Power, Camera, Cpu, Navigation, Compass, Radio, CheckCircle2, XCircle, AlertTriangle, RefreshCw, Layers, Terminal, Activity, Clock, Zap, Sliders, Shield } from 'lucide-react';
 
-export default function RobotControlPanel({ statusData, startStack, stopStack, toggleCamera, fetchStackLogs, backendConnected }) {
+export default function RobotControlPanel({
+  statusData,
+  batteryVoltage,
+  startStack,
+  stopStack,
+  toggleCamera,
+  toggleTeleop,
+  toggleMotor,
+  toggleRadio,
+  fetchStackLogs,
+  backendConnected,
+}) {
   const [cameraAlone, setCameraAlone] = useState(false);
-  const [actionInProgress, setActionInProgress] = useState(null); // 'starting' | 'stopping' | 'cam_on' | 'cam_off' | null
+  const [motorsIncluded, setMotorsIncluded] = useState(false);
+  const [radioIncluded, setRadioIncluded] = useState(false);
+  const [actionInProgress, setActionInProgress] = useState(null); // 'starting' | 'stopping' | 'cam_on' | 'cam_off' | 'teleop_on' | 'teleop_off' | 'motor_on' | 'motor_off' | 'radio_on' | 'radio_off' | null
   const [feedback, setFeedback] = useState(null);
   const [launchProgressStage, setLaunchProgressStage] = useState('');
   const [logs, setLogs] = useState([]);
   const [autoScroll, setAutoScroll] = useState(true);
   const logTerminalRef = useRef(null);
 
+  const currentVoltage = batteryVoltage ?? statusData?.battery?.voltage ?? statusData?.hardware?.sabertooth?.battery_voltage ?? null;
+
+  const batColorClass = currentVoltage !== null
+    ? currentVoltage >= 14.0
+      ? 'text-emerald-400'
+      : currentVoltage >= 12.0
+      ? 'text-cyan-400'
+      : currentVoltage >= 11.0
+      ? 'text-amber-400 font-semibold'
+      : 'text-rose-400 font-bold'
+    : 'text-slate-400';
+
   const managedProcs = statusData?.managed_processes || {};
   const isCameraRunning = managedProcs.camera_proc?.running || false;
+  const isSabertoothRunning = managedProcs.sabertooth_proc?.running || false;
+  const isRadioRunning = managedProcs.radio_proc?.running || false;
+  const isTeleopRunning = isSabertoothRunning && isRadioRunning;
 
   // Complete list of ROS 2 modules launched in the stack
   const autoStackNodes = [
@@ -21,7 +49,9 @@ export default function RobotControlPanel({ statusData, startStack, stopStack, t
     { key: 'imu_proc', name: 'Hiwonder 9-DOF IMU Node', topic: '/hiwonder/imu/data_raw', desc: 'Acceleration, gyro, angle, & magnetometer' },
     { key: 'lidar_proc', name: 'YDLIDAR Driver Node', topic: '/scan', desc: '2D 360° laser range scan' },
     { key: 'slam_proc', name: 'SLAM Toolbox (Localization)', topic: '/map', desc: 'Lifelong SLAM & pose localization' },
-    { key: 'gps_proc', name: 'Hiwonder GPS (GNSS) Node', topic: '/hiwonder/gps/fix', desc: 'Global GPS coordinates & /hiwonder/gps/fix telemetry' },
+    { key: 'gps_proc', name: 'Hiwonder GPS (GNSS) Node', topic: '/hiwonder/gps/fix', desc: 'Global GPS coordinates & telemetry' },
+    { key: 'sabertooth_proc', name: 'Sabertooth 2x32 Motor Driver', topic: '/battery_state', desc: 'DEScribe USB dual motor driver & battery voltage' },
+    { key: 'radio_proc', name: 'HOT RC DS-600 Radio Receiver', topic: '/radio/channels', desc: 'GPIO hardware PWM pulse receiver & RC teleop' },
   ];
 
   const runningCount = autoStackNodes.filter(n => managedProcs[n.key]?.running).length;
@@ -60,17 +90,21 @@ export default function RobotControlPanel({ statusData, startStack, stopStack, t
     }, 1000);
 
     const stageTimer2 = setTimeout(() => {
-      setLaunchProgressStage('Starting Hiwonder GPS, Odom, Hiwonder IMU, YDLIDAR, URDF, and SLAM nodes...');
+      setLaunchProgressStage('Starting Motors, Radio, GPS, Odom, IMU, Lidar, URDF, and SLAM nodes...');
     }, 2200);
 
     try {
-      const res = await startStack(cameraAlone);
+      const res = await startStack({
+        includeCamera: cameraAlone,
+        includeMotors: motorsIncluded,
+        includeRadio: radioIncluded,
+      });
       if (res.status === 'ok') {
         setFeedback({
           type: 'success',
           title: 'Stack Launch Succeeded',
           text: res.message || 'Robot stack launched successfully. Modules are initializing.',
-          details: `Process PID: ${res.pid || 'Active'} · Camera: ${cameraAlone ? 'Enabled' : 'Disabled'}`
+          details: `Process PID: ${res.pid || 'Active'} · Camera: ${cameraAlone ? 'ON' : 'OFF'} · Motors: ${motorsIncluded ? 'ON' : 'OFF'} · Radio: ${radioIncluded ? 'ON' : 'OFF'}`
         });
       } else {
         setFeedback({
@@ -161,6 +195,108 @@ export default function RobotControlPanel({ statusData, startStack, stopStack, t
     }
   };
 
+  const handleToggleTeleop = async (targetState) => {
+    setActionInProgress(targetState ? 'teleop_on' : 'teleop_off');
+    setFeedback(null);
+    try {
+      if (toggleTeleop) {
+        const res = await toggleTeleop(targetState);
+        if (res.status === 'ok') {
+          setFeedback({
+            type: 'success',
+            title: targetState ? 'Manual Radio Drive Activated' : 'Manual Radio Drive Stopped',
+            text: res.message || `Manual radio teleop turned ${targetState ? 'ON' : 'OFF'}.`,
+            details: targetState ? 'HOT RC DS-600 Radio Receiver + Sabertooth 2x32 Motor Driver running.' : 'Teleop processes terminated.'
+          });
+        } else {
+          setFeedback({
+            type: 'error',
+            title: 'Teleop Command Failed',
+            text: res.message || `Failed to turn ${targetState ? 'ON' : 'OFF'} manual radio drive.`,
+            details: 'Check GPIO and /dev/sabertooth device access.'
+          });
+        }
+      }
+    } catch (err) {
+      setFeedback({
+        type: 'error',
+        title: 'Teleop Request Failed',
+        text: err.message || 'Failed to send teleop command.',
+        details: 'Verify backend connection.'
+      });
+    } finally {
+      setActionInProgress(null);
+    }
+  };
+
+  const handleToggleMotor = async (targetState) => {
+    setActionInProgress(targetState ? 'motor_on' : 'motor_off');
+    setFeedback(null);
+    try {
+      if (toggleMotor) {
+        const res = await toggleMotor(targetState);
+        if (res.status === 'ok') {
+          setFeedback({
+            type: 'success',
+            title: targetState ? 'Motor Driver Activated' : 'Motor Driver Stopped',
+            text: res.message || `Sabertooth motor driver turned ${targetState ? 'ON' : 'OFF'}.`,
+            details: targetState ? 'Driver node: sabertooth_node · Port: /dev/sabertooth' : 'Motor driver terminated.'
+          });
+        } else {
+          setFeedback({
+            type: 'error',
+            title: 'Motor Command Failed',
+            text: res.message || `Failed to toggle motor driver.`,
+            details: 'Check /dev/sabertooth connection.'
+          });
+        }
+      }
+    } catch (err) {
+      setFeedback({
+        type: 'error',
+        title: 'Motor Request Failed',
+        text: err.message,
+        details: 'Verify backend connection.'
+      });
+    } finally {
+      setActionInProgress(null);
+    }
+  };
+
+  const handleToggleRadio = async (targetState) => {
+    setActionInProgress(targetState ? 'radio_on' : 'radio_off');
+    setFeedback(null);
+    try {
+      if (toggleRadio) {
+        const res = await toggleRadio(targetState);
+        if (res.status === 'ok') {
+          setFeedback({
+            type: 'success',
+            title: targetState ? 'Radio Receiver Activated' : 'Radio Receiver Stopped',
+            text: res.message || `Radio receiver turned ${targetState ? 'ON' : 'OFF'}.`,
+            details: targetState ? 'Receiver node: radio_receiver_node · Pins: GPIO 8 & 24' : 'Radio receiver terminated.'
+          });
+        } else {
+          setFeedback({
+            type: 'error',
+            title: 'Radio Command Failed',
+            text: res.message || `Failed to toggle radio receiver.`,
+            details: 'Check GPIO permissions on Qualcomm TLMM.'
+          });
+        }
+      }
+    } catch (err) {
+      setFeedback({
+        type: 'error',
+        title: 'Radio Request Failed',
+        text: err.message,
+        details: 'Verify backend connection.'
+      });
+    } finally {
+      setActionInProgress(null);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header Banner with Real-Time Stack Summary */}
@@ -176,11 +312,17 @@ export default function RobotControlPanel({ statusData, startStack, stopStack, t
             </span>
           </div>
           <p className="text-xs text-slate-400 mt-1">
-            Triggers <code className="font-mono text-cyan-400">ros2 launch rock_bringup navigation.launch.py</code> to launch Odom, IMU, YDLidar, URDF, and SLAM with selective camera streaming.
+            Triggers <code className="font-mono text-cyan-400">ros2 launch rock_bringup navigation.launch.py</code> to launch Motors, Radio Teleop, Odom, IMU, YDLidar, URDF, and SLAM with selective camera streaming.
           </p>
         </div>
 
         <div className="flex items-center gap-3">
+          {currentVoltage !== null && (
+            <div className="px-3 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-xs font-mono flex items-center gap-2 shadow-sm">
+              <Zap className={`w-4 h-4 ${batColorClass}`} />
+              <span className="text-slate-400">Battery: <strong className={batColorClass}>{typeof currentVoltage === 'number' ? `${currentVoltage.toFixed(1)}V` : `${currentVoltage}V`}</strong></span>
+            </div>
+          )}
           {anyStackRunning ? (
             <span className="px-3 py-1.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 rounded-lg text-xs font-bold flex items-center gap-2 shadow-sm">
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
@@ -241,38 +383,38 @@ export default function RobotControlPanel({ statusData, startStack, stopStack, t
       )}
 
       {/* Main Controls Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Left Card: Main Navigation Stack Launcher */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Left Card: Main Navigation & Core Sensor Stack */}
         <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4 flex flex-col justify-between shadow-lg">
           <div>
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-bold text-slate-200 flex items-center gap-2">
                 <Navigation className="w-4 h-4 text-cyan-400" />
-                Full Navigation & Robot Stack
+                Core Robot & Navigation Stack
               </h3>
               <span className="text-[10px] font-mono bg-cyan-500/10 text-cyan-400 px-2 py-0.5 rounded border border-cyan-500/30">
-                Automatic Core Stack
+                Core Stack
               </span>
             </div>
             <p className="text-xs text-slate-400 leading-relaxed mb-4">
-              Launches the entire robot subsystem: <strong>Odom</strong>, <strong>GY-80 IMU</strong>, <strong>YDLIDAR</strong>, <strong>URDF Publisher</strong>, and <strong>SLAM Localization</strong>.
+              Launches core autonomous systems: <strong>ESP32 Odometry</strong>, <strong>Hiwonder 9-DOF IMU</strong>, <strong>YDLIDAR</strong>, <strong>URDF 3D Tree</strong>, and <strong>SLAM Toolbox</strong>.
             </p>
 
-            {/* Toggle checkbox for Camera included in Launch */}
-            <div className="bg-slate-950 border border-slate-800 rounded-lg p-3 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Camera className="w-4 h-4 text-cyan-400" />
-                <label htmlFor="cameraAloneCheck" className="text-xs font-semibold text-slate-300 cursor-pointer">
-                  Include Camera Module in Startup
-                </label>
+            <div className="bg-slate-950 border border-slate-800 rounded-lg p-3 space-y-1.5 font-mono text-xs">
+              <div className="flex justify-between text-slate-400">
+                <span>Core Nodes:</span>
+                <span className="text-slate-200">Odom, IMU, Lidar, SLAM, TF</span>
               </div>
-              <input
-                id="cameraAloneCheck"
-                type="checkbox"
-                checked={cameraAlone}
-                onChange={(e) => setCameraAlone(e.target.checked)}
-                className="w-4 h-4 accent-cyan-500 rounded cursor-pointer"
-              />
+              <div className="flex justify-between text-slate-400">
+                <span>Launch File:</span>
+                <span className="text-cyan-400">navigation.launch.py</span>
+              </div>
+              <div className="flex justify-between text-slate-400">
+                <span>Stack Status:</span>
+                <span className={anyStackRunning ? 'text-emerald-400 font-bold' : 'text-slate-500'}>
+                  {anyStackRunning ? `Active (${runningCount} Nodes)` : 'Offline / Standby'}
+                </span>
+              </div>
             </div>
           </div>
 
@@ -285,12 +427,12 @@ export default function RobotControlPanel({ statusData, startStack, stopStack, t
               {actionInProgress === 'starting' ? (
                 <>
                   <RefreshCw className="w-4 h-4 animate-spin" />
-                  <span>Launching Stack...</span>
+                  <span>Launching Core Stack...</span>
                 </>
               ) : (
                 <>
                   <Power className="w-4 h-4" />
-                  <span>Launch Robot Stack</span>
+                  <span>Launch Core Stack</span>
                 </>
               )}
             </button>
@@ -310,20 +452,103 @@ export default function RobotControlPanel({ statusData, startStack, stopStack, t
           </div>
         </div>
 
+        {/* Middle Card: Single Dedicated Radio Teleop & Motor Drive Panel */}
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4 flex flex-col justify-between shadow-lg">
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-bold text-slate-200 flex items-center gap-2">
+                <Radio className="w-4 h-4 text-purple-400" />
+                Radio Teleop & Motor Drive
+              </h3>
+              <span className={`text-[10px] font-mono px-2 py-0.5 rounded border ${isTeleopRunning || isSabertoothRunning || isRadioRunning ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' : 'bg-slate-800 text-slate-400 border-slate-700'}`}>
+                {isTeleopRunning ? 'Teleop ACTIVE' : isSabertoothRunning || isRadioRunning ? 'Driver ACTIVE' : 'Teleop IDLE'}
+              </span>
+            </div>
+            <p className="text-xs text-slate-400 leading-relaxed mb-4">
+              Single-click control for <strong>HOT RC DS-600</strong> remote receiver and <strong>Sabertooth 2x32</strong> motor driver.
+            </p>
+
+            {/* Quick Status Pill Details */}
+            <div className="bg-slate-950 border border-slate-800 rounded-lg p-3 space-y-2 font-mono text-xs">
+              <div className="flex justify-between items-center text-slate-400">
+                <span className="flex items-center gap-1.5">
+                  <Radio className="w-3.5 h-3.5 text-purple-400" /> HOT RC DS-600:
+                </span>
+                <span className={isRadioRunning ? 'text-emerald-400 font-bold' : 'text-slate-500'}>
+                  {isRadioRunning ? 'Active (GPIO 8/24)' : 'Standby / Idle'}
+                </span>
+              </div>
+              <div className="flex justify-between items-center text-slate-400">
+                <span className="flex items-center gap-1.5">
+                  <Zap className="w-3.5 h-3.5 text-emerald-400" /> Sabertooth 2x32:
+                </span>
+                <span className={isSabertoothRunning ? 'text-emerald-400 font-bold' : 'text-slate-500'}>
+                  {isSabertoothRunning ? 'Running (/dev/sabertooth)' : 'Standby / Idle'}
+                </span>
+              </div>
+              <div className="flex justify-between items-center text-slate-400 border-t border-slate-800/80 pt-1.5">
+                <span>Drive Mode:</span>
+                <span className="text-cyan-400 font-semibold">RC PWM $\rightarrow$ Twist /cmd_vel</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Single Simple ON / OFF Toggle Button */}
+          <div className="pt-4 border-t border-slate-800">
+            {isTeleopRunning || isSabertoothRunning || isRadioRunning ? (
+              <button
+                onClick={() => handleToggleTeleop(false)}
+                disabled={actionInProgress !== null || !backendConnected}
+                className="w-full bg-rose-500 hover:bg-rose-400 disabled:opacity-50 text-slate-950 font-bold py-2.5 px-4 rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg transition cursor-pointer disabled:cursor-not-allowed"
+              >
+                {actionInProgress === 'teleop_off' ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <span>Stopping Radio Teleop...</span>
+                  </>
+                ) : (
+                  <>
+                    <Power className="w-4 h-4 text-slate-950" />
+                    <span>Turn OFF Radio Teleop Drive</span>
+                  </>
+                )}
+              </button>
+            ) : (
+              <button
+                onClick={() => handleToggleTeleop(true)}
+                disabled={actionInProgress !== null || !backendConnected}
+                className="w-full bg-purple-500 hover:bg-purple-400 disabled:opacity-50 text-slate-950 font-bold py-2.5 px-4 rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg transition cursor-pointer disabled:cursor-not-allowed"
+              >
+                {actionInProgress === 'teleop_on' ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin text-slate-950" />
+                    <span>Launching Radio Teleop...</span>
+                  </>
+                ) : (
+                  <>
+                    <Zap className="w-4 h-4 text-slate-950" />
+                    <span>Turn ON Radio Teleop Drive</span>
+                  </>
+                )}
+              </button>
+            )}
+          </div>
+        </div>
+
         {/* Right Card: Independent Camera Module Toggle */}
         <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4 flex flex-col justify-between shadow-lg">
           <div>
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-bold text-slate-200 flex items-center gap-2">
                 <Camera className="w-4 h-4 text-cyan-400" />
-                Camera Module Selective Control
+                Camera Module Control
               </h3>
               <span className={`text-[10px] font-mono px-2 py-0.5 rounded border ${isCameraRunning ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' : 'bg-slate-800 text-slate-400 border-slate-700'}`}>
                 {isCameraRunning ? 'Camera ON' : 'Camera OFF'}
               </span>
             </div>
             <p className="text-xs text-slate-400 leading-relaxed mb-4">
-              Turn the camera module ON or OFF independently at any time without restarting the core robot stack (odom, IMU, lidar).
+              Turn the RealSense camera module ON or OFF independently without affecting navigation or motor drive.
             </p>
 
             <div className="bg-slate-950 border border-slate-800 rounded-lg p-3 space-y-1.5 font-mono text-xs">

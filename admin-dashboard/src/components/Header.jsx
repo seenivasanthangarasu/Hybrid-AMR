@@ -1,7 +1,9 @@
 import React from 'react';
-import { Activity, Server, Cpu, HardDrive, Wifi, Radio, ShieldAlert } from 'lucide-react';
+import { Activity, Server, Cpu, HardDrive, Wifi, Radio, ShieldAlert, Zap, Battery } from 'lucide-react';
 
-export default function Header({ rosStatus, backendConnected, systemData, activeTab, setActiveTab }) {
+export default function Header({ rosStatus, backendConnected, systemData, batteryVoltage, activeTab, setActiveTab }) {
+  const currentVoltage = batteryVoltage ?? systemData?.battery?.voltage ?? null;
+
   const rosColor =
     rosStatus === 'connected'
       ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
@@ -20,6 +22,16 @@ export default function Header({ rosStatus, backendConnected, systemData, active
       : cpuTemp > 60
       ? 'text-amber-400 font-semibold'
       : 'text-emerald-400'
+    : 'text-slate-400';
+
+  const batColor = currentVoltage !== null
+    ? currentVoltage >= 14.0
+      ? 'text-emerald-400'
+      : currentVoltage >= 12.0
+      ? 'text-cyan-400'
+      : currentVoltage >= 11.0
+      ? 'text-amber-400 font-semibold'
+      : 'text-rose-400 font-bold'
     : 'text-slate-400';
 
   return (
@@ -122,6 +134,14 @@ export default function Header({ rosStatus, backendConnected, systemData, active
               API: {backendConnected ? 'Connected' : 'Offline'}
             </span>
           </div>
+
+          {/* Battery Voltage Badge */}
+          {currentVoltage !== null && (
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-slate-800 bg-slate-950 font-mono text-[11px]">
+              <Zap className={`w-3.5 h-3.5 ${batColor}`} />
+              <span className="text-slate-400">BAT: <strong className={batColor}>{typeof currentVoltage === 'number' ? `${currentVoltage.toFixed(1)}V` : `${currentVoltage}V`}</strong></span>
+            </div>
+          )}
 
           {/* CPU & Temp quick info */}
           {systemData?.cpu && (

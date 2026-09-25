@@ -1,0 +1,12 @@
+{
+  "samples_ch1": 22829,
+  "samples_ch2": 22718,
+  "ch1_min_us": 500.2,
+  "ch1_neutral_us": 1498.6,
+  "ch1_max_us": 2591.8,
+  "ch1_deadband_us": 619.2,
+  "ch2_min_us": 501.6,
+  "ch2_neutral_us": 1497.2,
+  "ch2_max_us": 2595.6,
+  "ch2_deadband_us": 619.8
+}

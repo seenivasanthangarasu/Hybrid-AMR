@@ -70,6 +70,21 @@ describe('Header – CPU/Temp info strip', () => {
   });
 });
 
+describe('Header – Battery Voltage info strip', () => {
+  it('renders battery voltage when batteryVoltage is provided', () => {
+    render(<Header {...baseProps} batteryVoltage={12.4} />);
+    expect(screen.getByText(/12.4V/)).toBeInTheDocument();
+  });
+
+  it('renders battery voltage from systemData when batteryVoltage is null', () => {
+    const sys = {
+      battery: { voltage: 16.1 },
+    };
+    render(<Header {...baseProps} systemData={sys} />);
+    expect(screen.getByText(/16.1V/)).toBeInTheDocument();
+  });
+});
+
 describe('Header – tab navigation', () => {
   const tabs = ['control', 'graph', 'process', 'system', 'logs', 'camera'];
 

@@ -63,10 +63,10 @@ class HiwonderGpsNode(Node):
             '/dev/hiwonder_gps',
             '/dev/amr_gps',
             '/dev/gps',
-            '/dev/ttyUSB3',
-            '/dev/ttyUSB2',
             '/dev/ttyUSB0',
-            '/dev/ttyUSB1'
+            '/dev/ttyUSB3',
+            '/dev/ttyUSB1',
+            '/dev/ttyUSB2'
         ]
         
         ports_to_try = []

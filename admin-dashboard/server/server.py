@@ -103,6 +103,57 @@ def get_network_interfaces():
         print(f"Error fetching net interfaces: {e}")
     return interfaces
 
+_battery_cache = {
+    "voltage": None,
+    "current": None,
+    "temp": None,
+    "timestamp": 0.0
+}
+
+def get_motor_driver_battery():
+    global _battery_cache
+    now = time.time()
+    if now - _battery_cache["timestamp"] < 1.5 and _battery_cache["voltage"] is not None:
+        return _battery_cache
+
+    # If Sabertooth ROS driver is running, avoid direct serial access to prevent DTR reset & motor jerks
+    try:
+        for p in psutil.process_iter(['name', 'cmdline']):
+            try:
+                cmd_str = " ".join(p.info['cmdline'] or [])
+                if "sabertooth_node" in cmd_str or "sabertooth_driver" in cmd_str:
+                    return _battery_cache
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                continue
+    except Exception:
+        pass
+
+    candidate_ports = ["/dev/sabertooth", "/dev/amr_motors", "/dev/ttyACM0"]
+    port_to_use = None
+    for p in candidate_ports:
+        if os.path.exists(p) and os.access(p, os.R_OK | os.W_OK):
+            port_to_use = p
+            break
+
+    if not port_to_use:
+        return _battery_cache
+
+    try:
+        import serial
+        import re
+        with serial.Serial(port_to_use, 115200, timeout=0.1) as s:
+            s.write(b"M1: getb\r\n")
+            time.sleep(0.04)
+            raw = s.read_all().decode('ascii', errors='ignore')
+            m = re.search(r'(?:M\d+:)?B\s*([+-]?\d+)', raw, re.IGNORECASE)
+            if m:
+                v = round(int(m.group(1)) / 10.0, 1)
+                _battery_cache["voltage"] = v
+                _battery_cache["timestamp"] = now
+    except Exception:
+        pass
+    return _battery_cache
+
 @app.route("/api/system", methods=["GET"])
 def get_system_metrics():
     try:
@@ -113,6 +164,7 @@ def get_system_metrics():
         cpu_total = round(sum(per_core_list) / len(per_core_list), 1) if per_core_list else 0.0
         mem = psutil.virtual_memory()
         disk = psutil.disk_usage("/")
+        bat_info = get_motor_driver_battery()
         
         uptime_seconds = 0
         try:
@@ -141,6 +193,11 @@ def get_system_metrics():
                 "used_gb": round(disk.used / (1024 ** 3), 1),
                 "free_gb": round(disk.free / (1024 ** 3), 1),
                 "percent": disk.percent
+            },
+            "battery": {
+                "voltage": bat_info.get("voltage"),
+                "unit": "V",
+                "present": (bat_info.get("voltage") is not None)
             },
             "uptime_seconds": round(uptime_seconds),
             "hostname": socket.gethostname(),
@@ -211,8 +268,8 @@ def get_hardware_and_processes():
             "accessible": False
         }
 
-    hw_esp = check_dev_path("/dev/esp", "/dev/amr_encoder", "/dev/ttyUSB2", "/dev/esp32")
-    hw_lidar = check_dev_path("/dev/amr_lidar", "/dev/ttyUSB3", "/dev/ttyUSB4", "/dev/lidar")
+    hw_esp = check_dev_path("/dev/ttyACM1", "/dev/esp", "/dev/amr_encoder", "/dev/ttyUSB2", "/dev/esp32")
+    hw_lidar = check_dev_path("/dev/amr_lidar", "/dev/ttyUSB1", "/dev/ttyUSB3", "/dev/ttyUSB4", "/dev/lidar", "/dev/ydlidar")
     hw_gps = check_dev_path("/dev/hiwonder_gps", "/dev/amr_gps", "/dev/gps", "/dev/ttyUSB0")
     hw_imu = check_dev_path("/dev/hiwonder_imu", "/dev/amr_imu", "/dev/esp-imu", "/dev/ttyUSB1")
     hw_sabertooth = check_dev_path("/dev/sabertooth", "/dev/amr_motors", "/dev/ttyACM0")
@@ -263,6 +320,9 @@ def get_hardware_and_processes():
     except Exception as e:
         print(f"Error inspecting processes: {e}")
 
+    bat_info = get_motor_driver_battery()
+    hw_sabertooth["battery_voltage"] = bat_info.get("voltage")
+
     return jsonify({
         "status": "ok",
         "timestamp": time.time(),
@@ -275,11 +335,28 @@ def get_hardware_and_processes():
             "radio": hw_radio,
             "camera": hw_camera
         },
+        "battery": {
+            "voltage": bat_info.get("voltage"),
+            "unit": "V",
+            "present": (bat_info.get("voltage") is not None),
+            "timestamp": bat_info.get("timestamp")
+        },
         "services": {
             "rosbridge_9090": rosbridge_reachable,
             "web_video_server_8080": video_server_reachable
         },
         "managed_processes": processes_info
+    })
+
+@app.route("/api/battery", methods=["GET"])
+def get_battery_telemetry_endpoint():
+    bat_info = get_motor_driver_battery()
+    return jsonify({
+        "status": "ok",
+        "voltage": bat_info.get("voltage"),
+        "unit": "V",
+        "present": (bat_info.get("voltage") is not None),
+        "timestamp": bat_info.get("timestamp") or time.time()
     })
 
 @app.route("/api/process/restart", methods=["POST"])
@@ -318,6 +395,9 @@ def restart_managed_process():
 
 GLOBAL_STACK_PROC = None
 GLOBAL_CAMERA_PROC = None
+GLOBAL_TELEOP_PROC = None
+GLOBAL_MOTOR_PROC = None
+GLOBAL_RADIO_PROC = None
 
 BRINGUP_LOG_FILE = "/tmp/robot_bringup.log"
 
@@ -326,6 +406,9 @@ def start_robot_stack():
     global GLOBAL_STACK_PROC
     data = request.json or {}
     include_camera = data.get("include_camera", False)
+    include_motors = data.get("include_motors", False)
+    include_radio = data.get("include_radio", False)
+    include_manual_drive = data.get("include_manual_drive", True)
 
     if GLOBAL_STACK_PROC and GLOBAL_STACK_PROC.poll() is None:
         return jsonify({
@@ -340,7 +423,11 @@ def start_robot_stack():
         "export ROS_LOG_DIR=/tmp/ros_log && "
         "source /opt/ros/jazzy/setup.bash && "
         "source /home/ubuntu/Desktop/Xtrmbly/install/setup.bash && "
-        f"ros2 launch rock_bringup navigation.launch.py start_camera:={'true' if include_camera else 'false'}"
+        f"ros2 launch rock_bringup navigation.launch.py "
+        f"start_camera:={'true' if include_camera else 'false'} "
+        f"start_manual_drive:={'true' if include_manual_drive else 'false'} "
+        f"start_motors:={'true' if include_motors else 'false'} "
+        f"start_radio:={'true' if include_radio else 'false'}"
     )
 
     try:
@@ -354,9 +441,200 @@ def start_robot_stack():
         )
         return jsonify({
             "status": "ok",
-            "message": f"Robot stack launched successfully (camera={'on' if include_camera else 'off'}).",
+            "message": f"Robot stack launched successfully (camera={'on' if include_camera else 'off'}, manual_drive={'on' if include_manual_drive else 'off'}).",
             "pid": GLOBAL_STACK_PROC.pid
         })
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+TELEOP_LOG_FILE = "/tmp/teleop_bringup.log"
+
+@app.route("/api/teleop/toggle", methods=["POST"])
+def toggle_teleop_stack():
+    global GLOBAL_TELEOP_PROC, GLOBAL_MOTOR_PROC, GLOBAL_RADIO_PROC
+    data = request.json or {}
+    enable = data.get("enable", True)
+
+    if not enable:
+        killed = []
+        for proc_ref_name in ["GLOBAL_TELEOP_PROC", "GLOBAL_MOTOR_PROC", "GLOBAL_RADIO_PROC"]:
+            proc_obj = globals().get(proc_ref_name)
+            if proc_obj and proc_obj.poll() is None:
+                try:
+                    pgid = os.getpgid(proc_obj.pid)
+                    os.killpg(pgid, signal.SIGINT)
+                    time.sleep(0.3)
+                    os.killpg(pgid, signal.SIGTERM)
+                    time.sleep(0.1)
+                    os.killpg(pgid, signal.SIGKILL)
+                    killed.append(proc_obj.pid)
+                except Exception:
+                    try:
+                        proc_obj.kill()
+                        killed.append(proc_obj.pid)
+                    except Exception:
+                        pass
+                globals()[proc_ref_name] = None
+
+        for pat in ["radio_receiver_node", "radio_receiver", "sabertooth_node", "sabertooth_driver", "manual_radio_drive"]:
+            for p in psutil.process_iter(['pid', 'name', 'cmdline']):
+                try:
+                    cmdline_str = " ".join(p.info['cmdline'] or [])
+                    pname = p.info['name'] or ""
+                    full_str = f"{pname} {cmdline_str}"
+                    if pat in full_str and p.pid != os.getpid():
+                        p.terminate()
+                        killed.append(p.info['pid'])
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    continue
+
+        return jsonify({
+            "status": "ok",
+            "message": "Radio teleop drive & motor controller stopped.",
+            "running": False,
+            "killed_pids": list(set(killed))
+        })
+
+    # Check if already running
+    if GLOBAL_TELEOP_PROC and GLOBAL_TELEOP_PROC.poll() is None:
+        return jsonify({
+            "status": "ok",
+            "message": "Radio teleop drive is already running.",
+            "running": True,
+            "pid": GLOBAL_TELEOP_PROC.pid
+        })
+
+    cmd_str = (
+        "export FASTRTPS_DEFAULT_PROFILES_FILE=/home/ubuntu/Desktop/Xtrmbly/fastdds_udp.xml && "
+        "export RMW_IMPLEMENTATION=rmw_fastrtps_cpp && "
+        "export ROS_LOG_DIR=/tmp/ros_log && "
+        "source /opt/ros/jazzy/setup.bash && "
+        "source /home/ubuntu/Desktop/Xtrmbly/install/setup.bash && "
+        "ros2 launch sabertooth_driver manual_radio_drive.launch.py"
+    )
+
+    try:
+        teleop_log_out = open(TELEOP_LOG_FILE, "a", buffering=1)
+        GLOBAL_TELEOP_PROC = subprocess.Popen(
+            ["/bin/bash", "-c", cmd_str],
+            stdout=teleop_log_out,
+            stderr=subprocess.STDOUT,
+            preexec_fn=os.setsid
+        )
+        return jsonify({
+            "status": "ok",
+            "message": "HOT RC Radio Controller & Sabertooth Motor Driver launched.",
+            "running": True,
+            "pid": GLOBAL_TELEOP_PROC.pid
+        })
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+@app.route("/api/motor/toggle", methods=["POST"])
+def toggle_motor_node():
+    global GLOBAL_MOTOR_PROC
+    data = request.json or {}
+    enable = data.get("enable", True)
+
+    if not enable:
+        killed = []
+        if GLOBAL_MOTOR_PROC and GLOBAL_MOTOR_PROC.poll() is None:
+            try:
+                pgid = os.getpgid(GLOBAL_MOTOR_PROC.pid)
+                os.killpg(pgid, signal.SIGINT)
+                time.sleep(0.3)
+                os.killpg(pgid, signal.SIGTERM)
+                killed.append(GLOBAL_MOTOR_PROC.pid)
+            except Exception:
+                try:
+                    GLOBAL_MOTOR_PROC.kill()
+                except Exception:
+                    pass
+            GLOBAL_MOTOR_PROC = None
+
+        for p in psutil.process_iter(['pid', 'name', 'cmdline']):
+            try:
+                cmdline_str = " ".join(p.info['cmdline'] or [])
+                if "sabertooth_node" in cmdline_str:
+                    p.terminate()
+                    killed.append(p.info['pid'])
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                continue
+
+        return jsonify({"status": "ok", "message": "Sabertooth motor driver stopped.", "running": False, "killed_pids": killed})
+
+    if GLOBAL_MOTOR_PROC and GLOBAL_MOTOR_PROC.poll() is None:
+        return jsonify({"status": "ok", "message": "Motor driver is already running.", "running": True, "pid": GLOBAL_MOTOR_PROC.pid})
+
+    cmd_str = (
+        "export FASTRTPS_DEFAULT_PROFILES_FILE=/home/ubuntu/Desktop/Xtrmbly/fastdds_udp.xml && "
+        "export RMW_IMPLEMENTATION=rmw_fastrtps_cpp && "
+        "source /opt/ros/jazzy/setup.bash && "
+        "source /home/ubuntu/Desktop/Xtrmbly/install/setup.bash && "
+        "ros2 launch sabertooth_driver sabertooth.launch.py"
+    )
+    try:
+        GLOBAL_MOTOR_PROC = subprocess.Popen(
+            ["/bin/bash", "-c", cmd_str],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            preexec_fn=os.setsid
+        )
+        return jsonify({"status": "ok", "message": "Sabertooth motor driver launched.", "running": True, "pid": GLOBAL_MOTOR_PROC.pid})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+@app.route("/api/radio/toggle", methods=["POST"])
+def toggle_radio_node():
+    global GLOBAL_RADIO_PROC
+    data = request.json or {}
+    enable = data.get("enable", True)
+
+    if not enable:
+        killed = []
+        if GLOBAL_RADIO_PROC and GLOBAL_RADIO_PROC.poll() is None:
+            try:
+                pgid = os.getpgid(GLOBAL_RADIO_PROC.pid)
+                os.killpg(pgid, signal.SIGINT)
+                time.sleep(0.3)
+                os.killpg(pgid, signal.SIGTERM)
+                killed.append(GLOBAL_RADIO_PROC.pid)
+            except Exception:
+                try:
+                    GLOBAL_RADIO_PROC.kill()
+                except Exception:
+                    pass
+            GLOBAL_RADIO_PROC = None
+
+        for p in psutil.process_iter(['pid', 'name', 'cmdline']):
+            try:
+                cmdline_str = " ".join(p.info['cmdline'] or [])
+                if "radio_receiver_node" in cmdline_str:
+                    p.terminate()
+                    killed.append(p.info['pid'])
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                continue
+
+        return jsonify({"status": "ok", "message": "Radio receiver stopped.", "running": False, "killed_pids": killed})
+
+    if GLOBAL_RADIO_PROC and GLOBAL_RADIO_PROC.poll() is None:
+        return jsonify({"status": "ok", "message": "Radio receiver is already running.", "running": True, "pid": GLOBAL_RADIO_PROC.pid})
+
+    cmd_str = (
+        "export FASTRTPS_DEFAULT_PROFILES_FILE=/home/ubuntu/Desktop/Xtrmbly/fastdds_udp.xml && "
+        "export RMW_IMPLEMENTATION=rmw_fastrtps_cpp && "
+        "source /opt/ros/jazzy/setup.bash && "
+        "source /home/ubuntu/Desktop/Xtrmbly/install/setup.bash && "
+        "ros2 launch radio_receiver radio_receiver.launch.py"
+    )
+    try:
+        GLOBAL_RADIO_PROC = subprocess.Popen(
+            ["/bin/bash", "-c", cmd_str],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            preexec_fn=os.setsid
+        )
+        return jsonify({"status": "ok", "message": "HOT RC Radio Receiver launched.", "running": True, "pid": GLOBAL_RADIO_PROC.pid})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
@@ -377,41 +655,28 @@ def get_stack_logs():
 
 @app.route("/api/stack/stop", methods=["POST"])
 def stop_robot_stack():
-    global GLOBAL_STACK_PROC, GLOBAL_CAMERA_PROC
+    global GLOBAL_STACK_PROC, GLOBAL_CAMERA_PROC, GLOBAL_TELEOP_PROC, GLOBAL_MOTOR_PROC, GLOBAL_RADIO_PROC
     killed_pids = []
 
     # 1. Stop main stack process group with gentle SIGINT then SIGTERM/SIGKILL
-    if GLOBAL_STACK_PROC and GLOBAL_STACK_PROC.poll() is None:
-        try:
-            pgid = os.getpgid(GLOBAL_STACK_PROC.pid)
-            os.killpg(pgid, signal.SIGINT)   # Allow nodes to close serial handles
-            time.sleep(0.4)
-            os.killpg(pgid, signal.SIGTERM)
-            time.sleep(0.2)
-            os.killpg(pgid, signal.SIGKILL)
-            killed_pids.append(GLOBAL_STACK_PROC.pid)
-        except Exception:
+    for proc_ref_name in ["GLOBAL_STACK_PROC", "GLOBAL_CAMERA_PROC", "GLOBAL_TELEOP_PROC", "GLOBAL_MOTOR_PROC", "GLOBAL_RADIO_PROC"]:
+        proc_obj = globals().get(proc_ref_name)
+        if proc_obj and proc_obj.poll() is None:
             try:
-                GLOBAL_STACK_PROC.kill()
-                killed_pids.append(GLOBAL_STACK_PROC.pid)
+                pgid = os.getpgid(proc_obj.pid)
+                os.killpg(pgid, signal.SIGINT)   # Allow nodes to close serial handles
+                time.sleep(0.3)
+                os.killpg(pgid, signal.SIGTERM)
+                time.sleep(0.1)
+                os.killpg(pgid, signal.SIGKILL)
+                killed_pids.append(proc_obj.pid)
             except Exception:
-                pass
-        GLOBAL_STACK_PROC = None
-
-    if GLOBAL_CAMERA_PROC and GLOBAL_CAMERA_PROC.poll() is None:
-        try:
-            pgid = os.getpgid(GLOBAL_CAMERA_PROC.pid)
-            os.killpg(pgid, signal.SIGINT)
-            time.sleep(0.2)
-            os.killpg(pgid, signal.SIGKILL)
-            killed_pids.append(GLOBAL_CAMERA_PROC.pid)
-        except Exception:
-            try:
-                GLOBAL_CAMERA_PROC.kill()
-                killed_pids.append(GLOBAL_CAMERA_PROC.pid)
-            except Exception:
-                pass
-        GLOBAL_CAMERA_PROC = None
+                try:
+                    proc_obj.kill()
+                    killed_pids.append(proc_obj.pid)
+                except Exception:
+                    pass
+            globals()[proc_ref_name] = None
 
     # 2. Terminate any remaining stack processes by pattern
     to_kill = []

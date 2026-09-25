@@ -29,6 +29,14 @@ const MOCK_STATUS_ALL_OK = {
   hardware: {
     esp32: { exists: true, accessible: true },
     ydlidar: { exists: true, accessible: true },
+    hiwonder_gps: { exists: true, accessible: true },
+    hiwonder_imu: { exists: true, accessible: true },
+    sabertooth: { exists: true, accessible: true, path: '/dev/sabertooth', battery_voltage: 12.8 },
+  },
+  battery: {
+    voltage: 12.8,
+    unit: 'V',
+    present: true,
   },
   services: {
     rosbridge_9090: true,
@@ -122,6 +130,22 @@ describe('ProcessHardwarePanel – serial device cards with data', () => {
     );
     const reachableBadges = screen.getAllByText(/reachable/i);
     expect(reachableBadges.length).toBeGreaterThan(0);
+  });
+});
+
+describe('ProcessHardwarePanel – Motor Driver Battery widget', () => {
+  it('renders battery telemetry card and voltage', () => {
+    mockGpsNoData();
+    render(
+      <ProcessHardwarePanel
+        statusData={MOCK_STATUS_ALL_OK}
+        batteryVoltage={12.8}
+        restartProcess={vi.fn()}
+        backendConnected={true}
+      />
+    );
+    expect(screen.getByText(/motor driver battery telemetry/i)).toBeInTheDocument();
+    expect(screen.getByText(/12.8 V/i)).toBeInTheDocument();
   });
 });
 

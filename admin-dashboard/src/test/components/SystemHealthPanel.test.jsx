@@ -108,6 +108,11 @@ describe('SystemHealthPanel – with real system data', () => {
     render(<SystemHealthPanel systemData={MOCK_SYSTEM} />);
     expect(screen.getByText(/20 GB \/ 58 GB/i)).toBeInTheDocument();
   });
+
+  it('displays battery voltage card when batteryVoltage is passed', () => {
+    render(<SystemHealthPanel systemData={MOCK_SYSTEM} batteryVoltage={12.6} />);
+    expect(screen.getByText(/12.6 V/i)).toBeInTheDocument();
+  });
 });
 
 describe('SystemHealthPanel – network interfaces table', () => {

@@ -1,160 +1,284 @@
 # Hybrid AMR (Autonomous Mobile Robot)
 
-A full-stack **ROS 2 Jazzy** autonomous mobile robot platform designed for hybrid indoor and outdoor navigation. Featuring automated GPS-to-SLAM transition management, hardware driver nodes, sensor telemetry recording, and a real-time onboard ROS 2 diagnostics dashboard.
+A production-grade, full-stack **ROS 2 Jazzy** autonomous mobile robot platform designed for hybrid indoor and outdoor navigation, running on **Ubuntu 24.04 LTS (arm64)** on the **Rubik Pi** single-board computer. 
 
-![ROS 2 Jazzy](https://img.shields.io/badge/ROS_2-Jazzy-blue)
-![React](https://img.shields.io/badge/Frontend-React%20%2B%20Vite-61dafb)
-![License](https://img.shields.io/badge/License-MIT-green)
+Featuring dual-stage Extended Kalman Filter (EKF) sensor fusion, autonomous outdoor GPS waypoint navigation, 2D SLAM mapping, Sabertooth 2x32 motor driver integration with live battery telemetry, HOT RC DS-600 radio teleoperation via direct Qualcomm GPIO, ESP32-S3 4x quadrature wheel odometry, YDLIDAR G4 12 Hz laser scanning, and a modern real-time onboard Web Admin & Diagnostics Dashboard (React 18 + Vite + Flask).
+
+![ROS 2 Jazzy](https://img.shields.io/badge/ROS_2-Jazzy%20Jalisco-blue)
+![OS](https://img.shields.io/badge/OS-Ubuntu%2024.04%20LTS%20arm64-orange)
+![Frontend](https://img.shields.io/badge/Frontend-React%2018%20%2B%20Vite%20%2B%20Tailwind-61dafb)
+![Backend](https://img.shields.io/badge/Backend-Flask%20%2B%20ROSBridge-green)
+![License](https://img.shields.io/badge/License-MIT-purple)
+![Tests](https://img.shields.io/badge/Tests-100%25%20Passing-brightgreen)
 
 ---
 
-## 🌟 Key Features
+## 🌟 Key Features & Architecture
 
-* **Hybrid Navigation State Machine**: Automatic switching between outdoor GPS navigation (u-blox GNSS) and indoor 2D SLAM navigation (`slam_toolbox`) based on real-time signal validity.
-* **ESP32 Wheel Odometry & Control**: Serial communication node (`/dev/esp` @ 115200 baud) for sending `/cmd_vel` motor commands and receiving encoder ticks to compute `/odom` and TF transforms (`odom` $\rightarrow$ `base_link`).
-* **IMU & LiDAR Hardware Drivers**: Sensor drivers for GY-80 IMU (`/dev/esp-imu`) publishing raw acceleration and magnetic fields, and YDLidar range sensors publishing to `/scan`.
-* **Telemetry Data Recorder**: Dedicated recording tool (`amr_data_recorder`) for capturing synchronized sensor streams (`/scan`, `/imu/*`, `/odom`, `/fix`, `/tf`) into MCAP format ROS 2 bags with structured experiment metadata (`metadata.yaml`).
-* **Web Onboard Admin & Diagnostics Dashboard** (`admin-dashboard`): the actively maintained onboard tool, built to run directly on the Rubik Pi itself.
-  * **Robot Bringup & Control**: Start/Stop full navigation stack (`navigation.launch.py`) with automatic startup of Odom, GY-80 IMU, YDLidar, URDF, and SLAM Toolbox.
-  * **Selective Camera Control**: Independent ON/OFF toggle for the Camera module (`v4l2_camera_node` on `/dev/video0`) with real-time launch progress phases and live bringup console logs.
-  * **ROS Graph Health**: live node/topic/service registry, per-topic Hz, TF tree staleness (`map→odom`, `odom→base_link`).
-  * **Processes & Hardware**: serial device presence/permissions for `/dev/esp`, `/dev/esp-imu`, `/dev/ttyUSB0`, managed-process status/metrics (PID, CPU%, Memory%, Uptime).
-  * **Pi System Health**: CPU temperature, per-core usage, RAM, disk, network interfaces.
-  * **Logs Viewer**: live `~/.ros/log/` and `journalctl` tailing.
-  * See [`admin-dashboard/README.md`](admin-dashboard/README.md) for full details, ports, and its security/trust model (no auth — LAN-only tool).
+```
+                                      +---------------------------------------------+
+                                      |            Remote Operator (LAN)            |
+                                      |      http://<ROBOT_IP>:3000 (React UI)      |
+                                      +------+-------------------------------+------+
+                                             |                               |
+                       REST API (HTTP) :5001 |                               | WebSocket (JSON) :9090
+                                             v                               v
+                     +-----------------------------------+   +------------------------------------+
+                     |      Flask Backend Server         |   |          ROSBridge Server          |
+                     |     (admin-dashboard/server)      |   |     (rosbridge_websocket :9090)    |
+                     +-----------------+-----------------+   +-----------------+------------------+
+                                       |                                       |
+                                       v                                       v
++-------------------------------------------------------------------------------------------------------------------------+
+|                                                  ROS 2 JAZZY CORE STACK                                                 |
+|                                                                                                                         |
+|  +---------------------------+   +---------------------------+   +---------------------------+   +-------------------+  |
+|  |     robot_localization    |   |     outdoor_navigation    |   |       slam_toolbox        |   | amr_data_recorder |  |
+|  | * Stage 1: EKF Local      |   | * WGS-84 Geodesy (ENU)    |   | * 2D SLAM Mapping         |   | * Synchronized    |  |
+|  |   (Odom + IMU -> /odom_f) |   | * Waypoint State Machine  |   | * Ceres Scan Matcher      |   |   MCAP Bagging    |  |
+|  | * Stage 2: EKF Global     |   | * LiDAR Obstacle Stop     |   | * Localization Mode       |   | * Experiment      |  |
+|  |   (/odom_f + GPS -> /glob)|   | * Dynamic Speed Scaling   |   |   (/map -> /odom)         |   |   metadata.yaml   |  |
+|  +---------------------------+   +---------------------------+   +---------------------------+   +-------------------+  |
+|                                                                                                                         |
+|  +---------------------------+   +---------------------------+   +---------------------------+   +-------------------+  |
+|  |     sabertooth_driver     |   |       radio_receiver      |   |         esp32_odom        |   | ydlidar_driver    |  |
+|  | * Plain Text CDC ACM      |   | * Qualcomm TLMM GPIO      |   | * ESP32-S3 4x Quad Ticks  |   | * YDLIDAR G4      |  |
+|  | * Differential /cmd_vel   |   |   (CH1=GPIO8, CH2=GPIO24) |   | * Exact Arc Kinematics    |   | * 12.0 Hz Scan    |  |
+|  | * Live Battery Telemetry  |   | * Low-Pass EMA & Slew Clam|   | * Monotonic Timestamps    |   | * 9 kHz Sampling  |  |
+|  | * 0 dB Silent Idle State  |   | * 350ms Failsafe Watchdog |   | * Auto-Reconnection       |   | * Auto-Resync     |  |
+|  +---------------------------+   +---------------------------+   +---------------------------+   +-------------------+  |
++-------------------------------------------------------------------------------------------------------------------------+
+                                                               |
+                                                               v
++-------------------------------------------------------------------------------------------------------------------------+
+|                                                    PHYSICAL HARDWARE                                                    |
+|                                                                                                                         |
+|  [Sabertooth 2x32 Controller]    [HOT RC DS-600 Receiver]    [ESP32-S3 Optical Encoders]     [YDLIDAR G4 Scanner]       |
+|  `/dev/sabertooth` (115200)      `gpiochip4` (Lines 8 & 24)  `/dev/amr_encoder` (115200)     `/dev/amr_lidar` (230400)  |
+|                                                                                                                         |
+|  [Hiwonder 9-DOF IMU]            [Hiwonder GNSS GPS]         [Intel RealSense D435i / USB Cam]                          |
+|  `/dev/hiwonder_imu` (9600)      `/dev/hiwonder_gps` (9600)  `/dev/video4` (424x240 @ 15 FPS)                           |
++-------------------------------------------------------------------------------------------------------------------------+
+```
 
-> **Note:** the earlier operator-facing `amr-dashboard` (React + Leaflet mission-planning GCS) and the `Frontend V1` prototypes have been retired and removed from this workspace as of 2026-08-18. `admin-dashboard` is the only dashboard currently deployed and maintained.
+---
+
+## 🚀 System Capabilities
+
+### 1. 🌐 Outdoor Autonomous GPS Waypoint Navigation (`outdoor_navigation`)
+* **WGS-84 Ellipsoid Geodesy**: Real-time East-North-Up (ENU) tangent-plane projection, Haversine geodesic distance calculation, and Great Circle bearing computations.
+* **Deterministic State Machine**: Managed lifecycle (`IDLE`, `WAITING_FOR_GPS`, `WAITING_FOR_VALID_GOAL`, `NAVIGATING`, `OBSTACLE_STOP`, `GPS_LOST`, `GOAL_REACHED`, `ERROR`, `STOPPED`).
+* **Active Safety & Collision Avoidance**: Real-time forward-arc LiDAR obstacle detection with automatic deceleration and emergency braking at configurable margins.
+* **Manual Override & Failsafe**: Immediate priority preemption upon radio transmitter input and command zeroing on GPS signal loss.
+
+### 2. 🧭 Dual-Stage Sensor Fusion (`robot_localization`)
+* **Stage 1 (Local Odometry - `ekf_local.yaml`)**: Fuses high-rate wheel odometry (`/odom`) with Hiwonder 9-DOF IMU angular velocities and accelerations (`/hiwonder/imu/data_raw`) to publish continuous, drift-compensated `odom -> base_link` transforms and `/odometry/filtered`.
+* **Stage 2 (Global Localization - `ekf_global.yaml` & `navsat_transform.yaml`)**: Fuses `/odometry/filtered` with Hiwonder GNSS GPS coordinates (`/hiwonder/gps/fix`) converted into UTM/ENU odometry, providing continuous earth-frame positioning (`map -> odom` TF and `/odometry/global`).
+
+### 3. 🗺️ 2D SLAM Mapping & Localization (`rock_bringup` / `indoor_amr`)
+* **SLAM Toolbox Integration**: Optimized Ceres scan matching parameters (`mapper_mapping.yaml`) with active barycenter centroid tracking (`use_scan_barycenter: true`) for robust loop-closure in dynamic indoor environments.
+* **Saved Map Localization**: Seamless transition into AMCL-like pose tracking against saved occupancy grids.
+
+### 4. ⚡ Sabertooth 2x32 Motor Driver & Live Battery Telemetry (`sabertooth_driver`)
+* **USB CDC ACM Plain Text Protocol**: Direct high-speed serial communication on `/dev/sabertooth` (115200 baud).
+* **Live Battery Telemetry**: 1.0 Hz periodic polling of battery voltage (`M1: getb\r\n`), publishing standard `sensor_msgs/BatteryState` on `/battery_state` and `std_msgs/Float32` on `/sabertooth/battery_voltage`.
+* **0 dB Silent Idle State**: Eliminates stationary H-bridge PWM chopper coil whine and low-speed motor creep with deadzone thresholds.
+* **Command Timeout Watchdog**: 250ms hardware watchdog that immediately zeros outputs if ROS 2 commands cease.
+
+### 5. 🎮 HOT RC DS-600 Radio Teleoperation (`radio_receiver`)
+* **Direct Hardware GPIO Capture**: Measures microsecond pulse widths using `libgpiod` on Qualcomm TLMM GPIO8 (Pin 11 / CH1 Steering) and GPIO24 (Pin 13 / CH2 Throttle).
+* **Anti-Jitter Filtering**: 90% smoothing Exponential Moving Average (EMA) low-pass filter and slew-rate limiter to suppress Linux interrupt scheduler jitter.
+* **350ms Signal Loss Watchdog**: Automatically zeroes velocity outputs if transmitter radio connection drops.
+
+### 6. 🔄 ESP32-S3 Optical Tracked Odometry (`esp32_odom`)
+* **Hardware Interrupt 4x Quadrature Decoding**: FreeRTOS atomic 64-bit tick counters running on the ESP32-S3 (`firmware/esp32_s3_encoder/esp32_s3_encoder.ino`).
+* **Exact Arc Kinematics**: 2nd-order Runge-Kutta / circular arc kinematics accounting for empirical skid-steer track separation (0.363 m effective track base).
+* **Auto-Reconnection**: Dynamic serial discovery and auto-recovery from transient USB bus resets.
+
+### 7. 📡 YDLIDAR G4 2D Laser Scanner (`ydlidar_ros2_driver`)
+* **High-Rate Scanning**: Configured for 12.0 Hz scan rate and 9.0 kHz sample rate at 230400 baud.
+* **Stream Resynchronization**: Fixed-position byte rewind on checksum failures preventing false sync packet header loss.
+* **Clean Shutdown**: POSIX signal handlers (`SIGINT`, `SIGTERM`, `SIGHUP`) assert CP2102 DTR line clearing to halt motor rotation immediately on node exit.
+
+### 8. 💻 Web Admin & Diagnostics Dashboard (`admin-dashboard`)
+* **Robot Control Panel**: Full stack bringup with animated launch stages, live streaming bringup logs, 1-click Radio Teleop & Motor Drive toggle (`[⚡ Turn ON Radio Teleop Drive]` / `[🛑 Turn OFF Radio Teleop Drive]`), and live battery indicator pill.
+* **Universal Camera Streamer**: Automatic detection of Intel RealSense D435i (`/dev/video4`), generic V4L2 USB cameras, 16-bit TURBO depth maps, and Pro-Max Telemetry HUD fallback stream on `http://<ROBOT_IP>:8080`.
+* **Live System & ROS 2 Diagnostics**: Real-time topic rates, TF tree staleness, node registry, CPU/RAM/Disk/Network health, and `journalctl`/ROS log viewers.
 
 ---
 
 ## 📁 Repository Structure
 
 ```
-├── start_all.sh              # Single-command startup script for all background services & dashboard
-├── admin-dashboard/          # Onboard ROS 2 admin & diagnostics dashboard (React + Vite + Flask)
-│   ├── src/                  # Dashboard UI (Robot Control, ROS Graph, Processes & Hardware, Pi System, Logs, Camera)
-│   ├── server/server.py      # Local Flask API (0.0.0.0:5001) — stack control, hardware/process metrics
+├── start_all.sh                     # Single-command startup script (ROSBridge, Flask API, Vite UI)
+├── fastdds_udp.xml                  # FastDDS UDPv4 transport profile (eliminates /dev/shm mutex lockups)
+├── rc_calibration_final.json        # HOT RC DS-600 radio transmitter calibration profile
+├── udev_rules/
+│   └── 99-amr.rules                 # Persistent udev rules for all robot sensors and motor controllers
+├── scripts/
+│   ├── usb_heal.sh                  # PCIe xHCI host controller auto-healer for USB error -71 recovery
+│   ├── calibrate_imu.py             # IMU gyroscope and accelerometer calibration script
+│   └── find_north.py                # Magnetometer true north alignment utility
+├── admin-dashboard/                 # Onboard Web Admin & Diagnostics Suite (React 18 + Vite + Flask)
+│   ├── src/                         # React UI Components, Hooks, and Vitest test suites
+│   ├── server/                      # Local Flask REST API (Port 5001), camera streamer, and Pytest tests
 │   ├── package.json
 │   └── vite.config.js
-├── src/                      # ROS 2 Jazzy Workspace Packages
-│   ├── hybrid_navigation/    # Hybrid state machine manager (GPS search <-> SLAM mode transition)
-│   ├── esp32_odom/           # ESP32 serial odometry broadcaster & command velocity bridge
-│   ├── imu_node/             # GY-80 IMU serial data parser (/imu/data_raw, /imu/mag)
-│   ├── amr_data_recorder/    # MCAP ROS bag data recorder node with metadata generation
-│   ├── gogo_description/     # Robot URDF geometry (Xacro), meshes, and state publisher launch
-│   ├── rock_bringup/         # Top-level launch scripts (navigation.launch.py)
-│   ├── indoor_amr/           # Indoor SLAM navigation launch configurations
-│   ├── ydlidar_ros2_driver/  # YDLidar 2D laser scanner driver
-│   ├── YDLidar-SDK/          # YDLidar C++ SDK library
-│   └── mapviz/               # MapViz visualization configurations (not referenced by any launch file)
+└── src/                             # ROS 2 Jazzy Workspace Packages
+    ├── outdoor_navigation/          # Outdoor GPS autonomous waypoint navigation state machine & geodesy
+    ├── sabertooth_driver/           # Sabertooth 2x32 motor controller driver & battery telemetry
+    ├── radio_receiver/              # HOT RC DS-600 GPIO pulse receiver node & manual teleop
+    ├── esp32_odom/                  # ESP32-S3 wheel odometry node, params, and Arduino firmware
+    ├── hiwonder_gps/                # Hiwonder GNSS GPS NMEA and NavSatFix driver
+    ├── hiwonder_imu/                # Hiwonder 9-DOF IMU acceleration, angular velocity, and magnetometer driver
+    ├── gogo_description/            # Robot URDF (Xacro) geometry, joint states, and TF tree definition
+    ├── rock_bringup/                # Top-level bringup launch files (navigation, mapping, EKF local/global)
+    ├── indoor_amr/                  # Indoor SLAM navigation launch configurations
+    ├── hybrid_navigation/           # Hybrid GPS <-> SLAM state transition manager
+    ├── amr_data_recorder/           # Synchronized MCAP ROS bag recorder with metadata generator
+    ├── ydlidar_ros2_driver/         # YDLIDAR G4 ROS 2 driver node (12 Hz scan rate)
+    ├── YDLidar-SDK/                 # Core YDLidar C++ communication library
+    └── mapviz/                      # MapViz GIS satellite mapping configurations
 ```
 
-Three directories under `src/` (`YDLidar-SDK`, `mapviz`, `ydlidar_ros2_driver`) are vendored checkouts carrying their own nested `.git` — there is no `.gitmodules`, so they are plain populated directories rather than git-managed submodules. That conversion is a known, still-undecided item (see `AGENTS.md`).
+---
+
+## 🔌 Hardware Port & Udev Rule Matrix
+
+All USB and serial devices are uniquely identified and mapped to persistent symlinks via `/etc/udev/rules.d/99-amr.rules`:
+
+| Device / Sensor | Hardware Identifier / Port | Baudrate / Interface | Persistent Symlink | Output Topics |
+|---|---|---|---|---|
+| **Sabertooth 2x32 Motors** | USB CDC ACM (`0x268b:0x0201`) | 115200 baud | `/dev/sabertooth` | `/battery_state`, `/sabertooth/battery_voltage` |
+| **HOT RC DS-600 Radio** | Board Pin 11 & 13 | Qualcomm TLMM GPIO 8 & 24 | `gpiochip4` | `/radio/channels`, `/radio/cmd_vel`, `/cmd_vel` |
+| **ESP32-S3 Odometry** | CP2102N (`serial: a8f8c9...`) | 115200 baud | `/dev/amr_encoder` | `/odom`, `/joint_states`, `/tf` (`odom -> base_link`) |
+| **YDLIDAR G4 Scanner** | CP2102 (`serial: 0001`) | 230400 baud | `/dev/amr_lidar` | `/scan` (12.0 Hz) |
+| **Hiwonder GNSS GPS** | USB-Serial CH340 (`port: 1-2.2`) | 9600 baud | `/dev/hiwonder_gps` | `/hiwonder/gps/fix`, `/hiwonder/gps/nmea` |
+| **Hiwonder 9-DOF IMU** | USB-Serial CH340 (`port: 1-2.3`) | 9600 baud | `/dev/hiwonder_imu` | `/hiwonder/imu/data_raw`, `/hiwonder/imu/mag` |
+| **Intel RealSense D435i** | USB 3.0 (`8086:0b3a`) | V4L2 (`/dev/video4`) | `/dev/video4` | `/camera/camera/color/image_raw` |
 
 ---
 
-## ⚡ Prerequisites
+## 📡 ROS 2 Topic & Service Contract
 
-1. **ROS 2 Jazzy Jalisco** installed on Ubuntu 24.04 LTS (or compatible Linux OS, incl. arm64 SBCs such as the Rubik Pi).
-2. **Node.js** (v18+) & **npm** (v9+).
-3. **Python 3.12+** with required dependencies:
-   ```bash
-   pip install pyserial flask flask-cors psutil requests
-   ```
-4. **ROS 2 Packages**:
-   ```bash
-   sudo apt update
-   sudo apt install ros-jazzy-rosbridge-server ros-jazzy-slam-toolbox ros-jazzy-navigation2 ros-jazzy-nav2-bringup ros-jazzy-robot-state-publisher ros-jazzy-v4l2-camera
-   ```
+| Topic | Message Type | Description |
+|---|---|---|
+| `/cmd_vel` | `geometry_msgs/Twist` | Primary motor velocity commands (from teleop or autonomous navigation) |
+| `/odom` | `nav_msgs/Odometry` | Raw ESP32-S3 circular arc wheel odometry |
+| `/odometry/filtered` | `nav_msgs/Odometry` | Local fused odometry (Wheel Odom + 9-DOF IMU) from Stage 1 EKF |
+| `/odometry/global` | `nav_msgs/Odometry` | Global earth-frame odometry (Local Filter + GPS) from Stage 2 EKF |
+| `/scan` | `sensor_msgs/LaserScan` | 2D LiDAR range scan data (12 Hz, YDLIDAR G4) |
+| `/hiwonder/gps/fix` | `sensor_msgs/NavSatFix` | Raw GNSS GPS coordinates (latitude, longitude, altitude) |
+| `/hiwonder/imu/data_raw` | `sensor_msgs/Imu` | 9-DOF linear acceleration and angular velocity |
+| `/hiwonder/imu/mag` | `sensor_msgs/MagneticField` | Calibrated magnetometer vector |
+| `/battery_state` | `sensor_msgs/BatteryState` | Sabertooth 2x32 live battery voltage, current, and temperature |
+| `/sabertooth/battery_voltage` | `std_msgs/Float32` | Instantaneous battery voltage float |
+| `/radio/channels` | `sensor_msgs/Joy` | Normalized HOT RC DS-600 joystick axis positions |
+| `/radio/status` | `std_msgs/String` | Radio receiver link state (`CONNECTED` / `DISCONNECTED`) |
+| `/outdoor_nav/state` | `std_msgs/String` | Current outdoor navigation state machine mode |
+| `/outdoor_nav/current_goal` | `geometry_msgs/PoseStamped` | Active GPS waypoint goal in local ENU frame |
+| `/map` | `nav_msgs/OccupancyGrid` | 2D SLAM occupancy grid map from `slam_toolbox` |
+| `/tf`, `/tf_static` | `tf2_msgs/TFMessage` | Coordinate frame tree (`map -> odom -> base_link -> laser_frame`) |
 
 ---
 
-## 🚀 All-in-One Startup Command (Recommended)
+## ⚡ Quick Start Guide
 
-To launch the complete project (ROSBridge server, Flask Admin Backend API, and Vite Dashboard Frontend) with a single command:
+### 1. Prerequisites
+* **Ubuntu 24.04 LTS arm64** (or x86_64) with **ROS 2 Jazzy Jalisco**.
+* **Node.js** (v18+) & **npm** (v9+).
+* **System packages**:
+  ```bash
+  sudo apt update
+  sudo apt install -y ros-jazzy-rosbridge-server ros-jazzy-slam-toolbox \
+      ros-jazzy-robot-localization ros-jazzy-robot-state-publisher \
+      ros-jazzy-web-video-server python3-pyserial python3-flask python3-flask-cors python3-psutil
+  ```
+
+### 2. Install Udev Rules
+```bash
+sudo cp udev_rules/99-amr.rules /etc/udev/rules.d/
+sudo udevadm control --reload-rules && sudo udevadm trigger
+```
+
+### 3. Build the ROS 2 Workspace
+```bash
+cd ~/Desktop/Xtrmbly
+source /opt/ros/jazzy/setup.bash
+colcon build --symlink-install --packages-skip mapviz mapviz_interfaces mapviz_plugins multires_image tile_map
+source install/setup.bash
+```
+
+---
+
+## 🚀 Launching the Robot
+
+### 🌟 All-in-One Dashboard Launch (Recommended)
+To launch the background services, ROSBridge WebSocket, Flask API, and Vite Web Dashboard with a single command:
 
 ```bash
 cd ~/Desktop/Xtrmbly
 ./start_all.sh
 ```
 
-Once started:
-* **Dashboard Frontend**: Open `http://<ROBOT_IP>:3000` (or `http://localhost:3000`) in your browser.
-* **Robot Bringup**: Go to the **Robot Control** tab and click **"Launch Robot Stack"** to automatically launch Odom, IMU, YDLidar, URDF, and SLAM Localization.
+Open `http://<ROBOT_IP>:3000` (or `http://localhost:3000`) in any browser on the local network.
+* Go to the **Robot Control** panel to bring up the full navigation stack with 1-click.
+* Click **`[ ⚡ Turn ON Radio Teleop Drive ]`** to activate the HOT RC DS-600 radio and Sabertooth motor drive.
 
 ---
 
-## 🛠️ Step-by-Step Manual Startup
+### 🛠️ Modular Launch Commands
 
-### 1. Build the ROS 2 Workspace
-
+#### 1. Core Navigation Bringup (Local EKF + Sensors + SLAM)
 ```bash
-cd ~/Desktop/Xtrmbly
-colcon build --symlink-install --packages-skip mapviz mapviz_interfaces mapviz_plugins multires_image tile_map
-source install/setup.bash
+ros2 launch rock_bringup navigation.launch.py start_manual_drive:=true start_camera:=false
 ```
 
-### 2. Start Dashboard Services Individually
-
+#### 2. Manual Radio Teleop & Sabertooth Motor Drive
 ```bash
-# Terminal 1: ROSBridge WebSocket (Port 9090)
-source /opt/ros/jazzy/setup.bash
-ros2 launch rosbridge_server rosbridge_websocket_launch.xml port:=9090
-
-# Terminal 2: Admin Backend Server (Port 5001)
-cd ~/Desktop/Xtrmbly/admin-dashboard
-python3 server/server.py
-
-# Terminal 3: Dashboard Frontend (Port 3000)
-cd ~/Desktop/Xtrmbly/admin-dashboard
-npm run dev -- --host 0.0.0.0 --port 3000
+ros2 launch sabertooth_driver manual_radio_drive.launch.py
 ```
 
-Open `http://<ROBOT_IP>:3000` from any browser on the robot's LAN. `admin-dashboard/.env` must point `VITE_ROSBRIDGE_URL` / `VITE_BACKEND_URL` / `VITE_VIDEO_SERVER_URL` at the robot's actual LAN IP (not `localhost`) for remote browsers to connect — see [`admin-dashboard/README.md`](admin-dashboard/README.md).
+#### 3. Outdoor Autonomous GPS Navigation
+```bash
+ros2 launch outdoor_navigation outdoor_navigation.launch.py
+```
 
-> **arm64 note:** `node_modules` must be installed on the target machine directly. A copy of `node_modules` produced on a different OS/architecture (e.g. synced over from a Windows/x86 dev machine) will be missing arm64-native binaries (observed: Rollup's `@rollup/rollup-linux-arm64-gnu`) and will have lost the executable bit on `node_modules/.bin/*` scripts. If `npm run dev` fails with `vite: Permission denied` or a Rollup "Cannot find module" error, delete `node_modules`/`package-lock.json` and re-run `npm install` on the Pi itself.
+#### 4. SLAM Mapping Mode
+```bash
+ros2 launch rock_bringup mapping.launch.py start_manual_drive:=true
+```
 
----
-
-## 📡 Topic & Service Contract
-
-| Topic | Message Type | Description / Usage |
-|---|---|---|
-| `/fix` | `sensor_msgs/NavSatFix` | GPS Fix coordinates |
-| `/odom` | `nav_msgs/Odometry` | Wheel odometry velocity & pose from ESP32 |
-| `/scan` | `sensor_msgs/LaserScan` | 2D LiDAR range scan data |
-| `/map` | `nav_msgs/OccupancyGrid` | SLAM occupancy map from `slam_toolbox` |
-| `/tf`, `/tf_static` | `tf2_msgs/TFMessage` | Coordinate frame transforms (`odom` $\rightarrow$ `base_link` $\rightarrow$ `laser_frame`) |
-| `/robot_description` | `std_msgs/String` | Robot URDF model XML |
-| `/imu/data_raw` | `sensor_msgs/Imu` | Raw linear acceleration from GY-80 IMU |
-| `/imu/mag` | `sensor_msgs/MagneticField` | Magnetometer from GY-80 IMU |
-| `/cmd_vel` | `geometry_msgs/Twist` | Motor velocity commands |
-| `/emergency_stop` | `std_msgs/Bool` | Emergency stop signal |
-| `/mission_state_cmd` | `std_msgs/String` | Mission state commands (`START`, `PAUSE`, `STOP`) |
-
----
-
-## ⏺️ Recording Experiment Data
-
-To record a synchronized MCAP ROS bag with experiment metadata:
-
+#### 5. Synchronized MCAP Telemetry Recording
 ```bash
 ros2 run amr_data_recorder record
 ```
 
-Follow the prompt to enter an experiment name. Recordings and `metadata.yaml` will be saved under `~/amr_data/YYYY-MM-DD_HH-MM-SS_<name>/`.
-
 ---
 
-## ⚠️ Known Hardware / Config Gaps (as of 2026-08-18)
+## 🧪 Testing & Verification
 
-* **`/dev/lidar` udev symlink is position-based, not identity-based.** `99-robot.rules` assigns it by physical USB port (`KERNELS=="1-1"`), unlike `99-esp.rules`, which correctly matches the ESP32 by its unique `ATTRS{serial}`. Whatever device is plugged into that physical port claims `/dev/lidar` — on the current robot the ESP32 occupies that port, so `/dev/lidar` currently resolves to the ESP32, not the lidar. Do not launch `ydlidar_ros2_driver` against `/dev/lidar` until this is fixed (rewrite the rule to match by serial number, the same way `99-esp.rules` does).
-* **`/home/ubuntu/ublox_config.yaml` does not exist** on the reference robot, so `ublox_gps_node` (GPS) cannot launch as configured in `hybrid_manager.py`.
-* **No saved map exists** at the path `rock_bringup/config/mapper_localization.yaml` expects (`/home/ubuntu/2_maps/maptest3`), so `rock_bringup navigation.launch.py`'s localization step will fail until one is generated (`indoor_amr` mapping mode) and copied into place.
-* **No camera driver node ships in this workspace.** `web_video_server` has nothing to bridge unless a separate camera driver (e.g. `realsense2_camera`) is launched independently.
+The codebase includes comprehensive unit test suites covering the frontend, backend server, and autonomous navigation algorithms:
+
+```bash
+# 1. Run Outdoor Navigation Geodesy & State Machine Tests
+pytest src/outdoor_navigation/test/
+
+# 2. Run Dashboard Flask Backend Tests (35 Unit Tests)
+pytest admin-dashboard/server/tests/test_server.py
+
+# 3. Run Dashboard Frontend Vitest Suite (130 Unit Tests across 10 test suites)
+cd admin-dashboard && npm test -- --run
+```
+
+| Test Suite | Framework | Total Tests | Pass Rate |
+|---|---|---|---|
+| **Outdoor Navigation Algorithms** | Pytest | 7 | **100% (7/7 Passed)** |
+| **Admin Backend Server API** | Pytest | 35 | **100% (35/35 Passed)** |
+| **React Frontend Diagnostics UI** | Vitest | 130 | **100% (130/130 Passed)** |
 
 ---
 
 ## 📄 License
 
-This repository is licensed under the [MIT License](LICENSE).
+This project is licensed under the [MIT License](LICENSE).

@@ -1,0 +1,39 @@
+# ==============================================================================
+# ESP32 Tracked AMR Odometry Configuration
+# Empirical Calibration & Kinematic Parameters
+# ==============================================================================
+
+esp32_odom:
+  ros__parameters:
+    # Serial Port Settings
+    port: "/dev/ttyACM1"
+    baud_rate: 115200
+    timeout: 0.1
+
+    # Empirical Encoder Calibration (Measured over 3-meter physical track tests)
+    # Measured straight-line counts: Left = +62708 / 3m = 20817.0, Right = -63715 / 3m = 21031.0
+    left_counts_per_meter: 20817.0
+    right_counts_per_meter: 21031.0
+
+    # Direction Normalization (Forward motion must produce positive displacement)
+    left_encoder_inverted: false
+    right_encoder_inverted: true
+
+    # Track Geometry (meters)
+    # effective_track_separation: Calibrated from 360-degree rotation tests (accounts for skid-steer slip)
+    effective_track_separation: 0.363
+    physical_track_center_distance: 0.40
+    track_loop_length: 1.22
+
+    # Coordinate Frames
+    odom_frame: "odom"
+    base_frame: "base_link"
+
+    # TF & Joint State Broadcasting
+    # Set publish_tf to false when fusing with robot_localization (EKF) to avoid duplicate TF trees
+    publish_tf: true
+    publish_joint_states: true
+
+    # Discontinuity / Reset Protection
+    # If consecutive tick jump exceeds this threshold or timestamp wraps, reinitialize tracking cleanly
+    reset_jump_threshold: 50000

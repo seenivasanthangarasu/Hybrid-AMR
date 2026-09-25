@@ -1,0 +1,39 @@
+outdoor_navigation_node:
+  ros__parameters:
+    # Sensor Topic Subscriptions
+    gps_topic: "/hiwonder/gps/fix"
+    imu_topic: "/hiwonder/imu/data_raw"
+    odom_topic: "/odom"
+    scan_topic: "/scan"
+    cmd_vel_out_topic: "/cmd_vel"
+    radio_cmd_vel_topic: "/radio/cmd_vel"
+
+    # Reference Coordinate Frames
+    global_frame: "odom"
+    base_frame: "base_link"
+
+    # Velocity and Motion Limits
+    max_linear_speed: 0.35      # Safe outdoor forward speed (m/s)
+    min_linear_speed: 0.08      # Minimum crawling speed (m/s)
+    max_angular_speed: 0.60     # Maximum turning rate (rad/s)
+    goal_tolerance: 1.50        # Stop threshold at destination (meters)
+    slow_down_distance: 4.00    # Distance to start decelerating (meters)
+    heading_tolerance: 0.45     # Heading error threshold for turn-in-place vs drive (~25.8 deg)
+    heading_kp: 1.20            # Proportional gain for angular steering
+    linear_kp: 0.40             # Proportional gain for linear velocity
+    max_linear_accel: 0.40      # Slew rate limit for linear acceleration (m/s^2)
+    max_angular_accel: 0.80     # Slew rate limit for angular acceleration (rad/s^2)
+
+    # LiDAR Safety and Obstacle Parameters
+    obstacle_stop_distance: 0.65 # Emergency obstacle halt threshold (meters)
+    obstacle_slow_distance: 1.30 # Obstacle deceleration zone threshold (meters)
+    obstacle_corridor_width: 0.50# Width of forward safety corridor (meters)
+
+    # GPS Watchdogs & Timing
+    gps_timeout: 2.5            # Max duration before declaring GPS LOST (seconds)
+    control_rate_hz: 20.0       # Control loop update rate (Hz)
+
+    # Destination Coordinates (0.0 implies interactive entry on startup)
+    destination_latitude: 0.0
+    destination_longitude: 0.0
+    interactive_input: true

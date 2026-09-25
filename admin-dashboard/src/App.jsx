@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import rosService from './services/RosService';
 import useBackendApi from './hooks/useBackendApi';
+import useRosTopic from './hooks/useRosTopic';
 import Header from './components/Header';
 import RosGraphPanel from './components/RosGraphPanel';
 import ProcessHardwarePanel from './components/ProcessHardwarePanel';
@@ -23,8 +24,23 @@ export default function App() {
     startStack,
     stopStack,
     toggleCamera,
+    toggleTeleop,
+    toggleMotor,
+    toggleRadio,
     fetchStackLogs,
   } = useBackendApi(2000);
+
+  // Live ROS 2 Battery State Subscription
+  const { data: batteryMsg, hasData: hasBatteryRos } = useRosTopic({
+    name: '/battery_state',
+    messageType: 'sensor_msgs/BatteryState',
+    throttle_rate: 500,
+  });
+
+  const batteryVoltage =
+    hasBatteryRos && batteryMsg?.voltage !== undefined && batteryMsg.voltage > 0
+      ? batteryMsg.voltage
+      : statusData?.battery?.voltage ?? systemData?.battery?.voltage ?? statusData?.hardware?.sabertooth?.battery_voltage ?? null;
 
   useEffect(() => {
     const unsubscribe = rosService.onStatusChange((status) => {
@@ -44,6 +60,7 @@ export default function App() {
         rosStatus={rosStatus}
         backendConnected={backendConnected}
         systemData={systemData}
+        batteryVoltage={batteryVoltage}
         activeTab={activeTab}
         setActiveTab={setActiveTab}
       />
@@ -52,9 +69,13 @@ export default function App() {
         {activeTab === 'control' && (
           <RobotControlPanel
             statusData={statusData}
+            batteryVoltage={batteryVoltage}
             startStack={startStack}
             stopStack={stopStack}
             toggleCamera={toggleCamera}
+            toggleTeleop={toggleTeleop}
+            toggleMotor={toggleMotor}
+            toggleRadio={toggleRadio}
             fetchStackLogs={fetchStackLogs}
             backendConnected={backendConnected}
           />
@@ -63,11 +84,17 @@ export default function App() {
         {activeTab === 'process' && (
           <ProcessHardwarePanel
             statusData={statusData}
+            batteryVoltage={batteryVoltage}
             restartProcess={restartProcess}
             backendConnected={backendConnected}
           />
         )}
-        {activeTab === 'system' && <SystemHealthPanel systemData={systemData} />}
+        {activeTab === 'system' && (
+          <SystemHealthPanel
+            systemData={systemData}
+            batteryVoltage={batteryVoltage}
+          />
+        )}
         {activeTab === 'logs' && <LogsPanel fetchLogs={fetchLogs} />}
         {activeTab === 'camera' && (
           <CameraPanel

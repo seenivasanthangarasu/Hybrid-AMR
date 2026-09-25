@@ -38,119 +38,135 @@
   <!-- ===================== -->
   <!-- LEFT WHEEL LINK -->
   <!-- ===================== -->
-<link name="left_wheel_link">
-  <visual>
-    <origin xyz="0 -0.0837 -0.0325" rpy="0 0 0"/>
-    <geometry>
-      <mesh filename="package://gogo_description/meshes/left_wheel_1.stl"
-            scale="0.001 0.001 0.001"/>
-    </geometry>
-    <material name="silver"/>
-  </visual>
+  <link name="left_wheel_link">
+    <visual>
+      <origin xyz="0 -0.0837 -0.0325" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://gogo_description/meshes/left_wheel_1.stl"
+              scale="0.001 0.001 0.001"/>
+      </geometry>
+      <material name="silver"/>
+    </visual>
 
-  <collision>
-    <origin xyz="0 -0.0837 -0.0325" rpy="0 0 0"/>
-    <geometry>
-      <mesh filename="package://gogo_description/meshes/left_wheel_1.stl"
-            scale="0.001 0.001 0.001"/>
-    </geometry>
-  </collision>
-</link>
+    <collision>
+      <origin xyz="0 -0.0837 -0.0325" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://gogo_description/meshes/left_wheel_1.stl"
+              scale="0.001 0.001 0.001"/>
+      </geometry>
+    </collision>
+  </link>
 
-<joint name="wheel_left_joint" type="fixed">
-  <parent link="base_link"/>
-  <child link="left_wheel_link"/>
-  <origin xyz="-0.0 -0.0837 -0.0325" rpy="0 0 0"/>
-</joint>
+  <joint name="wheel_left_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="left_wheel_link"/>
+    <origin xyz="-0.0 -0.0837 -0.0325" rpy="0 0 0"/>
+  </joint>
 
   <!-- ===================== -->
   <!-- RIGHT WHEEL LINK -->
   <!-- ===================== -->
- <link name="right_wheel_link">
-  <visual>
-    <origin xyz="0 0.0837 -0.0325" rpy="0 0 0"/>
-    <geometry>
-      <mesh filename="package://gogo_description/meshes/right_wheel_1.stl"
-            scale="0.001 0.001 0.001"/>
-    </geometry>
-    <material name="silver"/>
-  </visual>
+  <link name="right_wheel_link">
+    <visual>
+      <origin xyz="0 0.0837 -0.0325" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://gogo_description/meshes/right_wheel_1.stl"
+              scale="0.001 0.001 0.001"/>
+      </geometry>
+      <material name="silver"/>
+    </visual>
 
-  <collision>
-    <origin xyz="0 0.0837 -0.0325" rpy="0 0 0"/>
-    <geometry>
-      <mesh filename="package://gogo_description/meshes/right_wheel_1.stl"
-            scale="0.001 0.001 0.001"/>
-    </geometry>
-  </collision>
-</link>
+    <collision>
+      <origin xyz="0 0.0837 -0.0325" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://gogo_description/meshes/right_wheel_1.stl"
+              scale="0.001 0.001 0.001"/>
+      </geometry>
+    </collision>
+  </link>
 
-<joint name="wheel_right_joint" type="fixed">
-  <parent link="base_link"/>
-  <child link="right_wheel_link"/>
-  <origin xyz="-0.0 0.0837 -0.0325" rpy="0 0 0"/>
-</joint>
-
-
+  <joint name="wheel_right_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="right_wheel_link"/>
+    <origin xyz="-0.0 0.0837 -0.0325" rpy="0 0 0"/>
+  </joint>
 
   <!-- ===================== -->
   <!-- LIDAR -->
   <!-- ===================== -->
- <link name="lidar_link_1">
-  <visual>
-    <origin xyz="-0.034 0.0 -0.1771" rpy="0 0 0"/>
-    <geometry>
-      <mesh filename="package://gogo_description/meshes/lidar_link_1.stl"
-            scale="0.001 0.001 0.001"/>
-    </geometry>
-    <material name="silver"/>
-  </visual>
-</link>
+  <link name="lidar_link_1">
+    <visual>
+      <origin xyz="-0.034 0.0 -0.1771" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://gogo_description/meshes/lidar_link_1.stl"
+              scale="0.001 0.001 0.001"/>
+      </geometry>
+      <material name="silver"/>
+    </visual>
+  </link>
 
-<joint name="lidar_joint" type="fixed">
-  <parent link="base_link"/>
-  <child link="lidar_link_1"/>
-  <origin xyz="0.034 0.0 0.1771" rpy="0 0 0"/>
-</joint>
+  <joint name="lidar_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="lidar_link_1"/>
+    <origin xyz="0.034 0.0 0.1771" rpy="0 0 0"/>
+  </joint>
 
   <!-- ===================== -->
   <!-- CAMERA -->
   <!-- ===================== -->
- <link name="camera_link_1">
-  <visual>
-    <origin xyz="-0.0925 0.0 -0.1274" rpy="0 0 0"/>
-    <geometry>
-      <mesh filename="package://gogo_description/meshes/camera_link_1.stl"
-            scale="0.001 0.001 0.001"/>
-    </geometry>
-    <material name="silver"/>
-  </visual>
-</link>
+  <link name="camera_link_1">
+    <visual>
+      <origin xyz="-0.0925 0.0 -0.1274" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://gogo_description/meshes/camera_link_1.stl"
+              scale="0.001 0.001 0.001"/>
+      </geometry>
+      <material name="silver"/>
+    </visual>
+  </link>
 
-<joint name="camera_joint" type="fixed">
-  <parent link="base_link"/>
-  <child link="camera_link_1"/>
-  <origin xyz="0.0925 0.0 0.1274" rpy="0 0 0"/>
-</joint>
+  <joint name="camera_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="camera_link_1"/>
+    <origin xyz="0.0925 0.0 0.1274" rpy="0 0 0"/>
+  </joint>
 
   <!-- ===================== -->
   <!-- IMU -->
   <!-- ===================== -->
- <link name="imu_link_1">
-  <visual>
-    <origin xyz="-0.008683 -0.004961 -0.1029" rpy="0 0 0"/>
-    <geometry>
-      <mesh filename="package://gogo_description/meshes/imu_link_1.stl"
-            scale="0.001 0.001 0.001"/>
-    </geometry>
-    <material name="silver"/>
-  </visual>
-</link>
+  <link name="imu_link_1">
+    <visual>
+      <origin xyz="-0.008683 -0.004961 -0.1029" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://gogo_description/meshes/imu_link_1.stl"
+              scale="0.001 0.001 0.001"/>
+      </geometry>
+      <material name="silver"/>
+    </visual>
+  </link>
 
-<joint name="imu_joint" type="fixed">
-  <parent link="base_link"/>
-  <child link="imu_link_1"/>
-  <origin xyz="0.008683 0.004961 0.1029" rpy="0 0 0"/>
-</joint>
+  <joint name="imu_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="imu_link_1"/>
+    <origin xyz="0.008683 0.004961 0.1029" rpy="0 0 0"/>
+  </joint>
+
+  <!-- Standard imu_link alias frame -->
+  <link name="imu_link"/>
+  <joint name="imu_link_joint" type="fixed">
+    <parent link="imu_link_1"/>
+    <child link="imu_link"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
+
+  <!-- ===================== -->
+  <!-- GPS -->
+  <!-- ===================== -->
+  <link name="gps_link"/>
+  <joint name="gps_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="gps_link"/>
+    <origin xyz="-0.05 0.0 0.20" rpy="0 0 0"/>
+  </joint>
 
 </robot>
