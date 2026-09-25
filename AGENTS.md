@@ -892,7 +892,7 @@ Cycle    Status     Odom     IMU      GPS      Lidar    Camera   Depth    TF    
 ### 3. High-Performance Direct Camera Streamer (`camera_streamer.py`)
 - Upgraded `admin-dashboard/server/camera_streamer.py`:
   - Automatically queries `/dev/amr_camera`, `/dev/logi_cam`, `/dev/video_cam`, and `/dev/video0`.
-  - Configures V4L2 `cv2.CAP_PROP_FOURCC` to `MJPG`, native 1280x720 resolution, 30 FPS timer tick.
+  - Configures V4L2 `cv2.CAP_PROP_FOURCC` to `MJPG`, native 1280x720 resolution, **20 FPS** timer tick (reduced from 30 FPS to minimize CPU/SBC load).
   - Publishes `/camera/color/image_raw` and `/camera/camera/color/image_raw` with RELIABLE QoS for seamless streaming via `web_video_server` (Port 8080).
   - Preserves diagnostic HUD fallback with live GPS/IMU/Odometry overlays.
 
@@ -901,11 +901,11 @@ Cycle    Status     Odom     IMU      GPS      Lidar    Camera   Depth    TF    
   - `detect_camera_hardware()`: Automatically introspects `/dev/amr_camera` and reads V4L2 device names via `/sys/class/video4linux/video*/name` to identify Logitech C270 HD Webcam.
   - Updated `/api/camera/toggle` to launch `v4l2_camera_node` with 1280x720 resolution for Logitech webcams.
 - **Frontend UI (`admin-dashboard/src`)**:
-  - `CameraPanel.jsx`: Added Logitech C270 720p HD preset to top of topic selectors, updated stream mode switcher and hardware badges, set default 30 FPS.
-  - `RobotControlPanel.jsx`: Updated camera card and live iframe preview to stream `/camera/color/image_raw`.
+  - `CameraPanel.jsx`: Added Logitech C270 720p HD preset to top of topic selectors, updated stream mode switcher and hardware badges, set default **20 FPS** and default player to stable `stream_viewer` iframe to eliminate percent-encoding issues with raw `<img>` tags on `/stream?topic=...`.
+  - `RobotControlPanel.jsx`: Updated camera card and live iframe preview to stream `/camera/color/image_raw`, relaxed background log polling interval to 2.5s for load reduction.
   - `ProcessHardwarePanel.jsx`: Added `/dev/amr_camera` hardware card displaying connection status and live stream topic.
 - **Documentation (`README.md`)**:
-  - Updated hardware architecture diagram, system capabilities, hardware port & udev matrix table, and topic table to reflect Logitech C270 HD 720p webcam.
+  - Updated hardware architecture diagram, system capabilities, hardware port & udev matrix table, and topic table to reflect Logitech C270 HD 720p webcam at 20 FPS.
 
 ### 5. Verification & Testing
 - Flask backend unit tests (`admin-dashboard/server/tests/test_server.py`): 37/37 tests passed (100%).

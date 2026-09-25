@@ -28,13 +28,13 @@ export default function CameraPanel({ backendConnected, statusData, toggleCamera
   const [customTopic, setCustomTopic] = useState('');
   const [useCustom, setUseCustom] = useState(false);
   const [transport, setTransport] = useState('raw');
-  const [playerMode, setPlayerMode] = useState('img'); // 'img' | 'iframe'
+  const [playerMode, setPlayerMode] = useState('iframe'); // 'iframe' (stable stream_viewer) | 'img'
   const [streamKey, setStreamKey] = useState(0);
   const [streamStatus, setStreamStatus] = useState('live'); // 'loading' | 'live' | 'error'
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [quality, setQuality] = useState(75);
-  const [fps, setFps] = useState(30);
+  const [quality, setQuality] = useState(70);
+  const [fps, setFps] = useState(20);
   const [activeMode, setActiveMode] = useState('auto');
   const [isToggling, setIsToggling] = useState(false);
 

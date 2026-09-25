@@ -75,7 +75,7 @@ export default function RobotControlPanel({
     };
 
     updateLogs();
-    const interval = setInterval(updateLogs, 1200);
+    const interval = setInterval(updateLogs, 2500);
     return () => {
       isMounted = false;
       clearInterval(interval);

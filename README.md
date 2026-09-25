@@ -57,7 +57,7 @@ Featuring dual-stage Extended Kalman Filter (EKF) sensor fusion, autonomous outd
 |  `/dev/sabertooth` (115200)      `gpiochip4` (Lines 8 & 24)  `/dev/amr_encoder` (115200)     `/dev/amr_lidar` (230400)  |
 |                                                                                                                         |
 |  [Hiwonder 9-DOF IMU]            [Hiwonder GNSS GPS]         [Logitech C270 HD Web Camera]             |
-|  `/dev/hiwonder_imu` (9600)      `/dev/hiwonder_gps` (9600)  `/dev/amr_camera` (1280x720 @ 30 FPS)     |
+|  `/dev/hiwonder_imu` (9600)      `/dev/hiwonder_gps` (9600)  `/dev/amr_camera` (1280x720 @ 20 FPS)     |
 +-------------------------------------------------------------------------------------------------------------------------+
 ```
 
@@ -155,7 +155,7 @@ All USB and serial devices are uniquely identified and mapped to persistent syml
 | **YDLIDAR G4 Scanner** | CP2102 (`serial: 0001`) | 230400 baud | `/dev/amr_lidar` | `/scan` (12.0 Hz) |
 | **Hiwonder GNSS GPS** | USB-Serial CH340 (`port: 1-2.2`) | 9600 baud | `/dev/hiwonder_gps` | `/hiwonder/gps/fix`, `/hiwonder/gps/nmea` |
 | **Hiwonder 9-DOF IMU** | USB-Serial CH340 (`port: 1-2.3`) | 9600 baud | `/dev/hiwonder_imu` | `/hiwonder/imu/data_raw`, `/hiwonder/imu/mag` |
-| **Logitech C270 HD Web Camera** | USB 2.0 (`046d:0825`) | V4L2 MJPG (1280x720 @ 30 FPS) | `/dev/amr_camera` | `/camera/color/image_raw` |
+| **Logitech C270 HD Web Camera** | USB 2.0 (`046d:0825`) | V4L2 MJPG (1280x720 @ 20 FPS) | `/dev/amr_camera` | `/camera/color/image_raw` |
 
 ---
 

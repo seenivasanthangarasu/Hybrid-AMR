@@ -37,7 +37,7 @@ def open_video_capture(device_target):
     cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'MJPG'))
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
-    cap.set(cv2.CAP_PROP_FPS, 30)
+    cap.set(cv2.CAP_PROP_FPS, 20)
 
     ret, frame = cap.read()
     if ret and frame is not None and frame.shape[0] > 0 and frame.shape[1] > 0:
@@ -46,7 +46,7 @@ def open_video_capture(device_target):
     # Fallback to standard 640x480
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-    cap.set(cv2.CAP_PROP_FPS, 30)
+    cap.set(cv2.CAP_PROP_FPS, 20)
     ret, frame = cap.read()
     if ret and frame is not None and frame.shape[0] > 0 and frame.shape[1] > 0:
         return cap
@@ -130,8 +130,8 @@ class CameraStreamerNode(Node):
         else:
             self.get_logger().info("No physical optical RGB camera found. Running Pro-Max Telemetry HUD streamer.")
 
-        # Timer at 30 FPS (33.3 ms) for smooth live streaming
-        self.timer = self.create_timer(1.0 / 30.0, self.timer_tick)
+        # Timer at 20 FPS (50.0 ms) for smooth low-CPU streaming
+        self.timer = self.create_timer(1.0 / 20.0, self.timer_tick)
 
     def odom_cb(self, msg: Odometry):
         self.odom_pos["x"] = msg.pose.pose.position.x
@@ -220,7 +220,7 @@ class CameraStreamerNode(Node):
 
         # Bottom Bar
         cv2.rectangle(frame, (0, h - 28), (w, h), (18, 22, 30), -1)
-        cv2.putText(frame, "ROS 2 Jazzy | FastDDS UDP | 30 FPS Active Stream", (16, h - 10),
+        cv2.putText(frame, "ROS 2 Jazzy | FastDDS UDP | 20 FPS Active Stream", (16, h - 10),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.40, (140, 160, 180), 1, cv2.LINE_AA)
 
         return frame
