@@ -18,6 +18,7 @@ export const dataSources = [
   { id: '/map', label: 'Occupancy map', category: 'Perception', kind: 'topic', messageType: 'nav_msgs/OccupancyGrid', defaultEnabled: false },
 
   { id: '/hiwonder/gps/fix', label: 'GNSS fix', category: 'Positioning', kind: 'topic', messageType: 'sensor_msgs/NavSatFix', defaultEnabled: true },
+  { id: '/hiwonder/gps/nmea', label: 'GNSS raw NMEA', category: 'Positioning', kind: 'topic', messageType: 'std_msgs/String', defaultEnabled: false },
 
   { id: '/hiwonder/imu/data_raw', label: 'IMU (accel / gyro / orientation)', category: 'Sensors', kind: 'topic', messageType: 'sensor_msgs/Imu', defaultEnabled: true },
   { id: '/hiwonder/imu/mag', label: 'IMU magnetometer', category: 'Sensors', kind: 'topic', messageType: 'sensor_msgs/MagneticField', defaultEnabled: true },
@@ -26,6 +27,9 @@ export const dataSources = [
   { id: '/joint_states', label: 'Joint states', category: 'Robot model', kind: 'topic', messageType: 'sensor_msgs/JointState', defaultEnabled: false },
 
   { id: '/cmd_vel', label: 'Velocity command', category: 'Commands', kind: 'topic', messageType: 'geometry_msgs/Twist', defaultEnabled: true },
+  { id: '/radio/cmd_vel', label: 'Radio velocity command', category: 'Commands', kind: 'topic', messageType: 'geometry_msgs/Twist', defaultEnabled: false },
+  { id: '/radio/channels', label: 'Radio RC channels (DS-600)', category: 'Commands', kind: 'topic', messageType: 'sensor_msgs/Joy', defaultEnabled: true },
+  { id: '/radio/status', label: 'Radio link status', category: 'Commands', kind: 'topic', messageType: 'std_msgs/String', defaultEnabled: true },
 
   { id: 'camera-snapshots', label: 'Camera snapshots', category: 'Imagery', kind: 'camera', defaultEnabled: false },
 ];

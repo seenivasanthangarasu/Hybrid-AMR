@@ -22,11 +22,11 @@ describe('useGps', () => {
     useRosTopic.mockReset();
   });
 
-  it('subscribes to /fix as sensor_msgs/NavSatFix', () => {
+  it('subscribes to /hiwonder/gps/fix as sensor_msgs/NavSatFix', () => {
     useRosTopic.mockReturnValue({ data: null, hasData: false, stale: true, lastReceivedAt: null });
     renderHook(() => useGps());
     expect(useRosTopic).toHaveBeenCalledWith(
-      expect.objectContaining({ name: '/fix', messageType: 'sensor_msgs/NavSatFix' }),
+      expect.objectContaining({ name: '/hiwonder/gps/fix', messageType: 'sensor_msgs/NavSatFix' }),
     );
   });
 
