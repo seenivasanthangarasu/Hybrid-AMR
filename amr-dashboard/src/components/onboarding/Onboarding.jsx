@@ -109,7 +109,9 @@ export default function Onboarding() {
     <div className="setup-shell">
       <header className="setup-header">
         <span>WORKSPACE SETUP</span>
-        <span className="setup-header-label">ENVIRONMENT / MODE</span>
+        <a href="?view=dashboard" className="setup-direct-launch">
+          LAUNCH LIVE DASHBOARD →
+        </a>
       </header>
       <main className={`setup-main ${step === 'welcome' ? 'setup-welcome' : ''}`}>
         {step === 'welcome' ? (
@@ -209,13 +211,20 @@ export default function Onboarding() {
                 <section className={`setup-workspace tone-${mode}`} aria-label="Mode features placeholder">
                   <Illustration kind={mode} />
                   <div>
-                    <span className="setup-tag">WORKSPACE PREVIEW</span>
-                    <h2>{modeLabel} features</h2>
+                    <span className="setup-tag">WORKSPACE READY</span>
+                    <h2>{modeLabel} Active</h2>
                     <p>
-                      Features for {environmentLabel.toLowerCase()} {modeLabel.toLowerCase()} will appear
-                      here.
+                      Selected environment: <strong>{environmentLabel}</strong> ({environments.find((item) => item[0] === environment)?.[2]})<br />
+                      Operating mode: <strong>{modeLabel}</strong> ({modes.find((item) => item[0] === mode)?.[2]})
                     </p>
-                    <span className="setup-coming">Coming soon</span>
+                    <div style={{ marginTop: '20px', display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                      <a
+                        href="?view=dashboard"
+                        className="setup-primary-launch-button"
+                      >
+                        Launch Live Command Center →
+                      </a>
+                    </div>
                   </div>
                 </section>
               )}

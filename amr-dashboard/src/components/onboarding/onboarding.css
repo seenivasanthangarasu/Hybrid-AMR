@@ -37,6 +37,42 @@
   color: rgb(var(--ink-low));
   font-size: 10px;
 }
+.setup-direct-launch {
+  color: rgb(var(--signal-cyan));
+  font-size: 11px;
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid rgb(var(--signal-cyan) / 0.4);
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+.setup-direct-launch:hover {
+  background: rgb(var(--signal-cyan) / 0.15);
+  border-color: rgb(var(--signal-cyan));
+}
+.setup-primary-launch-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 24px;
+  background: rgb(var(--signal-cyan));
+  color: #0a0e14;
+  font-family: 'JetBrains Mono', 'IBM Plex Mono', monospace;
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+  border-radius: 6px;
+  box-shadow: 0 0 15px rgb(var(--signal-cyan) / 0.3);
+  transition: all 0.2s ease;
+}
+.setup-primary-launch-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 0 22px rgb(var(--signal-cyan) / 0.5);
+  background: #60e4ff;
+}
 .setup-main {
   width: min(1180px, 90%);
   margin: 0 auto;
