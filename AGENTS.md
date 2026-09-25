@@ -809,3 +809,66 @@ Cycle    Status     Odom     IMU      GPS      Lidar    Camera   Depth    TF    
 - Cleaned up runtime log paths in `.gitignore` (`.ros_log/`).
 - Staged all new workspace packages (`outdoor_navigation`), configuration templates (`ekf_local.yaml`, `ekf_global.yaml`, `mapper_mapping.yaml`, `navsat_transform.yaml`), launch files, firmware (`esp32_s3_encoder`), calibration profiles, scripts, and udev rules for git commit and remote sync.
 
+---
+
+## 🚀 Session Log (2026-09-25, continued) — Server-Side Authoritative AMR Power-Cycle Session Contract
+
+### 1. Architectural Design & Contract Compliance
+- **Contract Specification**:
+  - Implemented authoritative power-cycle session server on the robot conforming to the client contract in `seenivasanthangarasu/Hybrid-AMR` (branch `client-dash`).
+  - **Topic**: `/amr/session` (`std_msgs/msg/String`, rosbridge `std_msgs/String`).
+  - **QoS**: `Reliability: RELIABLE`, `Durability: TRANSIENT_LOCAL` (depth: 1).
+  - **Cadence**: Immediate publication upon startup, then periodic heartbeat every **2.0 seconds** while active.
+  - **Payload Structure**:
+    ```json
+    {
+      "schema_version": 1,
+      "robot_id": "amr-1",
+      "session_id": "<uuid-v4>",
+      "started_at": "YYYY-MM-DDTHH:MM:SS.sssZ",
+      "state": "active"
+    }
+    ```
+  - **Strict Formatting & Immutability**:
+    - `robot_id` & `session_id` match `^[a-zA-Z0-9_-]{1,80}$`.
+    - `started_at` is a real UTC calendar timestamp with exactly 3 fractional digits and trailing `Z`.
+    - Original `started_at` timestamp is completely immutable against post-boot NTP steps / time corrections.
+    - Orderly power-off/shutdown broadcasts `"state": "ended"` before transport destruction.
+
+### 2. Implementation: `amr_session` ROS 2 Package
+- **Package Location**: `src/amr_session/`
+- **Modules**:
+  - `session_manager.py`: Authoritative session generator and durable idempotency engine.
+    - Idempotency key: Linux kernel `/proc/sys/kernel/random/boot_id`.
+    - Persists session atomically to disk using `fcntl.flock` and temporary file replacement.
+    - Reboots generate a fresh authoritative session; web dashboard refreshes, multi-client joins, rosbridge restarts, or process restarts within the same boot reuse the existing active session.
+    - Inspects system clock synchronization via Linux kernel `adjtimex` (`STA_UNSYNC`).
+  - `session_publisher.py`: ROS 2 Node (`amr_session_publisher`) publishing `/amr/session` with `TRANSIENT_LOCAL` durability and a 2.0s timer. Registers POSIX `SIGINT`/`SIGTERM` handlers to broadcast `ended` state.
+- **Launch & Startup Integration**:
+  - Integrated into `start_all.sh` (Step 2b) to bring up the publisher before rosbridge and backend services.
+  - Created systemd unit `scripts/amr-session.service` for automatic boot startup.
+  - Added `/amr/session` to `amr_data_recorder` recorded topics.
+
+### 3. Server UI & Backend Integration
+- **Flask Backend (`admin-dashboard/server/server.py`)**:
+  - Imported `amr_session.session_manager`.
+  - Added `session_proc` to `MANAGED_PROCESS_PATTERNS`.
+  - Exposed `GET /api/session` endpoint returning active session payload and internal clock/boot metadata.
+  - Augmented `GET /api/status` to return authoritative session and clock sync status.
+- **React Frontend (`admin-dashboard/src`)**:
+  - `App.jsx`: Subscribed to `/amr/session` via `useRosTopic` and passed `sessionData` to child panels.
+  - `Header.jsx`: Added live Authoritative Session badge (`<Hash />`, Robot ID, shortened UUID, and active/ended badge).
+  - `RobotControlPanel.jsx`: Added Authoritative Power-Cycle Session telemetry card and registered `Authoritative Session Publisher` in module list.
+  - `ProcessHardwarePanel.jsx`: Added Authoritative Session banner with full identity, started time, and status.
+
+### 4. Verification & Testing
+- **Session Manager Unit Tests (`src/amr_session/test/test_session_manager.py`)**:
+  - 9/9 tests passed (100%): ISO 8601 UTC millisecond formatting, ID regex, boot idempotency, concurrent startup requests, reboot session renewal, clock correction immutability, repeated wall-clock timestamps, malformed metadata auto-healing, and orderly shutdown.
+- **Flask Backend Unit Tests (`admin-dashboard/server/tests/test_server.py`)**:
+  - 37/37 tests passed (100%), including new `/api/session` and `/api/status` contract tests.
+- **Frontend Production Build**:
+  - `npm run build` succeeded cleanly with zero warnings or errors.
+- **Live ROS 2 Integration**:
+  - Verified package build via `colcon build --symlink-install --packages-select amr_session`.
+  - Verified ROS 2 topic publication, transient-local latching, and rosbridge JSON serialization over WebSocket port 9090.
+

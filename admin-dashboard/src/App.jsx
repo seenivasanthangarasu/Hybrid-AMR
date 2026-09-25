@@ -37,6 +37,24 @@ export default function App() {
     throttle_rate: 500,
   });
 
+  // Live Authoritative AMR Session Subscription (/amr/session)
+  const { data: sessionRosMsg, hasData: hasSessionRos } = useRosTopic({
+    name: '/amr/session',
+    messageType: 'std_msgs/String',
+    throttle_rate: 0,
+  });
+
+  // Parse session JSON payload if available from ROS topic, fallback to backend /api/status session
+  let liveSession = null;
+  if (hasSessionRos && sessionRosMsg?.data) {
+    try {
+      liveSession = typeof sessionRosMsg.data === 'string' ? JSON.parse(sessionRosMsg.data) : sessionRosMsg.data;
+    } catch (e) {
+      console.warn('Failed to parse ROS session message:', e);
+    }
+  }
+  const sessionData = liveSession || statusData?.session || null;
+
   const batteryVoltage =
     hasBatteryRos && batteryMsg?.voltage !== undefined && batteryMsg.voltage > 0
       ? batteryMsg.voltage
@@ -61,6 +79,7 @@ export default function App() {
         backendConnected={backendConnected}
         systemData={systemData}
         batteryVoltage={batteryVoltage}
+        sessionData={sessionData}
         activeTab={activeTab}
         setActiveTab={setActiveTab}
       />
@@ -70,6 +89,7 @@ export default function App() {
           <RobotControlPanel
             statusData={statusData}
             batteryVoltage={batteryVoltage}
+            sessionData={sessionData}
             startStack={startStack}
             stopStack={stopStack}
             toggleCamera={toggleCamera}
@@ -85,6 +105,7 @@ export default function App() {
           <ProcessHardwarePanel
             statusData={statusData}
             batteryVoltage={batteryVoltage}
+            sessionData={sessionData}
             restartProcess={restartProcess}
             backendConnected={backendConnected}
           />

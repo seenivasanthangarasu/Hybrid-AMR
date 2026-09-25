@@ -50,6 +50,9 @@ class AMRDataRecorder(Node):
             # Robot command
             '/cmd_vel',
 
+            # Session lifecycle
+            '/amr/session',
+
             # TF
             '/tf',
             '/tf_static',

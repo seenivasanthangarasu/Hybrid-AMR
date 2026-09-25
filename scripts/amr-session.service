@@ -1,0 +1,21 @@
+[Unit]
+Description=Hybrid-AMR Authoritative Power Cycle Session Publisher
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/Desktop/Xtrmbly
+Environment="FASTRTPS_DEFAULT_PROFILES_FILE=/home/ubuntu/Desktop/Xtrmbly/fastdds_udp.xml"
+Environment="RMW_IMPLEMENTATION=rmw_fastrtps_cpp"
+Environment="ROS_LOG_DIR=/tmp/ros_log"
+ExecStart=/bin/bash -c "source /opt/ros/jazzy/setup.bash && source /home/ubuntu/Desktop/Xtrmbly/install/setup.bash && ros2 run amr_session session_publisher"
+Restart=always
+RestartSec=3
+KillMode=process
+KillSignal=SIGTERM
+TimeoutStopSec=5
+
+[Install]
+WantedBy=multi-user.target

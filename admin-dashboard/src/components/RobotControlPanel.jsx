@@ -4,6 +4,7 @@ import { Power, Camera, Cpu, Navigation, Compass, Radio, CheckCircle2, XCircle, 
 export default function RobotControlPanel({
   statusData,
   batteryVoltage,
+  sessionData,
   startStack,
   stopStack,
   toggleCamera,
@@ -43,6 +44,7 @@ export default function RobotControlPanel({
 
   // Complete list of ROS 2 modules launched in the stack
   const autoStackNodes = [
+    { key: 'session_proc', name: 'Authoritative Session Publisher', topic: '/amr/session', desc: 'Authoritative power-cycle session identity & heartbeat' },
     { key: 'urdf_proc', name: 'Robot State Publisher (URDF / TF)', topic: '/robot_description', desc: 'Publishes 3D robot transform tree' },
     { key: 'joint_state_proc', name: 'Joint State Publisher', topic: '/joint_states', desc: 'Publishes wheel joint states' },
     { key: 'odom_proc', name: 'ESP32 Odometry Node', topic: '/odom', desc: 'Serial wheel encoder odometry' },
@@ -379,6 +381,55 @@ export default function RobotControlPanel({
           <button onClick={() => setFeedback(null)} className="text-slate-400 hover:text-slate-200 text-base font-bold px-1">
             &times;
           </button>
+        </div>
+      )}
+
+      {/* Authoritative Session & Power Cycle Card */}
+      {sessionData && (
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-sm">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 bg-cyan-500/10 border border-cyan-500/30 rounded-xl text-cyan-400">
+                <Shield className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-bold text-slate-100">Authoritative Power-Cycle Session</h3>
+                  <span
+                    className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase tracking-wider ${
+                      sessionData.state === 'active'
+                        ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                        : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                    }`}
+                  >
+                    {sessionData.state}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Durable session identity generated on robot power-on and published over ROS topic <code className="text-cyan-400 font-mono">/amr/session</code>
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 font-mono text-xs">
+              <div className="bg-slate-950 px-3 py-2 rounded-lg border border-slate-800">
+                <span className="text-[10px] text-slate-500 uppercase tracking-wider block">Robot ID</span>
+                <span className="text-slate-200 font-bold">{sessionData.robot_id || 'amr-1'}</span>
+              </div>
+              <div className="bg-slate-950 px-3 py-2 rounded-lg border border-slate-800">
+                <span className="text-[10px] text-slate-500 uppercase tracking-wider block">Session UUID</span>
+                <span className="text-cyan-300 font-semibold truncate block" title={sessionData.session_id}>
+                  {sessionData.session_id || 'N/A'}
+                </span>
+              </div>
+              <div className="bg-slate-950 px-3 py-2 rounded-lg border border-slate-800">
+                <span className="text-[10px] text-slate-500 uppercase tracking-wider block">Started At (UTC)</span>
+                <span className="text-slate-200 font-medium truncate block" title={sessionData.started_at}>
+                  {sessionData.started_at || 'N/A'}
+                </span>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 

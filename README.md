@@ -254,6 +254,35 @@ ros2 launch rock_bringup mapping.launch.py start_manual_drive:=true
 ros2 run amr_data_recorder record
 ```
 
+#### 6. Authoritative Power-Cycle Session Publisher (/amr/session)
+```bash
+ros2 run amr_session session_publisher
+```
+
+---
+
+## 🆔 Authoritative Power-Cycle Session Contract
+
+The robot manages an authoritative power-cycle session conforming to the browser client contract:
+
+* **ROS 2 Topic**: `/amr/session`
+* **Message Type**: `std_msgs/msg/String` (JSON string)
+* **QoS**: `Reliability: RELIABLE`, `Durability: TRANSIENT_LOCAL` (depth: 1)
+* **Publication Rate**: Immediate on startup, and every **2.0 seconds** while active.
+* **Payload Structure**:
+  ```json
+  {
+    "schema_version": 1,
+    "robot_id": "amr-1",
+    "session_id": "550e8400-e29b-41d4-a716-446655440000",
+    "started_at": "2026-09-25T10:00:00.000Z",
+    "state": "active"
+  }
+  ```
+* **Durable Idempotency Key**: Linux kernel boot ID (`/proc/sys/kernel/random/boot_id`). Reboots trigger a brand-new session; reloads, reconnects, or process restarts within the same boot reuse the existing authoritative session.
+* **Orderly Shutdown**: Upon SIGTERM/SIGINT, announces `"state": "ended"` before shutting down transport.
+* **Systemd Service**: `scripts/amr-session.service` is available to start the session publisher on boot (`sudo cp scripts/amr-session.service /etc/systemd/system/ && sudo systemctl enable --now amr-session.service`).
+
 ---
 
 ## 🧪 Testing & Verification
@@ -264,17 +293,21 @@ The codebase includes comprehensive unit test suites covering the frontend, back
 # 1. Run Outdoor Navigation Geodesy & State Machine Tests
 pytest src/outdoor_navigation/test/
 
-# 2. Run Dashboard Flask Backend Tests (35 Unit Tests)
+# 2. Run AMR Session Manager Unit Tests (9 Unit Tests)
+PYTHONPATH=src/amr_session pytest src/amr_session/test/
+
+# 3. Run Dashboard Flask Backend Tests (37 Unit Tests)
 pytest admin-dashboard/server/tests/test_server.py
 
-# 3. Run Dashboard Frontend Vitest Suite (130 Unit Tests across 10 test suites)
+# 4. Run Dashboard Frontend Vitest Suite (130 Unit Tests across 10 test suites)
 cd admin-dashboard && npm test -- --run
 ```
 
 | Test Suite | Framework | Total Tests | Pass Rate |
 |---|---|---|---|
 | **Outdoor Navigation Algorithms** | Pytest | 7 | **100% (7/7 Passed)** |
-| **Admin Backend Server API** | Pytest | 35 | **100% (35/35 Passed)** |
+| **AMR Power-Cycle Session Manager** | Pytest | 9 | **100% (9/9 Passed)** |
+| **Admin Backend Server API** | Pytest | 37 | **100% (37/37 Passed)** |
 | **React Frontend Diagnostics UI** | Vitest | 130 | **100% (130/130 Passed)** |
 
 ---

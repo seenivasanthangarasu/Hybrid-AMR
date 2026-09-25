@@ -10,12 +10,28 @@ from flask_cors import CORS
 import psutil
 import signal
 
+# Import Authoritative AMR Session Manager
+WORKSPACE_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+AMR_SESSION_PKG = os.path.join(WORKSPACE_ROOT, "src", "amr_session")
+if AMR_SESSION_PKG not in sys.path:
+    sys.path.insert(0, AMR_SESSION_PKG)
+
+try:
+    from amr_session.session_manager import get_session_manager, check_clock_sync_status
+except ImportError:
+    try:
+        from src.amr_session.amr_session.session_manager import get_session_manager, check_clock_sync_status
+    except ImportError:
+        get_session_manager = None
+        check_clock_sync_status = lambda: {"synchronized": False, "details": "amr_session package not loaded"}
+
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
 
 PORT = int(os.environ.get("ADMIN_BACKEND_PORT", 5001))
 
 MANAGED_PROCESS_PATTERNS = {
+    "session_proc": ["amr_session_publisher", "session_publisher", "session_publisher.py"],
     "hybrid_manager": ["hybrid_manager.py", "hybrid_navigation"],
     "gps_proc": ["hiwonder_gps_node", "hiwonder_gps", "gps_node", "ublox_gps_node", "ublox_gps"],
     "urdf_proc": ["robot_state_publisher"],
@@ -341,12 +357,36 @@ def get_hardware_and_processes():
             "present": (bat_info.get("voltage") is not None),
             "timestamp": bat_info.get("timestamp")
         },
+        "session": (get_session_manager().get_or_create_session() if get_session_manager else None),
+        "clock_sync": check_clock_sync_status(),
         "services": {
             "rosbridge_9090": rosbridge_reachable,
             "web_video_server_8080": video_server_reachable
         },
         "managed_processes": processes_info
     })
+
+@app.route("/api/session", methods=["GET"])
+def get_session_endpoint():
+    try:
+        if get_session_manager is None:
+            return jsonify({"status": "error", "message": "amr_session manager not available"}), 500
+        sm = get_session_manager()
+        session_data = sm.get_or_create_session()
+        payload = sm.get_client_payload(session_data)
+        clock_status = check_clock_sync_status()
+        return jsonify({
+            "status": "ok",
+            "session": payload,
+            "internal_metadata": {
+                "boot_id": session_data.get("_boot_id"),
+                "started_at_epoch": session_data.get("_started_at_epoch"),
+                "clock_sync": clock_status,
+                "session_file": sm.session_file
+            }
+        })
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route("/api/battery", methods=["GET"])
 def get_battery_telemetry_endpoint():

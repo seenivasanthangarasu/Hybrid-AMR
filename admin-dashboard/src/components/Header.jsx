@@ -1,7 +1,7 @@
 import React from 'react';
-import { Activity, Server, Cpu, HardDrive, Wifi, Radio, ShieldAlert, Zap, Battery } from 'lucide-react';
+import { Activity, Server, Cpu, HardDrive, Wifi, Radio, ShieldAlert, Zap, Battery, Hash } from 'lucide-react';
 
-export default function Header({ rosStatus, backendConnected, systemData, batteryVoltage, activeTab, setActiveTab }) {
+export default function Header({ rosStatus, backendConnected, systemData, batteryVoltage, sessionData, activeTab, setActiveTab }) {
   const currentVoltage = batteryVoltage ?? systemData?.battery?.voltage ?? null;
 
   const rosColor =
@@ -134,6 +134,34 @@ export default function Header({ rosStatus, backendConnected, systemData, batter
               API: {backendConnected ? 'Connected' : 'Offline'}
             </span>
           </div>
+
+          {/* Authoritative Session Badge */}
+          {sessionData && (
+            <div
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border font-mono text-[10px] ${
+                sessionData.state === 'active'
+                  ? 'bg-cyan-500/10 text-cyan-300 border-cyan-500/30'
+                  : 'bg-amber-500/10 text-amber-300 border-amber-500/30'
+              }`}
+              title={`Robot: ${sessionData.robot_id} | Session: ${sessionData.session_id} | Started: ${sessionData.started_at}`}
+            >
+              <Hash className="w-3.5 h-3.5 text-cyan-400" />
+              <span className="font-bold">{sessionData.robot_id || 'amr-1'}</span>
+              <span className="text-slate-500">:</span>
+              <span className="text-slate-300">
+                {sessionData.session_id ? `${sessionData.session_id.slice(0, 8)}...` : 'N/A'}
+              </span>
+              <span
+                className={`ml-1 px-1 py-0.2 rounded text-[9px] font-semibold uppercase ${
+                  sessionData.state === 'active'
+                    ? 'bg-emerald-500/20 text-emerald-400'
+                    : 'bg-rose-500/20 text-rose-400'
+                }`}
+              >
+                {sessionData.state}
+              </span>
+            </div>
+          )}
 
           {/* Battery Voltage Badge */}
           {currentVoltage !== null && (

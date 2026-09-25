@@ -423,3 +423,43 @@ class TestApiBattery:
         assert "battery" in data
         assert "voltage" in data["battery"]
         assert "unit" in data["battery"]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# /api/session & /api/status session metadata
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestApiSession:
+
+    def test_session_endpoint_returns_200_and_conforms_to_contract(self, client):
+        rv = client.get("/api/session")
+        assert rv.status_code == 200
+        data = rv.get_json()
+        assert data["status"] == "ok"
+        assert "session" in data
+        sess = data["session"]
+
+        # Exact client contract validation
+        assert sess["schema_version"] == 1
+        assert "robot_id" in sess and isinstance(sess["robot_id"], str)
+        assert "session_id" in sess and isinstance(sess["session_id"], str)
+        assert "started_at" in sess and isinstance(sess["started_at"], str)
+        assert sess["state"] in ("active", "ended")
+
+        # started_at format check: ISO 8601 UTC with exactly 3 decimals and trailing Z
+        assert sess["started_at"].endswith("Z")
+        parts = sess["started_at"][:-1].split(".")
+        assert len(parts) == 2
+        assert len(parts[1]) == 3
+
+    def test_session_included_in_api_status(self, client):
+        data = client.get("/api/status").get_json()
+        assert "session" in data
+        assert "clock_sync" in data
+        assert "session_proc" in data["managed_processes"]
+        if data["session"] is not None:
+            sess = data["session"]
+            assert sess["schema_version"] == 1
+            assert sess["state"] in ("active", "ended")
+            assert "robot_id" in sess
+            assert "session_id" in sess

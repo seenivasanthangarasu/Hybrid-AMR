@@ -33,7 +33,14 @@ fuser -k 5001/tcp 2>/dev/null || true
 fuser -k 3000/tcp 2>/dev/null || true
 pkill -f depth_colorizer.py 2>/dev/null || true
 pkill -f diagnostic_cam.py 2>/dev/null || true
+pkill -f session_publisher 2>/dev/null || true
 sleep 0.5
+
+# 2b. Start Authoritative AMR Power-Cycle Session Publisher (/amr/session)
+echo "🆔 Launching Authoritative AMR Session Publisher (/amr/session)..."
+setsid ros2 run amr_session session_publisher </dev/null > /tmp/session_publisher.log 2>&1 &
+SESSION_PUB_PID=$!
+echo "   ↳ Session Publisher PID: $SESSION_PUB_PID"
 
 # 3. Start ROSBridge WebSocket Server (Port 9090)
 echo "📡 Launching ROSBridge WebSocket Server (port 9090)..."

@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import useRosTopic from '../hooks/useRosTopic';
-import { Cpu, HardDrive, MapPin, Radio, AlertTriangle, CheckCircle2, XCircle, RotateCcw, ShieldAlert, Server, Zap, Battery } from 'lucide-react';
+import { Cpu, HardDrive, MapPin, Radio, AlertTriangle, CheckCircle2, XCircle, RotateCcw, ShieldAlert, Server, Zap, Battery, Hash, Shield } from 'lucide-react';
 
-export default function ProcessHardwarePanel({ statusData, batteryVoltage, restartProcess, backendConnected }) {
+export default function ProcessHardwarePanel({ statusData, batteryVoltage, sessionData, restartProcess, backendConnected }) {
   const [confirmModal, setConfirmModal] = useState(null); // process key to confirm
   const [restarting, setRestarting] = useState(false);
   const [feedback, setFeedback] = useState(null);
@@ -77,6 +77,49 @@ export default function ProcessHardwarePanel({ statusData, batteryVoltage, resta
           <button onClick={() => setFeedback(null)} className="text-slate-400 hover:text-slate-200">
             &times;
           </button>
+        </div>
+      )}
+
+      {/* Authoritative Session Banner */}
+      {sessionData && (
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-cyan-500/10 border border-cyan-500/30 rounded-lg text-cyan-400">
+              <Shield className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-bold text-slate-100">Authoritative Power-Cycle Session</span>
+                <span
+                  className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase tracking-wider ${
+                    sessionData.state === 'active'
+                      ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                      : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                  }`}
+                >
+                  {sessionData.state}
+                </span>
+              </div>
+              <p className="text-xs text-slate-400">
+                Authoritative AMR session generated from boot cycle and broadcast on <code className="text-cyan-400 font-mono">/amr/session</code>
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3 font-mono text-xs">
+            <div className="bg-slate-950 px-3 py-1.5 rounded-lg border border-slate-800">
+              <span className="text-[10px] text-slate-500 block">ROBOT</span>
+              <strong className="text-slate-200">{sessionData.robot_id}</strong>
+            </div>
+            <div className="bg-slate-950 px-3 py-1.5 rounded-lg border border-slate-800">
+              <span className="text-[10px] text-slate-500 block">SESSION ID</span>
+              <strong className="text-cyan-300">{sessionData.session_id}</strong>
+            </div>
+            <div className="bg-slate-950 px-3 py-1.5 rounded-lg border border-slate-800">
+              <span className="text-[10px] text-slate-500 block">STARTED AT</span>
+              <strong className="text-slate-200">{sessionData.started_at}</strong>
+            </div>
+          </div>
         </div>
       )}
 
