@@ -124,7 +124,7 @@ export default function ProcessHardwarePanel({ statusData, batteryVoltage, sessi
       )}
 
       {/* Serial Hardware & Ports Reachability */}
-      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-7 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-8 gap-4">
         {/* /dev/hiwonder_gps */}
         <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
           <div className="flex items-center justify-between mb-2">
@@ -259,6 +259,28 @@ export default function ProcessHardwarePanel({ statusData, batteryVoltage, sessi
           </div>
           <p className="text-sm font-semibold text-slate-200">Web Video Server</p>
           <p className="text-xs text-slate-400 mt-1">MJPEG Camera Streamer</p>
+        </div>
+
+        {/* /dev/amr_camera - Logitech C270 Web Camera */}
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-mono text-slate-400">/dev/amr_camera</span>
+            {hardware.camera?.physical_camera_connected ? (
+              <span className="px-2 py-0.5 text-[10px] font-bold bg-emerald-500/10 text-emerald-400 rounded border border-emerald-500/30">
+                Connected
+              </span>
+            ) : (
+              <span className="px-2 py-0.5 text-[10px] font-bold bg-rose-500/10 text-rose-400 rounded border border-rose-500/30">
+                Missing
+              </span>
+            )}
+          </div>
+          <p className="text-sm font-semibold text-slate-200">
+            {hardware.camera?.logitech ? 'Logitech C270 (720p)' : 'Logitech / USB Webcam'}
+          </p>
+          <p className="text-xs text-slate-400 mt-1">
+            Stream: <span className="font-mono text-cyan-400">/camera/color/image_raw</span>
+          </p>
         </div>
       </div>
 

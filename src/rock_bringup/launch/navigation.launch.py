@@ -158,27 +158,25 @@ def generate_launch_description():
         condition=IfCondition(LaunchConfiguration('start_rviz'))
     )
 
-    camera_launch = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            os.path.join(
-                get_package_share_directory('realsense2_camera'),
-                'launch',
-                'rs_launch.py'
-            )
-        ),
-        launch_arguments={
-            'initial_reset': 'false',
-            'enable_gyro': 'false',
-            'enable_accel': 'false',
-            'enable_motion': 'false',
-            'enable_sync': 'false',
-            'enable_color': 'true',
-            'enable_depth': 'true',
-            'color_qos': 'DEFAULT',
-            'depth_qos': 'DEFAULT',
-            'depth_module.depth_profile': '480x270x15',
-            'rgb_camera.color_profile': '424x240x15',
-        }.items(),
+    # -----------------------------
+    # Camera Node (Logitech C270 HD 720p Web Camera via v4l2_camera)
+    # -----------------------------
+    camera_device_path = '/dev/amr_camera' if os.path.exists('/dev/amr_camera') else '/dev/video0'
+    camera_launch = Node(
+        package='v4l2_camera',
+        executable='v4l2_camera_node',
+        name='v4l2_camera_node',
+        output='screen',
+        parameters=[{
+            'video_device': camera_device_path,
+            'image_size': [1280, 720],
+            'camera_frame_id': 'camera_link_1',
+            'pixel_format': 'MJPG'
+        }],
+        remappings=[
+            ('image_raw', '/camera/color/image_raw'),
+            ('camera_info', '/camera/color/camera_info')
+        ],
         condition=IfCondition(LaunchConfiguration('start_camera'))
     )
 

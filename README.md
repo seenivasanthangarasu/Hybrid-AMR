@@ -56,8 +56,8 @@ Featuring dual-stage Extended Kalman Filter (EKF) sensor fusion, autonomous outd
 |  [Sabertooth 2x32 Controller]    [HOT RC DS-600 Receiver]    [ESP32-S3 Optical Encoders]     [YDLIDAR G4 Scanner]       |
 |  `/dev/sabertooth` (115200)      `gpiochip4` (Lines 8 & 24)  `/dev/amr_encoder` (115200)     `/dev/amr_lidar` (230400)  |
 |                                                                                                                         |
-|  [Hiwonder 9-DOF IMU]            [Hiwonder GNSS GPS]         [Intel RealSense D435i / USB Cam]                          |
-|  `/dev/hiwonder_imu` (9600)      `/dev/hiwonder_gps` (9600)  `/dev/video4` (424x240 @ 15 FPS)                           |
+|  [Hiwonder 9-DOF IMU]            [Hiwonder GNSS GPS]         [Logitech C270 HD Web Camera]             |
+|  `/dev/hiwonder_imu` (9600)      `/dev/hiwonder_gps` (9600)  `/dev/amr_camera` (1280x720 @ 30 FPS)     |
 +-------------------------------------------------------------------------------------------------------------------------+
 ```
 
@@ -102,7 +102,7 @@ Featuring dual-stage Extended Kalman Filter (EKF) sensor fusion, autonomous outd
 
 ### 8. 💻 Web Admin & Diagnostics Dashboard (`admin-dashboard`)
 * **Robot Control Panel**: Full stack bringup with animated launch stages, live streaming bringup logs, 1-click Radio Teleop & Motor Drive toggle (`[⚡ Turn ON Radio Teleop Drive]` / `[🛑 Turn OFF Radio Teleop Drive]`), and live battery indicator pill.
-* **Universal Camera Streamer**: Automatic detection of Intel RealSense D435i (`/dev/video4`), generic V4L2 USB cameras, 16-bit TURBO depth maps, and Pro-Max Telemetry HUD fallback stream on `http://<ROBOT_IP>:8080`.
+* **Universal Camera Streamer**: High-performance V4L2 streamer with native support for Logitech C270 HD (1280x720 @ 30 FPS MJPG), persistent `/dev/amr_camera` symlink discovery, and Pro-Max Telemetry HUD fallback stream on `http://<ROBOT_IP>:8080`.
 * **Live System & ROS 2 Diagnostics**: Real-time topic rates, TF tree staleness, node registry, CPU/RAM/Disk/Network health, and `journalctl`/ROS log viewers.
 
 ---
@@ -155,7 +155,7 @@ All USB and serial devices are uniquely identified and mapped to persistent syml
 | **YDLIDAR G4 Scanner** | CP2102 (`serial: 0001`) | 230400 baud | `/dev/amr_lidar` | `/scan` (12.0 Hz) |
 | **Hiwonder GNSS GPS** | USB-Serial CH340 (`port: 1-2.2`) | 9600 baud | `/dev/hiwonder_gps` | `/hiwonder/gps/fix`, `/hiwonder/gps/nmea` |
 | **Hiwonder 9-DOF IMU** | USB-Serial CH340 (`port: 1-2.3`) | 9600 baud | `/dev/hiwonder_imu` | `/hiwonder/imu/data_raw`, `/hiwonder/imu/mag` |
-| **Intel RealSense D435i** | USB 3.0 (`8086:0b3a`) | V4L2 (`/dev/video4`) | `/dev/video4` | `/camera/camera/color/image_raw` |
+| **Logitech C270 HD Web Camera** | USB 2.0 (`046d:0825`) | V4L2 MJPG (1280x720 @ 30 FPS) | `/dev/amr_camera` | `/camera/color/image_raw` |
 
 ---
 

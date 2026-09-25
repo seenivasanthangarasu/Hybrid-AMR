@@ -241,16 +241,42 @@ def detect_camera_hardware():
             pass
 
     v4l2_devices = []
+    # Check persistent symlinks first
+    for sym in ["/dev/amr_camera", "/dev/logi_cam", "/dev/video_cam"]:
+        if os.path.exists(sym) and sym not in v4l2_devices:
+            v4l2_devices.append(sym)
+
     for dev in sorted(glob.glob("/dev/video*")):
         base = os.path.basename(dev)
         if base in ["video32", "video33"]:
             continue
-        if os.path.exists(dev):
+        if os.path.exists(dev) and dev not in v4l2_devices:
             v4l2_devices.append(dev)
+
+    logitech_found = False
+    logitech_name = "Logitech C270 HD Webcam"
+    for dev in v4l2_devices:
+        target = os.path.realpath(dev) if os.path.islink(dev) else dev
+        base = os.path.basename(target)
+        name_path = f"/sys/class/video4linux/{base}/name"
+        if os.path.exists(name_path):
+            try:
+                with open(name_path) as f:
+                    name_str = f.read().strip()
+                    if "C270" in name_str or "Logitech" in name_str:
+                        logitech_found = True
+                        logitech_name = f"Logitech {name_str} (720p HD)"
+                        break
+            except Exception:
+                pass
 
     if realsense_found:
         hw_type = "realsense"
         label = f"{realsense_name} (USB 3D Camera)"
+    elif logitech_found:
+        hw_type = "v4l2"
+        dev_label = v4l2_devices[0] if v4l2_devices else "/dev/video0"
+        label = f"{logitech_name} ({dev_label})"
     elif v4l2_devices:
         hw_type = "v4l2"
         label = f"V4L2 USB Camera ({v4l2_devices[0]})"
@@ -261,6 +287,8 @@ def detect_camera_hardware():
     return {
         "realsense": realsense_found,
         "realsense_name": realsense_name if realsense_found else None,
+        "logitech": logitech_found,
+        "logitech_name": logitech_name if logitech_found else None,
         "v4l2_devices": v4l2_devices,
         "type": hw_type,
         "label": label,
@@ -887,9 +915,10 @@ def toggle_camera_module():
         active_topic = "/camera/camera/color/image_raw"
     elif chosen_mode == "v4l2":
         dev = hw["v4l2_devices"][0] if hw["v4l2_devices"] else "/dev/video0"
+        image_size = "[1280,720]" if hw.get("logitech") else "[640,480]"
         cmd_str = (
             prefix +
-            f"ros2 run v4l2_camera v4l2_camera_node --ros-args -p video_device:={dev} -p image_size:=[640,480] -r image_raw:=/camera/color/image_raw"
+            f"ros2 run v4l2_camera v4l2_camera_node --ros-args -p video_device:={dev} -p image_size:={image_size} -r image_raw:=/camera/color/image_raw"
         )
         active_topic = "/camera/color/image_raw"
     else:  # diagnostic

@@ -16,9 +16,9 @@ const VIDEO_SERVER_URL = getVideoServerUrl();
 
 // Common camera topic options for ROS 2 + web_video_server
 const TOPIC_PRESETS = [
+  { label: 'Logitech C270 HD 720p (/camera/color/image_raw)', topic: '/camera/color/image_raw' },
   { label: 'RealSense RGB (/camera/camera/color/image_raw)', topic: '/camera/camera/color/image_raw' },
   { label: 'RealSense Depth (/camera/camera/depth/image_rect_raw)', topic: '/camera/camera/depth/image_rect_raw' },
-  { label: 'RGB Camera (/camera/color/image_raw)', topic: '/camera/color/image_raw' },
   { label: 'USB Camera (/usb_cam/image_raw)', topic: '/usb_cam/image_raw' },
   { label: 'Camera Raw (/image_raw)', topic: '/image_raw' },
 ];
@@ -33,8 +33,8 @@ export default function CameraPanel({ backendConnected, statusData, toggleCamera
   const [streamStatus, setStreamStatus] = useState('live'); // 'loading' | 'live' | 'error'
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [quality, setQuality] = useState(70);
-  const [fps, setFps] = useState(15);
+  const [quality, setQuality] = useState(75);
+  const [fps, setFps] = useState(30);
   const [activeMode, setActiveMode] = useState('auto');
   const [isToggling, setIsToggling] = useState(false);
 
@@ -169,14 +169,18 @@ export default function CameraPanel({ backendConnected, statusData, toggleCamera
           {/* Hardware Detection Badge */}
           {cameraHw && (
             <span className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-mono ${
-              cameraHw.realsense
+              cameraHw.logitech
+                ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                : cameraHw.realsense
                 ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
                 : cameraHw.v4l2_devices?.length > 0
                 ? 'bg-cyan-500/10 border-cyan-500/30 text-cyan-400'
                 : 'bg-amber-500/10 border-amber-500/30 text-amber-400'
             }`}>
               <Radio className="w-3 h-3" />
-              {cameraHw.realsense
+              {cameraHw.logitech
+                ? 'Logitech C270 (720p HD)'
+                : cameraHw.realsense
                 ? 'RealSense Connected'
                 : cameraHw.v4l2_devices?.length > 0
                 ? `USB Cam (${cameraHw.v4l2_devices[0]})`
@@ -236,8 +240,8 @@ export default function CameraPanel({ backendConnected, statusData, toggleCamera
         <div className="flex items-center flex-wrap gap-1.5">
           {[
             { id: 'auto', label: 'Auto (Best)', icon: <ShieldCheck className="w-3 h-3" /> },
+            { id: 'v4l2', label: 'Logitech C270 (720p)', icon: <Camera className="w-3 h-3" /> },
             { id: 'realsense', label: 'RealSense 3D', icon: <Video className="w-3 h-3" /> },
-            { id: 'v4l2', label: 'USB Webcam', icon: <Camera className="w-3 h-3" /> },
             { id: 'diagnostic', label: 'Telemetry HUD', icon: <Cpu className="w-3 h-3" /> },
           ].map((m) => (
             <button

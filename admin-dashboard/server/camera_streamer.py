@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """
-camera_streamer.py — High-Performance Direct V4L2 & RealSense ROS 2 Camera Streamer
-- Automatically discovers RealSense RGB (/dev/video4, /dev/video0) or generic USB webcams
-- Directly captures BGR frames at native 424x240 / 640x480 @ 15 FPS
+camera_streamer.py — High-Performance Direct V4L2 ROS 2 Camera Streamer
+- Automatically discovers Logitech C270 HD Webcam (/dev/amr_camera, /dev/video0) or generic USB webcams
+- Directly captures BGR frames at native HD 720p (1280x720 @ 30 FPS, MJPG) or standard VGA
 - Publishes with RELIABLE QoS to:
     /camera/color/image_raw
     /camera/camera/color/image_raw
 - Seamlessly falls back to Pro-Max Telemetry HUD if no physical camera is connected
-- Colorizes 16-bit Depth (/camera/camera/depth/image_rect_raw) -> TURBO colormap
+- Colorizes 16-bit Depth (/camera/camera/depth/image_rect_raw) -> TURBO colormap if depth data present
 """
 import os
 import sys
@@ -23,25 +23,55 @@ from sensor_msgs.msg import Image, NavSatFix, Imu
 from nav_msgs.msg import Odometry
 from cv_bridge import CvBridge
 
+def open_video_capture(device_target):
+    """
+    Open V4L2 VideoCapture on device index or device node path.
+    Prioritizes 1280x720 MJPG @ 30fps (Logitech C270 native HD).
+    Falls back gracefully to 640x480 / default.
+    """
+    cap = cv2.VideoCapture(device_target, cv2.CAP_V4L2)
+    if not cap.isOpened():
+        return None
+
+    # Try native 720p MJPG first (standard for Logitech C270)
+    cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'MJPG'))
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+    cap.set(cv2.CAP_PROP_FPS, 30)
+
+    ret, frame = cap.read()
+    if ret and frame is not None and frame.shape[0] > 0 and frame.shape[1] > 0:
+        return cap
+
+    # Fallback to standard 640x480
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+    cap.set(cv2.CAP_PROP_FPS, 30)
+    ret, frame = cap.read()
+    if ret and frame is not None and frame.shape[0] > 0 and frame.shape[1] > 0:
+        return cap
+
+    cap.release()
+    return None
+
 def find_rgb_video_device():
-    # RealSense D435i RGB is typically /dev/video4
-    for dev_idx in [4, 2, 0, 1, 3, 5]:
+    # 1. Check persistent udev symlink first
+    for symlink in ["/dev/amr_camera", "/dev/logi_cam", "/dev/video_cam"]:
+        if os.path.exists(symlink):
+            test_cap = open_video_capture(symlink)
+            if test_cap is not None:
+                test_cap.release()
+                return symlink
+
+    # 2. Check standard video indices (/dev/video0, /dev/video1, etc.)
+    for dev_idx in [0, 1, 2, 4, 3, 5]:
         dev_path = f"/dev/video{dev_idx}"
         if not os.path.exists(dev_path):
             continue
-        try:
-            cap = cv2.VideoCapture(dev_idx, cv2.CAP_V4L2)
-            if cap.isOpened():
-                cap.set(cv2.CAP_PROP_FRAME_WIDTH, 424)
-                cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 240)
-                cap.set(cv2.CAP_PROP_FPS, 15)
-                ret, frame = cap.read()
-                cap.release()
-                if ret and frame is not None and frame.shape[0] > 0 and frame.shape[1] > 0:
-                    if len(frame.shape) == 3 and frame.shape[2] == 3:
-                        return dev_idx
-        except Exception:
-            pass
+        test_cap = open_video_capture(dev_idx)
+        if test_cap is not None:
+            test_cap.release()
+            return dev_idx
     return None
 
 class CameraStreamerNode(Node):
@@ -82,23 +112,26 @@ class CameraStreamerNode(Node):
         self.create_subscription(Image, '/camera/camera/depth/image_rect_raw', self.depth_cb, self.qos_sub)
 
         # Hardware Camera Video Capture
-        self.video_idx = find_rgb_video_device()
+        self.video_dev = find_rgb_video_device()
         self.cap = None
-        if self.video_idx is not None:
+        if self.video_dev is not None:
             try:
-                self.cap = cv2.VideoCapture(self.video_idx, cv2.CAP_V4L2)
-                self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 424)
-                self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 240)
-                self.cap.set(cv2.CAP_PROP_FPS, 15)
-                self.get_logger().info(f"Connected to RGB Optical Camera on /dev/video{self.video_idx} (424x240 @ 15fps)")
+                self.cap = open_video_capture(self.video_dev)
+                if self.cap is not None:
+                    actual_w = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+                    actual_h = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+                    actual_fps = int(self.cap.get(cv2.CAP_PROP_FPS))
+                    self.get_logger().info(f"Connected to Logitech C270 / USB Camera on {self.video_dev} ({actual_w}x{actual_h} @ {actual_fps}fps)")
+                else:
+                    self.get_logger().warn(f"Failed to open camera on {self.video_dev}")
             except Exception as e:
-                self.get_logger().warn(f"Failed to open /dev/video{self.video_idx}: {e}")
+                self.get_logger().warn(f"Exception opening camera {self.video_dev}: {e}")
                 self.cap = None
         else:
             self.get_logger().info("No physical optical RGB camera found. Running Pro-Max Telemetry HUD streamer.")
 
-        # Timer at 15 FPS (66.6 ms)
-        self.timer = self.create_timer(1.0 / 15.0, self.timer_tick)
+        # Timer at 30 FPS (33.3 ms) for smooth live streaming
+        self.timer = self.create_timer(1.0 / 30.0, self.timer_tick)
 
     def odom_cb(self, msg: Odometry):
         self.odom_pos["x"] = msg.pose.pose.position.x
@@ -150,7 +183,7 @@ class CameraStreamerNode(Node):
         cv2.putText(frame, "HYBRID-AMR TELEMETRY HUD  |  PRO-MAX STREAM", (16, 24),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 220, 255), 1, cv2.LINE_AA)
         
-        status_text = "OPTICAL CAM: OFFLINE" if self.cap is None else f"OPTICAL CAM: /dev/video{self.video_idx}"
+        status_text = "OPTICAL CAM: OFFLINE" if self.cap is None else f"OPTICAL CAM: {self.video_dev}"
         cv2.putText(frame, status_text, (w - 240, 24),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.42, (0, 255, 180), 1, cv2.LINE_AA)
 
@@ -187,7 +220,7 @@ class CameraStreamerNode(Node):
 
         # Bottom Bar
         cv2.rectangle(frame, (0, h - 28), (w, h), (18, 22, 30), -1)
-        cv2.putText(frame, "ROS 2 Jazzy | FastDDS UDP | 15 FPS Active Stream", (16, h - 10),
+        cv2.putText(frame, "ROS 2 Jazzy | FastDDS UDP | 30 FPS Active Stream", (16, h - 10),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.40, (140, 160, 180), 1, cv2.LINE_AA)
 
         return frame
@@ -202,9 +235,9 @@ class CameraStreamerNode(Node):
                 frame = captured
             else:
                 self.cap.release()
-                self.video_idx = find_rgb_video_device()
-                if self.video_idx is not None:
-                    self.cap = cv2.VideoCapture(self.video_idx, cv2.CAP_V4L2)
+                self.video_dev = find_rgb_video_device()
+                if self.video_dev is not None:
+                    self.cap = open_video_capture(self.video_dev)
                 else:
                     self.cap = None
 

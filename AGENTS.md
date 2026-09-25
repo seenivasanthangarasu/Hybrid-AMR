@@ -872,3 +872,42 @@ Cycle    Status     Odom     IMU      GPS      Lidar    Camera   Depth    TF    
   - Verified package build via `colcon build --symlink-install --packages-select amr_session`.
   - Verified ROS 2 topic publication, transient-local latching, and rosbridge JSON serialization over WebSocket port 9090.
 
+---
+
+## 🚀 Session Log (2026-09-25) — Logitech C270 HD 720p Webcam Integration & Depth Camera Migration
+
+### 1. Hardware Identification & Udev Symlinks
+- Replaced depth camera with **Logitech C270 HD Web Camera** (`046d:0825`, USB 2.0).
+- Created persistent, unprivileged udev symlinks in `udev_rules/99-amr.rules` and installed into `/etc/udev/rules.d/99-amr.rules`:
+  - `SUBSYSTEM=="video4linux", ATTRS{idVendor}=="046d", ATTRS{idProduct}=="0825", ATTR{index}=="0", MODE:="0666", GROUP:="video", SYMLINK+="amr_camera logi_cam video_cam"`
+  - Verified symlinks: `/dev/amr_camera -> video0`, `/dev/logi_cam -> video0`, `/dev/video_cam -> video0`.
+
+### 2. ROS 2 Bringup & Camera Launch Stack (`navigation.launch.py`)
+- Replaced Intel RealSense launch with native ROS 2 `v4l2_camera` (`v4l2_camera_node`):
+  - Configured for `/dev/amr_camera` (fallback to `/dev/video0`).
+  - Native 720p HD resolution: `[1280, 720]` @ 30 FPS with `MJPG` pixel format.
+  - Frame ID: `camera_link_1`.
+  - Topic remapping: `image_raw` $\rightarrow$ `/camera/color/image_raw`.
+
+### 3. High-Performance Direct Camera Streamer (`camera_streamer.py`)
+- Upgraded `admin-dashboard/server/camera_streamer.py`:
+  - Automatically queries `/dev/amr_camera`, `/dev/logi_cam`, `/dev/video_cam`, and `/dev/video0`.
+  - Configures V4L2 `cv2.CAP_PROP_FOURCC` to `MJPG`, native 1280x720 resolution, 30 FPS timer tick.
+  - Publishes `/camera/color/image_raw` and `/camera/camera/color/image_raw` with RELIABLE QoS for seamless streaming via `web_video_server` (Port 8080).
+  - Preserves diagnostic HUD fallback with live GPS/IMU/Odometry overlays.
+
+### 4. Admin Dashboard Server & UI (`admin-dashboard`)
+- **Flask Backend (`server/server.py`)**:
+  - `detect_camera_hardware()`: Automatically introspects `/dev/amr_camera` and reads V4L2 device names via `/sys/class/video4linux/video*/name` to identify Logitech C270 HD Webcam.
+  - Updated `/api/camera/toggle` to launch `v4l2_camera_node` with 1280x720 resolution for Logitech webcams.
+- **Frontend UI (`admin-dashboard/src`)**:
+  - `CameraPanel.jsx`: Added Logitech C270 720p HD preset to top of topic selectors, updated stream mode switcher and hardware badges, set default 30 FPS.
+  - `RobotControlPanel.jsx`: Updated camera card and live iframe preview to stream `/camera/color/image_raw`.
+  - `ProcessHardwarePanel.jsx`: Added `/dev/amr_camera` hardware card displaying connection status and live stream topic.
+- **Documentation (`README.md`)**:
+  - Updated hardware architecture diagram, system capabilities, hardware port & udev matrix table, and topic table to reflect Logitech C270 HD 720p webcam.
+
+### 5. Verification & Testing
+- Flask backend unit tests (`admin-dashboard/server/tests/test_server.py`): 37/37 tests passed (100%).
+- Frontend production build (`npm run build`): Completed cleanly (`dist/` generated).
+

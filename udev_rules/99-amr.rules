@@ -19,6 +19,9 @@ SUBSYSTEM=="tty", KERNELS=="*-*.3", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="
 # 5. Sabertooth 2x32 Motor Controller (Dimension Engineering)
 SUBSYSTEM=="tty", ATTRS{idVendor}=="268b", ATTRS{idProduct}=="0201", ATTRS{serial}=="160091F3C484", MODE:="0666", GROUP:="dialout", SYMLINK+="sabertooth amr_motors"
 
+# 6. Logitech C270 HD 720p Webcam (Logitech, Inc.)
+SUBSYSTEM=="video4linux", ATTRS{idVendor}=="046d", ATTRS{idProduct}=="0825", ATTR{index}=="0", MODE:="0666", GROUP:="video", SYMLINK+="amr_camera logi_cam video_cam"
+
 # Universal fallback for USB serial permissions
 KERNEL=="ttyUSB*", MODE:="0666", GROUP:="dialout"
 KERNEL=="ttyACM*", MODE:="0666", GROUP:="dialout"

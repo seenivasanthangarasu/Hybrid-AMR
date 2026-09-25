@@ -175,14 +175,14 @@ export default function RobotControlPanel({
           type: 'success',
           title: targetState ? 'Camera Activated' : 'Camera Deactivated',
           text: res.message || `Camera module turned ${targetState ? 'ON' : 'OFF'}.`,
-          details: targetState ? `Driver: realsense2_camera · Stream: /camera/camera/color/image_raw` : 'Camera node terminated.'
+          details: targetState ? `Driver: v4l2_camera / camera_streamer · Stream: /camera/color/image_raw` : 'Camera node terminated.'
         });
       } else {
         setFeedback({
           type: 'error',
           title: 'Camera Command Failed',
           text: res.message || `Failed to turn ${targetState ? 'ON' : 'OFF'} camera module.`,
-          details: 'Check if Intel RealSense D435i is connected via USB 3.0.'
+          details: 'Check if Logitech C270 HD webcam is connected via USB (/dev/amr_camera).'
         });
       }
     } catch (err) {
@@ -599,22 +599,22 @@ export default function RobotControlPanel({
               </span>
             </div>
             <p className="text-xs text-slate-400 leading-relaxed mb-4">
-              Turn the RealSense camera module ON or OFF independently without affecting navigation or motor drive.
+              Turn the Logitech C270 HD 720p camera stream ON or OFF independently without affecting navigation or motor drive.
             </p>
 
             <div className="bg-slate-950 border border-slate-800 rounded-lg p-3 space-y-1.5 font-mono text-xs">
               <div className="flex justify-between text-slate-400">
                 <span>Driver:</span>
-                <span className="text-slate-200">realsense2_camera (D435i)</span>
+                <span className="text-slate-200">v4l2_camera (Logitech C270 HD)</span>
               </div>
               <div className="flex justify-between text-slate-400">
                 <span>Stream Topic:</span>
-                <span className="text-cyan-400 truncate">/camera/camera/color/image_raw</span>
+                <span className="text-cyan-400 truncate">/camera/color/image_raw</span>
               </div>
               <div className="flex justify-between text-slate-400">
                 <span>Status:</span>
                 <span className={isCameraRunning ? 'text-emerald-400 font-bold' : 'text-slate-500'}>
-                  {isCameraRunning ? 'Active Stream' : 'Stopped / Standby'}
+                  {isCameraRunning ? 'Active 720p Stream' : 'Stopped / Standby'}
                 </span>
               </div>
             </div>
@@ -623,7 +623,7 @@ export default function RobotControlPanel({
             {isCameraRunning && (
               <div className="mt-3 rounded-lg overflow-hidden border border-slate-800 bg-slate-950">
                 <iframe
-                  src={`${typeof window !== 'undefined' && window.location?.hostname ? `http://${window.location.hostname}:8080` : 'http://localhost:8080'}/stream_viewer?topic=/camera/camera/color/image_raw`}
+                  src={`${typeof window !== 'undefined' && window.location?.hostname ? `http://${window.location.hostname}:8080` : 'http://localhost:8080'}/stream_viewer?topic=/camera/color/image_raw`}
                   title="Live Camera Preview"
                   className="w-full h-48 border-0 bg-slate-950 block"
                 />
