@@ -8,11 +8,13 @@ Hardware Port: /dev/sabertooth -> /dev/ttyACM0 (CDC ACM USB)
 import os
 import time
 import math
+import re
 import serial
 import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import Twist
-from std_msgs.msg import String
+from std_msgs.msg import String, Float32
+from sensor_msgs.msg import BatteryState
 
 
 class SabertoothNode(Node):
@@ -36,6 +38,7 @@ class SabertoothNode(Node):
         self.declare_parameter('watchdog_timeout_sec', 0.25)
         self.declare_parameter('control_rate_hz', 50.0)
         self.declare_parameter('protocol', 'usb_describe') # 'usb_describe' or 'packet_serial'
+        self.declare_parameter('battery_query_rate_hz', 1.0)
 
         self.configured_port = self.get_parameter('port').value
         self.baudrate = self.get_parameter('baudrate').value
@@ -50,6 +53,8 @@ class SabertoothNode(Node):
         self.watchdog_timeout = self.get_parameter('watchdog_timeout_sec').value
         self.control_rate = self.get_parameter('control_rate_hz').value
         self.protocol = self.get_parameter('protocol').value
+        self.battery_query_rate = float(self.get_parameter('battery_query_rate_hz').value)
+        self.battery_query_interval = 1.0 / max(0.1, self.battery_query_rate)
 
         # -----------------------------
         # State
@@ -57,6 +62,7 @@ class SabertoothNode(Node):
         self.ser = None
         self.port = self.configured_port
         self.last_reconnect_attempt = 0.0
+        self._rx_buffer = ""
 
         self.target_v = 0.0
         self.target_w = 0.0
@@ -65,6 +71,11 @@ class SabertoothNode(Node):
         self.left_motor_cmd = 0
         self.right_motor_cmd = 0
         self.is_stopped = True
+
+        self.battery_voltage = None
+        self.motor_current = None
+        self.driver_temp = None
+        self.last_battery_query_time = 0.0
 
         # -----------------------------
         # Subscribers & Publishers
@@ -76,6 +87,8 @@ class SabertoothNode(Node):
             10
         )
         self.pub_status = self.create_publisher(String, '/sabertooth/status', 10)
+        self.pub_battery_state = self.create_publisher(BatteryState, '/battery_state', 10)
+        self.pub_battery_voltage = self.create_publisher(Float32, '/sabertooth/battery_voltage', 10)
 
         # Establish serial connection safely
         self._connect_serial()
@@ -126,8 +139,17 @@ class SabertoothNode(Node):
             self.target_w = 0.0
             return
 
-        self.target_v = max(-self.max_lin, min(self.max_lin, msg.linear.x))
-        self.target_w = max(-self.max_ang, min(self.max_ang, msg.angular.z))
+        v = msg.linear.x
+        w = msg.angular.z
+
+        # Software deadzone to reject sub-threshold teleop jitter
+        if abs(v) < 0.02:
+            v = 0.0
+        if abs(w) < 0.03:
+            w = 0.0
+
+        self.target_v = max(-self.max_lin, min(self.max_lin, v))
+        self.target_w = max(-self.max_ang, min(self.max_ang, w))
         self.last_cmd_time = time.time()
 
     def _control_loop(self):
@@ -139,6 +161,19 @@ class SabertoothNode(Node):
                 self.last_reconnect_attempt = now
                 self._connect_serial()
             return
+
+        # Periodic battery and telemetry polling (1 Hz)
+        if self.ser and self.ser.is_open:
+            if now - self.last_battery_query_time >= self.battery_query_interval:
+                self.last_battery_query_time = now
+                if self.protocol == 'usb_describe':
+                    try:
+                        self.ser.write(b"M1: getb\r\nM1: getc\r\nM1: gett\r\n")
+                    except Exception:
+                        pass
+
+            # Read any incoming serial feedback
+            self._read_serial_feedback()
 
         # Watchdog check: if command timeout, zero all outputs
         time_since_cmd = now - self.last_cmd_time
@@ -170,21 +205,92 @@ class SabertoothNode(Node):
             left_cmd = int(left_ratio * self.max_power)
             right_cmd = int(right_ratio * self.max_power)
 
-            self._send_motor_commands(left_cmd, right_cmd)
-            self.is_stopped = (left_cmd == 0 and right_cmd == 0)
+            # Deadband threshold on raw power to eliminate idle jitter & twitch
+            if abs(left_cmd) < 35:
+                left_cmd = 0
+            if abs(right_cmd) < 35:
+                right_cmd = 0
+
+            # Silence coil whine and eliminate idle jerk: Only send drive commands when non-zero, or send stop once when halting
+            if left_cmd == 0 and right_cmd == 0:
+                if not self.is_stopped:
+                    self._send_stop()
+                    self.is_stopped = True
+            else:
+                self._send_motor_commands(left_cmd, right_cmd)
+                self.is_stopped = False
 
         self.left_motor_cmd = left_cmd
         self.right_motor_cmd = right_cmd
 
         # Status Publisher
         status_msg = String()
+        bat_str = f"{self.battery_voltage:.1f}V" if self.battery_voltage is not None else "N/A"
         status_msg.data = (
             f"port={self.port}, online={self.ser is not None and self.ser.is_open}, "
+            f"battery={bat_str}, "
             f"watchdog_ok={time_since_cmd <= self.watchdog_timeout}, "
             f"target_v={self.target_v:.2f}m/s, target_w={self.target_w:.2f}rad/s, "
             f"left_power={left_cmd}, right_power={right_cmd}"
         )
         self.pub_status.publish(status_msg)
+
+    def _read_serial_feedback(self):
+        if not self.ser or not self.ser.is_open:
+            return
+        try:
+            if self.ser.in_waiting > 0:
+                raw = self.ser.read(self.ser.in_waiting).decode('ascii', errors='ignore')
+                self._rx_buffer += raw
+                if '\n' in self._rx_buffer or '\r' in self._rx_buffer:
+                    lines = re.split(r'[\r\n]+', self._rx_buffer)
+                    self._rx_buffer = lines[-1]
+                    updated = False
+                    for line in lines[:-1]:
+                        line = line.strip()
+                        if not line:
+                            continue
+                        match_b = re.search(r'(?:M\d+:)?B\s*([+-]?\d+)', line, re.IGNORECASE)
+                        if match_b:
+                            self.battery_voltage = round(int(match_b.group(1)) / 10.0, 1)
+                            updated = True
+                        match_c = re.search(r'(?:M\d+:)?C\s*([+-]?\d+)', line, re.IGNORECASE)
+                        if match_c:
+                            self.motor_current = round(int(match_c.group(1)) / 10.0, 1)
+                            updated = True
+                        match_t = re.search(r'(?:M\d+:)?T\s*([+-]?\d+)', line, re.IGNORECASE)
+                        if match_t:
+                            self.driver_temp = round(float(match_t.group(1)), 1)
+                            updated = True
+
+                    if updated:
+                        self._publish_battery_telemetry()
+        except Exception as e:
+            self.get_logger().debug(f"Serial RX read error: {e}")
+
+    def _publish_battery_telemetry(self):
+        if self.battery_voltage is None:
+            return
+
+        # 1. sensor_msgs/BatteryState -> /battery_state
+        bs = BatteryState()
+        bs.header.stamp = self.get_clock().now().to_msg()
+        bs.header.frame_id = 'base_link'
+        bs.voltage = float(self.battery_voltage)
+        if self.motor_current is not None:
+            bs.current = float(self.motor_current)
+        if self.driver_temp is not None:
+            bs.temperature = float(self.driver_temp)
+        bs.present = True
+        bs.power_supply_status = BatteryState.POWER_SUPPLY_STATUS_DISCHARGING
+        bs.power_supply_health = BatteryState.POWER_SUPPLY_HEALTH_GOOD
+        bs.power_supply_technology = BatteryState.POWER_SUPPLY_TECHNOLOGY_LION
+        self.pub_battery_state.publish(bs)
+
+        # 2. std_msgs/Float32 -> /sabertooth/battery_voltage
+        v_msg = Float32()
+        v_msg.data = float(self.battery_voltage)
+        self.pub_battery_voltage.publish(v_msg)
 
     def _send_motor_commands(self, left_power: int, right_power: int):
         if not self.ser or not self.ser.is_open:
@@ -193,8 +299,8 @@ class SabertoothNode(Node):
         try:
             if self.protocol == 'usb_describe':
                 # Plain Text DEScribe protocol (Native USB CDC ACM on Sabertooth 2x32)
-                # M1: <power>\r\n M2: <power>\r\n (-2047 to 2047)
-                cmd = f"M1: {left_power}\r\nM2: {right_power}\r\n"
+                # Format: M1:<power>\r\nM2:<power>\r\n (-2047 to 2047)
+                cmd = f"M1:{left_power}\r\nM2:{right_power}\r\n"
                 self.ser.write(cmd.encode('ascii'))
             elif self.protocol == 'packet_serial':
                 # Standard Dimension Engineering Packetized Serial
@@ -227,7 +333,7 @@ class SabertoothNode(Node):
             return
         try:
             if self.protocol == 'usb_describe':
-                self.ser.write(b"M1: 0\r\nM2: 0\r\nSTOP\r\n")
+                self.ser.write(b"M1: 0\r\nM2: 0\r\n")
             elif self.protocol == 'packet_serial':
                 # M1 stop
                 chk1 = (self.address + 0 + 0) & 0x7F

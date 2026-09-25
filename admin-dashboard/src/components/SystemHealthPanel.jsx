@@ -1,7 +1,7 @@
 import React from 'react';
-import { Cpu, HardDrive, Wifi, Thermometer, Clock, Server } from 'lucide-react';
+import { Cpu, HardDrive, Wifi, Thermometer, Clock, Server, Zap, BatteryCharging } from 'lucide-react';
 
-export default function SystemHealthPanel({ systemData }) {
+export default function SystemHealthPanel({ systemData, batteryVoltage }) {
   if (!systemData) {
     return (
       <div className="bg-slate-900 border border-slate-800 rounded-xl p-8 text-center space-y-3">
@@ -13,6 +13,7 @@ export default function SystemHealthPanel({ systemData }) {
   }
 
   const { cpu, memory, disk, uptime_seconds, hostname, network } = systemData;
+  const currentVoltage = batteryVoltage ?? systemData?.battery?.voltage ?? null;
 
   const formatUptime = (secs) => {
     if (!secs) return '0m';
@@ -31,10 +32,46 @@ export default function SystemHealthPanel({ systemData }) {
       : 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10'
     : 'text-slate-400 border-slate-700 bg-slate-800';
 
+  const batColor = currentVoltage !== null
+    ? currentVoltage >= 14.0
+      ? 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10'
+      : currentVoltage >= 12.0
+      ? 'text-cyan-400 border-cyan-500/30 bg-cyan-500/10'
+      : currentVoltage >= 11.0
+      ? 'text-amber-400 border-amber-500/30 bg-amber-500/10'
+      : 'text-rose-400 border-rose-500/30 bg-rose-500/10 animate-pulse'
+    : 'text-slate-400 border-slate-700 bg-slate-800';
+
+  const batStatusText = currentVoltage !== null
+    ? currentVoltage >= 14.0
+      ? 'Full / 14V+'
+      : currentVoltage >= 12.0
+      ? 'Nominal / Healthy'
+      : currentVoltage >= 11.0
+      ? 'Low Voltage Alert'
+      : 'Critical (<11V)'
+    : 'Motor Driver Telemetry';
+
   return (
     <div className="space-y-6">
       {/* Top Overview Bar */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        {/* Battery Voltage Card (Small Box) */}
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 flex items-center justify-between">
+          <div>
+            <p className="text-xs text-slate-400 font-medium uppercase tracking-wider">Battery Voltage</p>
+            <p className="text-2xl font-bold text-slate-100 mt-1">
+              {currentVoltage !== null
+                ? `${typeof currentVoltage === 'number' ? currentVoltage.toFixed(1) : currentVoltage} V`
+                : 'N/A'}
+            </p>
+            <span className="text-[11px] text-slate-400 mt-0.5 block">{batStatusText}</span>
+          </div>
+          <div className={`p-3 rounded-xl border ${batColor}`}>
+            <Zap className="w-6 h-6" />
+          </div>
+        </div>
+
         {/* CPU Temp */}
         <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 flex items-center justify-between">
           <div>

@@ -74,12 +74,20 @@ export default function useBackendApi(pollIntervalMs = 2000) {
     }
   };
 
-  const startStack = async (includeCamera = false) => {
+  const startStack = async (options = {}) => {
     try {
+      const payload =
+        typeof options === 'boolean'
+          ? { include_camera: options, include_motors: false, include_radio: false }
+          : {
+              include_camera: options.includeCamera ?? false,
+              include_motors: options.includeMotors ?? false,
+              include_radio: options.includeRadio ?? false,
+            };
       const res = await fetch(`${BACKEND_URL}/api/stack/start`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ include_camera: includeCamera }),
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
       fetchMetrics();
@@ -93,6 +101,51 @@ export default function useBackendApi(pollIntervalMs = 2000) {
     try {
       const res = await fetch(`${BACKEND_URL}/api/stack/stop`, {
         method: 'POST',
+      });
+      const data = await res.json();
+      fetchMetrics();
+      return data;
+    } catch (err) {
+      return { status: 'error', message: err.message };
+    }
+  };
+
+  const toggleTeleop = async (enable) => {
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/teleop/toggle`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enable }),
+      });
+      const data = await res.json();
+      fetchMetrics();
+      return data;
+    } catch (err) {
+      return { status: 'error', message: err.message };
+    }
+  };
+
+  const toggleMotor = async (enable) => {
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/motor/toggle`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enable }),
+      });
+      const data = await res.json();
+      fetchMetrics();
+      return data;
+    } catch (err) {
+      return { status: 'error', message: err.message };
+    }
+  };
+
+  const toggleRadio = async (enable) => {
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/radio/toggle`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enable }),
       });
       const data = await res.json();
       fetchMetrics();
@@ -167,6 +220,9 @@ export default function useBackendApi(pollIntervalMs = 2000) {
     startStack,
     stopStack,
     toggleCamera,
+    toggleTeleop,
+    toggleMotor,
+    toggleRadio,
     fetchCameraStatus,
     rescanCamera,
     backendUrl: BACKEND_URL

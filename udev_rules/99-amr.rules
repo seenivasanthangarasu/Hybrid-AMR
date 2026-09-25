@@ -1,0 +1,25 @@
+# ==============================================================================
+# 99-amr.rules — Persistent, conflict-free device symlinks for Hybrid-AMR
+# ==============================================================================
+
+# 1. ESP32 Motor Controller & Wheel Encoders (QinHeng CH343 / USB Single Serial)
+SUBSYSTEM=="tty", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="55d3", ATTRS{serial}=="5B8F128275", MODE:="0666", GROUP:="dialout", SYMLINK+="amr_encoder esp32 esp"
+# ESP32 Fallback (Legacy CP2102N)
+SUBSYSTEM=="tty", ATTRS{idVendor}=="10c4", ATTRS{idProduct}=="ea60", ATTRS{serial}=="a8f8c998665df01189fd5e401045c30f", MODE:="0666", GROUP:="dialout", SYMLINK+="amr_encoder esp32 esp"
+
+# 2. YDLIDAR G4 Laser Scanner (Silicon Labs CP2102)
+SUBSYSTEM=="tty", ATTRS{idVendor}=="10c4", ATTRS{idProduct}=="ea60", ATTRS{serial}=="0001", MODE:="0666", GROUP:="dialout", SYMLINK+="amr_lidar lidar ydlidar"
+
+# 3. Hiwonder GNSS / GPS (CH340 Serial on Hub Port 2)
+SUBSYSTEM=="tty", KERNELS=="*-*.2", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="7523", MODE:="0666", GROUP:="dialout", SYMLINK+="hiwonder_gps amr_gps gps"
+
+# 4. Hiwonder 9-DOF IMU (CH340 Serial on Hub Port 3)
+SUBSYSTEM=="tty", KERNELS=="*-*.3", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="7523", MODE:="0666", GROUP:="dialout", SYMLINK+="hiwonder_imu amr_imu esp-imu"
+
+# 5. Sabertooth 2x32 Motor Controller (Dimension Engineering)
+SUBSYSTEM=="tty", ATTRS{idVendor}=="268b", ATTRS{idProduct}=="0201", ATTRS{serial}=="160091F3C484", MODE:="0666", GROUP:="dialout", SYMLINK+="sabertooth amr_motors"
+
+# Universal fallback for USB serial permissions
+KERNEL=="ttyUSB*", MODE:="0666", GROUP:="dialout"
+KERNEL=="ttyACM*", MODE:="0666", GROUP:="dialout"
+KERNEL=="gpiochip*", MODE:="0666", GROUP:="gpio"

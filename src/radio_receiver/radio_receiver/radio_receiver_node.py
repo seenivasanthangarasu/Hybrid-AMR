@@ -32,18 +32,19 @@ class RadioReceiverNode(Node):
         self.declare_parameter('ch2_gpio', 24)
 
         # Calibrated values for HOT RC DS-600 FA-06
-        self.declare_parameter('ch1_min_us', 800.0)
-        self.declare_parameter('ch1_neutral_us', 1494.0)
-        self.declare_parameter('ch1_max_us', 2200.0)
-        self.declare_parameter('ch1_deadband_us', 35.0)
+        self.declare_parameter('ch1_min_us', 880.0)
+        self.declare_parameter('ch1_neutral_us', 1498.0)
+        self.declare_parameter('ch1_max_us', 2045.0)
+        self.declare_parameter('ch1_deadband_us', 160.0)
         self.declare_parameter('ch1_invert', False)
 
-        self.declare_parameter('ch2_min_us', 870.0)
-        self.declare_parameter('ch2_neutral_us', 1904.0)
-        self.declare_parameter('ch2_max_us', 2200.0)
-        self.declare_parameter('ch2_deadband_us', 35.0)
+        self.declare_parameter('ch2_min_us', 880.0)
+        self.declare_parameter('ch2_neutral_us', 1498.0)
+        self.declare_parameter('ch2_max_us', 2045.0)
+        self.declare_parameter('ch2_deadband_us', 160.0)
         self.declare_parameter('ch2_invert', False)
 
+        self.declare_parameter('filter_alpha', 0.10)      # Ultra-smooth low-pass EMA filter (90% smoothing)
         self.declare_parameter('max_linear_speed', 1.0)    # m/s
         self.declare_parameter('max_angular_speed', 1.8)   # rad/s
         self.declare_parameter('signal_timeout_sec', 0.35) # Failsafe timeout
@@ -68,6 +69,7 @@ class RadioReceiverNode(Node):
         self.ch2_deadband = self.get_parameter('ch2_deadband_us').value
         self.ch2_invert = self.get_parameter('ch2_invert').value
 
+        self.filter_alpha = self.get_parameter('filter_alpha').value
         self.max_lin = self.get_parameter('max_linear_speed').value
         self.max_ang = self.get_parameter('max_angular_speed').value
         self.signal_timeout = self.get_parameter('signal_timeout_sec').value
@@ -110,7 +112,7 @@ class RadioReceiverNode(Node):
 
         self.get_logger().info(
             f"Radio Receiver Node initialized on {self.gpio_chip_name} "
-            f"(CH1=GPIO{self.ch1_pin}, CH2=GPIO{self.ch2_pin})"
+            f"(CH1=GPIO{self.ch1_pin}, CH2=GPIO{self.ch2_pin}, deadband={self.ch1_deadband}us, alpha={self.filter_alpha})"
         )
 
     def _normalize_channel(self, raw_us, min_us, neutral_us, max_us, deadband_us, invert):
@@ -126,6 +128,8 @@ class RadioReceiverNode(Node):
             val = (raw_us - (neutral_us - deadband_us)) / span if span > 0 else 0.0
 
         val = max(-1.0, min(1.0, val))
+        if abs(val) < 0.02:
+            return 0.0
         return -val if invert else val
 
     def _gpio_monitor_loop(self):
@@ -159,25 +163,47 @@ class RadioReceiverNode(Node):
                             ts = e.sec + (e.nsec / 1e9)
                             if e.type == gpiod.LineEvent.RISING_EDGE:
                                 ch1_rise = ts
-                            elif e.type == gpiod.LineEvent.FALLING_EDGE and ch1_rise is not None:
-                                width = (ts - ch1_rise) * 1e6
-                                if 600 < width < 2500:
-                                    with self.lock:
-                                        self.ch1_raw_us = width
-                                        self.ch1_last_update = time.time()
-                                        self.pulse_count_ch1 += 1
+                            elif e.type == gpiod.LineEvent.FALLING_EDGE:
+                                if ch1_rise is not None:
+                                    dt_pulse = ts - ch1_rise
+                                    ch1_rise = None
+                                    if 0.0006 < dt_pulse < 0.0026:
+                                        width = dt_pulse * 1e6
+                                        with self.lock:
+                                            if self.pulse_count_ch1 == 0:
+                                                self.ch1_raw_us = width
+                                            else:
+                                                # Glitch rejection & heavy low-pass filter
+                                                diff = width - self.ch1_raw_us
+                                                if abs(diff) > 350.0:
+                                                    width = self.ch1_raw_us + (350.0 if diff > 0 else -350.0)
+                                                a = self.filter_alpha
+                                                self.ch1_raw_us = (a * width) + ((1.0 - a) * self.ch1_raw_us)
+                                            self.ch1_last_update = time.time()
+                                            self.pulse_count_ch1 += 1
                         elif fd == fd2:
                             e = line2.event_read()
                             ts = e.sec + (e.nsec / 1e9)
                             if e.type == gpiod.LineEvent.RISING_EDGE:
                                 ch2_rise = ts
-                            elif e.type == gpiod.LineEvent.FALLING_EDGE and ch2_rise is not None:
-                                width = (ts - ch2_rise) * 1e6
-                                if 600 < width < 2500:
-                                    with self.lock:
-                                        self.ch2_raw_us = width
-                                        self.ch2_last_update = time.time()
-                                        self.pulse_count_ch2 += 1
+                            elif e.type == gpiod.LineEvent.FALLING_EDGE:
+                                if ch2_rise is not None:
+                                    dt_pulse = ts - ch2_rise
+                                    ch2_rise = None
+                                    if 0.0006 < dt_pulse < 0.0026:
+                                        width = dt_pulse * 1e6
+                                        with self.lock:
+                                            if self.pulse_count_ch2 == 0:
+                                                self.ch2_raw_us = width
+                                            else:
+                                                # Glitch rejection & heavy low-pass filter
+                                                diff = width - self.ch2_raw_us
+                                                if abs(diff) > 350.0:
+                                                    width = self.ch2_raw_us + (350.0 if diff > 0 else -350.0)
+                                                a = self.filter_alpha
+                                                self.ch2_raw_us = (a * width) + ((1.0 - a) * self.ch2_raw_us)
+                                            self.ch2_last_update = time.time()
+                                            self.pulse_count_ch2 += 1
 
                 line1.release()
                 line2.release()
@@ -225,8 +251,11 @@ class RadioReceiverNode(Node):
         # CH1 -> Angular velocity (Left / Right turn: steering left gives positive yaw rate in ROS standard)
         twist_msg = Twist()
         if signal_valid:
-            twist_msg.linear.x = float(norm_ch2 * self.max_lin)
-            twist_msg.angular.z = float(-norm_ch1 * self.max_ang)
+            lin_x = norm_ch2 * self.max_lin
+            ang_z = -norm_ch1 * self.max_ang
+            # Absolute zero clamp for idle stick drift
+            twist_msg.linear.x = float(lin_x) if abs(lin_x) >= 0.015 else 0.0
+            twist_msg.angular.z = float(ang_z) if abs(ang_z) >= 0.02 else 0.0
         else:
             twist_msg.linear.x = 0.0
             twist_msg.angular.z = 0.0

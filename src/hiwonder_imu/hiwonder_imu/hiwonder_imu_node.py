@@ -1,4 +1,9 @@
 #!/usr/bin/env python3
+# ==============================================================================
+# Hiwonder 9-DOF IMU Node (ROS 2 Jazzy)
+# Publishes: /hiwonder/imu/data_raw (sensor_msgs/Imu)
+#            /hiwonder/imu/mag      (sensor_msgs/MagneticField)
+# ==============================================================================
 
 import os
 import time
@@ -20,13 +25,15 @@ class HiwonderIMUNode(Node):
         # Parameters
         self.declare_parameter('port', '/dev/hiwonder_imu')
         self.declare_parameter('baudrate', 9600)
+        self.declare_parameter('frame_id', 'imu_link')
 
         self.configured_port = self.get_parameter('port').value
         self.baudrate = self.get_parameter('baudrate').value
+        self.frame_id = self.get_parameter('frame_id').value
         self.port = self.configured_port
 
         self.get_logger().info(
-            f'Hiwonder IMU Node initializing (target: {self.configured_port} @ {self.baudrate} baud)'
+            f'Hiwonder IMU Node initializing (target: {self.configured_port} @ {self.baudrate} baud, frame: {self.frame_id})'
         )
 
         # Serial connection state
@@ -72,9 +79,9 @@ class HiwonderIMUNode(Node):
             '/dev/amr_imu',
             '/dev/esp-imu',
             '/dev/ttyUSB1',
+            '/dev/ttyUSB0',
             '/dev/ttyUSB3',
-            '/dev/ttyUSB2',
-            '/dev/ttyUSB0'
+            '/dev/ttyUSB2'
         ]
 
         ports_to_try = []
@@ -105,10 +112,6 @@ class HiwonderIMUNode(Node):
         self.serial = None
         self.get_logger().warn(f'No accessible IMU port found among candidates: {ports_to_try}', throttle_duration_sec=5.0)
         return False
-
-    # ---------------------------------------------------------
-    # SERIAL READER
-    # ---------------------------------------------------------
 
     def read_serial(self):
         if not self.serial or not self.serial.is_open:
@@ -154,199 +157,58 @@ class HiwonderIMUNode(Node):
         except Exception as e:
             self.get_logger().warn(f'IMU read error: {e}', throttle_duration_sec=2.0)
 
-    # ---------------------------------------------------------
-    # FRAME PARSER
-    # ---------------------------------------------------------
-
-    def parse_frame(
-        self,
-        frame_type,
-        frame
-    ):
-
-        values = struct.unpack(
-            '<hhhh',
-            frame[2:10]
-        )
+    def parse_frame(self, frame_type, frame):
+        values = struct.unpack('<hhhh', frame[2:10])
 
         if frame_type == 0x51:
-
-            self.parse_acceleration(
-                values
-            )
-
+            self.parse_acceleration(values)
         elif frame_type == 0x52:
-
-            self.parse_gyro(
-                values
-            )
-
+            self.parse_gyro(values)
         elif frame_type == 0x53:
-
-            self.parse_angle(
-                values
-            )
-
+            self.parse_angle(values)
         elif frame_type == 0x54:
+            self.parse_magnetic(values)
 
-            self.parse_magnetic(
-                values
-            )
-
-    # ---------------------------------------------------------
-    # ACCELERATION
-    # ---------------------------------------------------------
-
-    def parse_acceleration(
-        self,
-        values
-    ):
-
+    def parse_acceleration(self, values):
         ax_raw, ay_raw, az_raw, _ = values
-
         g = 9.80665
 
-        ax = (
-            ax_raw /
-            32768.0 *
-            16.0 *
-            g
-        )
+        ax = (ax_raw / 32768.0 * 16.0 * g)
+        ay = (ay_raw / 32768.0 * 16.0 * g)
+        az = (az_raw / 32768.0 * 16.0 * g)
 
-        ay = (
-            ay_raw /
-            32768.0 *
-            16.0 *
-            g
-        )
-
-        az = (
-            az_raw /
-            32768.0 *
-            16.0 *
-            g
-        )
-
-        self.accel = (
-            ax,
-            ay,
-            az
-        )
-
+        self.accel = (ax, ay, az)
         self.publish_imu()
 
-    # ---------------------------------------------------------
-    # GYROSCOPE
-    # ---------------------------------------------------------
-
-    def parse_gyro(
-        self,
-        values
-    ):
-
+    def parse_gyro(self, values):
         gx_raw, gy_raw, gz_raw, _ = values
-
         deg_to_rad = math.pi / 180.0
 
-        gx = (
-            gx_raw /
-            32768.0 *
-            2000.0 *
-            deg_to_rad
-        )
+        gx = (gx_raw / 32768.0 * 2000.0 * deg_to_rad)
+        gy = (gy_raw / 32768.0 * 2000.0 * deg_to_rad)
+        gz = (gz_raw / 32768.0 * 2000.0 * deg_to_rad)
 
-        gy = (
-            gy_raw /
-            32768.0 *
-            2000.0 *
-            deg_to_rad
-        )
-
-        gz = (
-            gz_raw /
-            32768.0 *
-            2000.0 *
-            deg_to_rad
-        )
-
-        self.gyro = (
-            gx,
-            gy,
-            gz
-        )
-
+        self.gyro = (gx, gy, gz)
         self.publish_imu()
 
-    # ---------------------------------------------------------
-    # ANGLE / ORIENTATION
-    # ---------------------------------------------------------
-
-    def parse_angle(
-        self,
-        values
-    ):
-
+    def parse_angle(self, values):
         roll_raw, pitch_raw, yaw_raw, _ = values
 
-        roll = (
-            roll_raw /
-            32768.0 *
-            180.0
-        )
+        roll = (roll_raw / 32768.0 * 180.0)
+        pitch = (pitch_raw / 32768.0 * 180.0)
+        yaw = (yaw_raw / 32768.0 * 180.0)
 
-        pitch = (
-            pitch_raw /
-            32768.0 *
-            180.0
-        )
-
-        yaw = (
-            yaw_raw /
-            32768.0 *
-            180.0
-        )
-
-        self.rpy = (
-            roll,
-            pitch,
-            yaw
-        )
-
+        self.rpy = (roll, pitch, yaw)
         self.publish_imu()
 
-    # ---------------------------------------------------------
-    # MAGNETOMETER
-    # ---------------------------------------------------------
-
-    def parse_magnetic(
-        self,
-        values
-    ):
-
+    def parse_magnetic(self, values):
         mx_raw, my_raw, mz_raw, _ = values
 
-        # Hiwonder documentation exposes these
-        # as raw magnetic sensor values.
-        #
-        # Do NOT assume Tesla conversion here.
-        # Keep raw values until exact sensor
-        # sensitivity is confirmed.
-
-        self.mag = (
-            float(mx_raw),
-            float(my_raw),
-            float(mz_raw)
-        )
+        self.mag = (float(mx_raw), float(my_raw), float(mz_raw))
 
         msg = MagneticField()
-
-        msg.header.stamp = (
-            self.get_clock()
-            .now()
-            .to_msg()
-        )
-
-        msg.header.frame_id = 'imu_link'
+        msg.header.stamp = self.get_clock().now().to_msg()
+        msg.header.frame_id = self.frame_id
 
         msg.magnetic_field.x = self.mag[0]
         msg.magnetic_field.y = self.mag[1]
@@ -354,209 +216,87 @@ class HiwonderIMUNode(Node):
 
         self.mag_pub.publish(msg)
 
-    # ---------------------------------------------------------
-    # RPY → QUATERNION
-    # ---------------------------------------------------------
+    def rpy_to_quaternion(self, roll_deg, pitch_deg, yaw_deg):
+        roll = math.radians(roll_deg)
+        pitch = math.radians(pitch_deg)
+        yaw = math.radians(yaw_deg)
 
-    def rpy_to_quaternion(
-        self,
-        roll_deg,
-        pitch_deg,
-        yaw_deg
-    ):
+        cr = math.cos(roll / 2.0)
+        sr = math.sin(roll / 2.0)
+        cp = math.cos(pitch / 2.0)
+        sp = math.sin(pitch / 2.0)
+        cy = math.cos(yaw / 2.0)
+        sy = math.sin(yaw / 2.0)
 
-        roll = math.radians(
-            roll_deg
-        )
+        qw = (cr * cp * cy + sr * sp * sy)
+        qx = (sr * cp * cy - cr * sp * sy)
+        qy = (cr * sp * cy + sr * cp * sy)
+        qz = (cr * cp * sy - sr * sp * cy)
 
-        pitch = math.radians(
-            pitch_deg
-        )
-
-        yaw = math.radians(
-            yaw_deg
-        )
-
-        cr = math.cos(
-            roll / 2.0
-        )
-
-        sr = math.sin(
-            roll / 2.0
-        )
-
-        cp = math.cos(
-            pitch / 2.0
-        )
-
-        sp = math.sin(
-            pitch / 2.0
-        )
-
-        cy = math.cos(
-            yaw / 2.0
-        )
-
-        sy = math.sin(
-            yaw / 2.0
-        )
-
-        qw = (
-            cr * cp * cy +
-            sr * sp * sy
-        )
-
-        qx = (
-            sr * cp * cy -
-            cr * sp * sy
-        )
-
-        qy = (
-            cr * sp * cy +
-            sr * cp * sy
-        )
-
-        qz = (
-            cr * cp * sy -
-            sr * sp * cy
-        )
-
-        return (
-            qx,
-            qy,
-            qz,
-            qw
-        )
-
-    # ---------------------------------------------------------
-    # PUBLISH IMU
-    # ---------------------------------------------------------
+        return (qx, qy, qz, qw)
 
     def publish_imu(self):
-
-        # We need all three measurements
-        if self.accel is None:
-            return
-
-        if self.gyro is None:
-            return
-
-        if self.rpy is None:
+        if self.accel is None or self.gyro is None or self.rpy is None:
             return
 
         msg = Imu()
+        msg.header.stamp = self.get_clock().now().to_msg()
+        msg.header.frame_id = self.frame_id
 
-        msg.header.stamp = (
-            self.get_clock()
-            .now()
-            .to_msg()
-        )
-
-        msg.header.frame_id = 'imu_link'
-
-        # -------------------------
         # Orientation
-        # -------------------------
-
-        qx, qy, qz, qw = (
-            self.rpy_to_quaternion(
-                self.rpy[0],
-                self.rpy[1],
-                self.rpy[2]
-            )
-        )
-
+        qx, qy, qz, qw = self.rpy_to_quaternion(self.rpy[0], self.rpy[1], self.rpy[2])
         msg.orientation.x = qx
         msg.orientation.y = qy
         msg.orientation.z = qz
         msg.orientation.w = qw
 
-        # -------------------------
         # Angular velocity
-        # -------------------------
+        msg.angular_velocity.x = self.gyro[0]
+        msg.angular_velocity.y = self.gyro[1]
+        msg.angular_velocity.z = self.gyro[2]
 
-        msg.angular_velocity.x = (
-            self.gyro[0]
-        )
-
-        msg.angular_velocity.y = (
-            self.gyro[1]
-        )
-
-        msg.angular_velocity.z = (
-            self.gyro[2]
-        )
-
-        # -------------------------
         # Linear acceleration
-        # -------------------------
+        msg.linear_acceleration.x = self.accel[0]
+        msg.linear_acceleration.y = self.accel[1]
+        msg.linear_acceleration.z = self.accel[2]
 
-        msg.linear_acceleration.x = (
-            self.accel[0]
-        )
-
-        msg.linear_acceleration.y = (
-            self.accel[1]
-        )
-
-        msg.linear_acceleration.z = (
-            self.accel[2]
-        )
-
-        # -------------------------
-        # Covariance
-        # -------------------------
-
-        # Unknown until we characterize
-        # the sensor properly.
+        # Covariance Matrices for EKF sensor fusion
         msg.orientation_covariance = [
-            0.0, 0.0, 0.0,
-            0.0, 0.0, 0.0,
-            0.0, 0.0, 0.0
+            0.01, 0.0,  0.0,
+            0.0,  0.01, 0.0,
+            0.0,  0.0,  0.01
         ]
 
         msg.angular_velocity_covariance = [
-            0.0, 0.0, 0.0,
-            0.0, 0.0, 0.0,
-            0.0, 0.0, 0.0
+            0.001, 0.0,   0.0,
+            0.0,   0.001, 0.0,
+            0.0,   0.0,   0.001
         ]
 
         msg.linear_acceleration_covariance = [
-            0.0, 0.0, 0.0,
-            0.0, 0.0, 0.0,
-            0.0, 0.0, 0.0
+            0.05, 0.0,  0.0,
+            0.0,  0.05, 0.0,
+            0.0,  0.0,  0.05
         ]
 
         self.imu_pub.publish(msg)
 
-    # ---------------------------------------------------------
-    # CLEANUP
-    # ---------------------------------------------------------
-
     def destroy_node(self):
-
-        if (
-            hasattr(self, 'serial')
-            and self.serial.is_open
-        ):
-            self.serial.close()
-
+        if hasattr(self, 'serial') and self.serial and self.serial.is_open:
+            try:
+                self.serial.close()
+            except Exception:
+                pass
         super().destroy_node()
 
 
 def main(args=None):
-
     rclpy.init(args=args)
-
     node = None
-
     try:
-
         node = HiwonderIMUNode()
-
         rclpy.spin(node)
-
-    except Exception:
+    except (KeyboardInterrupt, Exception):
         pass
     finally:
         if node is not None:
