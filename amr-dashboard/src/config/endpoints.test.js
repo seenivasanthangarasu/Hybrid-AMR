@@ -32,7 +32,7 @@ describe('Endpoints Resolver', () => {
       framerate: 30,
       defaultTransport: 'raw',
     });
-    expect(stream).toContain('/stream?topic=%2Fcamera%2Fcolor%2Fimage_raw');
+    expect(stream).toContain('/stream?topic=/camera/color/image_raw');
     expect(stream).toContain('quality=75');
     expect(stream).toContain('framerate=30');
     expect(stream).toContain('default_transport=raw');
@@ -40,6 +40,6 @@ describe('Endpoints Resolver', () => {
 
   it('generates stream viewer fallback URL', () => {
     const viewer = getCameraViewerUrl(DEFAULT_CAMERA_TOPIC);
-    expect(viewer).toContain('/stream_viewer?topic=%2Fcamera%2Fcolor%2Fimage_raw');
+    expect(viewer).toContain('/stream_viewer?topic=/camera/color/image_raw');
   });
 });

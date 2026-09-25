@@ -54,10 +54,10 @@ export function getCameraStreamUrl(options = {}) {
     framerate = 30,
   } = options;
   const base = getVideoServerUrl();
-  return `${base}/stream?topic=${encodeURIComponent(topic)}&quality=${quality}&default_transport=${defaultTransport}&framerate=${framerate}`;
+  return `${base}/stream?topic=${topic}&quality=${quality}&default_transport=${defaultTransport}&framerate=${framerate}`;
 }
 
 export function getCameraViewerUrl(topic = DEFAULT_CAMERA_TOPIC) {
   const base = getVideoServerUrl();
-  return `${base}/stream_viewer?topic=${encodeURIComponent(topic)}`;
+  return `${base}/stream_viewer?topic=${topic}`;
 }
