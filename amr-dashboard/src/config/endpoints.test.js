@@ -25,7 +25,12 @@ describe('Endpoints Resolver', () => {
     expect(getRobotHostname()).toBe('192.168.1.50');
   });
 
-  it('generates standard Logitech C270 stream URL with 720p 30 FPS parameters', () => {
+  it('generates clean default stream URL when no options provided', () => {
+    const stream = getCameraStreamUrl();
+    expect(stream).toContain('/stream?topic=/camera/color/image_raw');
+  });
+
+  it('generates standard Logitech C270 stream URL with custom parameters when specified', () => {
     const stream = getCameraStreamUrl({
       topic: '/camera/color/image_raw',
       quality: 75,

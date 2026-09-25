@@ -49,12 +49,22 @@ export const CAMERA_SPECS = '720p @ 30 FPS · V4L2';
 export function getCameraStreamUrl(options = {}) {
   const {
     topic = DEFAULT_CAMERA_TOPIC,
-    quality = 75,
-    defaultTransport = 'raw',
-    framerate = 30,
+    quality,
+    defaultTransport,
+    framerate,
   } = options;
   const base = getVideoServerUrl();
-  return `${base}/stream?topic=${topic}&quality=${quality}&default_transport=${defaultTransport}&framerate=${framerate}`;
+  const queryParts = [`topic=${topic}`];
+  if (quality !== undefined && quality !== null && quality !== '') {
+    queryParts.push(`quality=${quality}`);
+  }
+  if (defaultTransport) {
+    queryParts.push(`default_transport=${defaultTransport}`);
+  }
+  if (framerate !== undefined && framerate !== null && framerate !== '') {
+    queryParts.push(`framerate=${framerate}`);
+  }
+  return `${base}/stream?${queryParts.join('&')}`;
 }
 
 export function getCameraViewerUrl(topic = DEFAULT_CAMERA_TOPIC) {

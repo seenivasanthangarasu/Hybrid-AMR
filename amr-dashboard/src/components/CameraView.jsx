@@ -26,15 +26,18 @@ export default function CameraView({ compact = false, onStreamState }) {
   const [quality, setQuality] = useState(75);
   const [framerate, setFramerate] = useState(30);
   const [showSettings, setShowSettings] = useState(false);
-  const [useSnapshotMode, setUseSnapshotMode] = useState(false);
+  const [viewMode, setViewMode] = useState('mjpeg'); // 'mjpeg' | 'viewer' | 'snapshot'
   const [toggleMsg, setToggleMsg] = useState(null);
 
   const { backendConnected, cameraHardware, toggleCamera, loading: backendLoading } = useBackendApi();
 
-  const streamUrl = useMemo(
-    () => getCameraStreamUrl({ topic: DEFAULT_CAMERA_TOPIC, quality, framerate, defaultTransport: 'raw' }),
-    [quality, framerate],
-  );
+  // Generate clean default stream URL matching http://<IP>:8080/stream?topic=/camera/color/image_raw
+  const streamUrl = useMemo(() => {
+    if (showSettings) {
+      return getCameraStreamUrl({ topic: DEFAULT_CAMERA_TOPIC, quality, framerate });
+    }
+    return getCameraStreamUrl({ topic: DEFAULT_CAMERA_TOPIC });
+  }, [showSettings, quality, framerate]);
 
   const viewerUrl = useMemo(
     () => getCameraViewerUrl(DEFAULT_CAMERA_TOPIC),
@@ -58,7 +61,7 @@ export default function CameraView({ compact = false, onStreamState }) {
     return () => clearInterval(id);
   }, [errored]);
 
-  const activeSrc = useSnapshotMode
+  const activeSrc = viewMode === 'snapshot'
     ? `${snapshotUrl}&_snap=${reloadKey}`
     : reloadKey === 0
       ? streamUrl
@@ -99,7 +102,7 @@ export default function CameraView({ compact = false, onStreamState }) {
 
         {!errored && (
           <div className="pointer-events-none absolute bottom-1 left-1.5 rounded bg-deck-950/80 px-1.5 py-0.5 font-mono text-[9px] text-signal-cyan backdrop-blur-sm">
-            720p · {framerate} FPS
+            720p · LIVE
           </div>
         )}
       </div>
@@ -130,20 +133,37 @@ export default function CameraView({ compact = false, onStreamState }) {
             <span className="text-signal-cyan animate-pulse font-bold">{toggleMsg}</span>
           )}
 
-          <button
-            type="button"
-            onClick={() => setUseSnapshotMode((v) => !v)}
-            className={`rounded border px-2 py-0.5 ${useSnapshotMode ? 'border-signal-cyan bg-signal-cyan/20 text-signal-cyan font-bold' : 'border-deck-line bg-deck-800 text-ink-mid hover:text-ink-high'}`}
-          >
-            {useSnapshotMode ? 'Snapshot Mode' : 'MJPEG Stream'}
-          </button>
+          {/* Mode Switchers */}
+          <div className="inline-flex rounded border border-deck-line bg-deck-800 p-0.5">
+            <button
+              type="button"
+              onClick={() => { setViewMode('mjpeg'); setErrored(false); }}
+              className={`rounded px-2 py-0.5 transition-colors ${viewMode === 'mjpeg' ? 'bg-signal-cyan/20 text-signal-cyan font-bold' : 'text-ink-mid hover:text-ink-high'}`}
+            >
+              Stream
+            </button>
+            <button
+              type="button"
+              onClick={() => { setViewMode('viewer'); setErrored(false); }}
+              className={`rounded px-2 py-0.5 transition-colors ${viewMode === 'viewer' ? 'bg-signal-cyan/20 text-signal-cyan font-bold' : 'text-ink-mid hover:text-ink-high'}`}
+            >
+              Viewer
+            </button>
+            <button
+              type="button"
+              onClick={() => { setViewMode('snapshot'); setErrored(false); }}
+              className={`rounded px-2 py-0.5 transition-colors ${viewMode === 'snapshot' ? 'bg-signal-cyan/20 text-signal-cyan font-bold' : 'text-ink-mid hover:text-ink-high'}`}
+            >
+              Snapshot
+            </button>
+          </div>
 
           <button
             type="button"
             onClick={() => setShowSettings((v) => !v)}
-            className="rounded border border-deck-line bg-deck-800 px-2 py-0.5 text-ink-mid hover:border-signal-cyan hover:text-ink-high"
+            className={`rounded border px-2 py-0.5 transition-colors ${showSettings ? 'border-signal-cyan text-signal-cyan bg-signal-cyan/10' : 'border-deck-line bg-deck-800 text-ink-mid hover:text-ink-high'}`}
           >
-            {quality}% · {framerate} FPS ⚙
+            ⚙ Settings
           </button>
 
           <a
@@ -216,14 +236,23 @@ export default function CameraView({ compact = false, onStreamState }) {
 
       {/* Main Video Stream Container */}
       <div className="relative flex flex-1 items-center justify-center overflow-hidden bg-black">
-        <img
-          key={`${reloadKey}-${useSnapshotMode}`}
-          src={activeSrc}
-          alt="Logitech C270 Live Camera Stream"
-          className={`h-full w-full object-contain ${errored ? 'invisible' : ''}`}
-          onError={() => setErrored(true)}
-          onLoad={() => setErrored(false)}
-        />
+        {viewMode === 'viewer' ? (
+          <iframe
+            key={reloadKey}
+            src={viewerUrl}
+            title="Logitech C270 Web Video Server Stream Viewer"
+            className="h-full w-full border-0 bg-black"
+          />
+        ) : (
+          <img
+            key={`${reloadKey}-${viewMode}`}
+            src={activeSrc}
+            alt="Logitech C270 Live Camera Stream"
+            className={`h-full w-full object-contain ${errored ? 'invisible' : ''}`}
+            onError={() => setErrored(true)}
+            onLoad={() => setErrored(false)}
+          />
+        )}
 
         {/* Stream Overlay Details */}
         {!errored && (
@@ -232,13 +261,17 @@ export default function CameraView({ compact = false, onStreamState }) {
               ● LIVE
             </span>
             <span className="rounded bg-deck-950/80 px-2 py-0.5 text-[9px] text-ink-mid backdrop-blur-sm border border-deck-line">
-              {useSnapshotMode ? 'SNAPSHOT' : `720p · ${framerate} FPS · ${quality}% Q`}
+              {viewMode === 'viewer'
+                ? 'CANVAS VIEWER'
+                : viewMode === 'snapshot'
+                  ? 'SNAPSHOT'
+                  : '720p · MJPEG DIRECT'}
             </span>
           </div>
         )}
 
         {/* Fallback Screen when Stream is Down */}
-        {errored && (
+        {errored && viewMode !== 'viewer' && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-deck-900/95 p-4 text-center">
             <DataFallback
               topic={DEFAULT_CAMERA_TOPIC}
@@ -252,10 +285,18 @@ export default function CameraView({ compact = false, onStreamState }) {
             <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
               <button
                 type="button"
-                onClick={() => setReloadKey((k) => k + 1)}
+                onClick={() => { setErrored(false); setReloadKey((k) => k + 1); }}
                 className="rounded border border-signal-cyan/50 bg-signal-cyan/15 px-3 py-1 text-[11px] text-signal-cyan hover:bg-signal-cyan/25"
               >
                 Retry Stream ↻
+              </button>
+
+              <button
+                type="button"
+                onClick={() => { setViewMode('viewer'); setErrored(false); }}
+                className="rounded border border-deck-line bg-deck-800 px-3 py-1 text-[11px] text-signal-cyan hover:bg-deck-700"
+              >
+                Switch to Canvas Viewer
               </button>
 
               <a
