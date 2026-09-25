@@ -1,0 +1,424 @@
+/* Dashboard dark palette, scoped so a saved dashboard light theme cannot
+   override setup. Typefaces match the dashboard display and panel labels. */
+.setup-shell {
+  --deck-950: 10 14 20;
+  --deck-900: 14 19 28;
+  --deck-800: 20 27 39;
+  --deck-line: 36 48 67;
+  --ink-high: 238 242 248;
+  --ink-mid: 159 176 198;
+  --ink-low: 130 146 170;
+  --signal-cyan: 61 220 255;
+  min-height: 100svh;
+  background: rgb(var(--deck-950));
+  color: rgb(var(--ink-high));
+  color-scheme: dark;
+  font-family: Inter, sans-serif;
+  display: flex;
+  flex-direction: column;
+}
+.setup-shell * {
+  box-sizing: border-box;
+}
+.setup-header {
+  min-height: 58px;
+  padding: 16px 5%;
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid rgb(var(--deck-line));
+  background: rgb(var(--deck-900));
+  font:
+    600 12px 'IBM Plex Mono',
+    monospace;
+  letter-spacing: 1.5px;
+}
+.setup-header-label {
+  color: rgb(var(--ink-low));
+  font-size: 10px;
+}
+.setup-main {
+  width: min(1180px, 90%);
+  margin: 0 auto;
+  flex: 1;
+  padding: 40px 0 48px;
+}
+.setup-steps {
+  display: flex;
+  justify-content: center;
+  gap: 38px;
+  margin-bottom: 48px;
+  color: rgb(var(--ink-low));
+  font:
+    12px 'IBM Plex Mono',
+    monospace;
+  text-transform: uppercase;
+}
+.setup-steps > span {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.setup-steps b {
+  width: 26px;
+  height: 26px;
+  border: 1px solid rgb(var(--deck-line));
+  border-radius: 4px;
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+}
+.setup-steps .active {
+  color: rgb(var(--signal-cyan));
+}
+.setup-steps .active b {
+  background: rgb(var(--signal-cyan) / 0.1);
+  border-color: rgb(var(--signal-cyan) / 0.5);
+}
+.setup-heading-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  min-height: 38px;
+}
+.setup-eyebrow,
+.setup-tag {
+  font:
+    500 10px 'IBM Plex Mono',
+    monospace;
+  letter-spacing: 1.5px;
+  color: rgb(var(--ink-low));
+}
+.setup-eyebrow {
+  margin: 0 0 12px;
+}
+.setup-shell h1 {
+  font-family: 'JetBrains Mono', 'IBM Plex Mono', monospace;
+  font-size: clamp(25px, 3vw, 36px);
+  font-weight: 600;
+  letter-spacing: -1px;
+  line-height: 1.3;
+  margin: 0 0 14px;
+}
+.setup-shell h1:focus {
+  outline: none;
+}
+.setup-intro {
+  font-size: 14px;
+  line-height: 1.7;
+  color: rgb(var(--ink-mid));
+  margin: 0;
+}
+.setup-cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+  margin-top: 30px;
+}
+.setup-card {
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+  padding: 20px 24px 0;
+  background: rgb(var(--deck-800));
+  color: rgb(var(--ink-high));
+  border: 1px solid rgb(var(--deck-line));
+  border-radius: 6px;
+  cursor: pointer;
+  overflow: hidden;
+  transition:
+    background 0.18s,
+    border-color 0.18s,
+    box-shadow 0.18s;
+}
+.tone-indoor,
+.tone-manual {
+  --accent: #3ddcff;
+  --wash: #132735;
+}
+.tone-outdoor,
+.tone-mapping {
+  --accent: #37e29a;
+  --wash: #142b29;
+}
+.tone-hybrid,
+.tone-navigation {
+  --accent: #a695ff;
+  --wash: #23233c;
+}
+.setup-card:hover {
+  border-color: var(--accent);
+  background: #1b2433;
+  box-shadow: 0 0 0 1px var(--accent);
+}
+.setup-card[aria-pressed='true'] {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+  background: var(--wash);
+}
+.setup-shell button:focus-visible {
+  outline: 3px solid rgb(var(--signal-cyan));
+  outline-offset: 4px;
+  border-radius: 4px;
+}
+.setup-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font:
+    11px 'IBM Plex Mono',
+    monospace;
+  color: rgb(var(--ink-low));
+}
+.setup-check {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgb(var(--deck-line));
+  border-radius: 4px;
+  font-size: 16px;
+}
+[aria-pressed='true'] .setup-check {
+  color: #0a0e14;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.setup-illustration {
+  width: 100%;
+  color: var(--accent, #3ddcff);
+  background: radial-gradient(ellipse, var(--wash, #132735), transparent 70%);
+}
+.setup-card .setup-illustration {
+  margin: 8px 0 18px;
+}
+.setup-tag {
+  color: var(--accent, #3ddcff);
+  font-size: 9px;
+}
+.setup-card-title {
+  font:
+    600 22px 'JetBrains Mono',
+    monospace;
+  margin: 10px 0 12px;
+}
+.setup-card-detail {
+  color: rgb(var(--ink-mid));
+  font-size: 13px;
+  line-height: 1.7;
+  min-height: 48px;
+}
+.setup-card-action {
+  display: flex;
+  justify-content: space-between;
+  padding: 17px 0;
+  margin-top: 17px;
+  border-top: 1px solid rgb(var(--deck-line));
+  font:
+    500 11px 'IBM Plex Mono',
+    monospace;
+  color: var(--accent);
+}
+.setup-bottom {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+  margin-top: 24px;
+  color: rgb(var(--ink-low));
+  font:
+    11px 'IBM Plex Mono',
+    monospace;
+}
+.setup-text-button {
+  color: rgb(var(--signal-cyan));
+  min-height: 44px;
+  background: transparent;
+  border: 0;
+  padding: 10px 0;
+  font:
+    12px 'IBM Plex Mono',
+    monospace;
+  cursor: pointer;
+}
+.setup-text-button:hover {
+  text-decoration: underline;
+}
+.setup-environment-chip {
+  min-height: 44px;
+  padding: 10px 14px;
+  border: 1px solid rgb(var(--deck-line));
+  border-radius: 4px;
+  background: rgb(var(--deck-800));
+  color: rgb(var(--ink-high));
+  font:
+    12px 'IBM Plex Mono',
+    monospace;
+  cursor: pointer;
+}
+.setup-environment-chip:hover {
+  border-color: rgb(var(--signal-cyan));
+}
+.setup-environment-chip span {
+  color: rgb(var(--signal-cyan));
+}
+.setup-welcome {
+  display: grid;
+  place-items: center;
+  text-align: center;
+}
+.setup-welcome-content {
+  width: min(700px, 100%);
+}
+.setup-welcome-orbit {
+  width: 270px;
+  margin: 0 auto 30px;
+  animation: setup-float 2.6s ease-in-out;
+}
+.setup-welcome h1 span {
+  color: rgb(var(--signal-cyan));
+}
+.setup-progress {
+  width: 130px;
+  height: 3px;
+  margin: 32px auto 15px;
+  background: rgb(var(--deck-line));
+  overflow: hidden;
+}
+.setup-progress span {
+  display: block;
+  height: 100%;
+  background: rgb(var(--signal-cyan));
+  transform-origin: left;
+  animation: setup-load 2.6s linear forwards;
+}
+.setup-content {
+  animation: setup-enter 0.25s ease-out;
+}
+.setup-workspace {
+  display: grid;
+  grid-template-columns: 1fr 1.5fr;
+  gap: 40px;
+  align-items: center;
+  background: rgb(var(--deck-800));
+  border: 1px solid rgb(var(--deck-line));
+  border-radius: 6px;
+  margin-top: 30px;
+  padding: 36px;
+}
+.setup-workspace h2 {
+  font:
+    500 24px 'JetBrains Mono',
+    monospace;
+  margin: 12px 0;
+}
+.setup-workspace p {
+  color: rgb(var(--ink-mid));
+  font-size: 14px;
+  line-height: 1.8;
+}
+.setup-coming {
+  display: inline-block;
+  margin-top: 18px;
+  padding: 8px 12px;
+  border: 1px solid rgb(var(--deck-line));
+  background: rgb(var(--deck-900));
+  color: rgb(var(--ink-low));
+  font:
+    11px 'IBM Plex Mono',
+    monospace;
+  text-transform: uppercase;
+  border-radius: 4px;
+}
+@keyframes setup-load {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+@keyframes setup-float {
+  50% {
+    transform: translateY(-6px);
+  }
+}
+@keyframes setup-enter {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@media (max-width: 900px) {
+  .setup-cards {
+    gap: 14px;
+  }
+  .setup-card {
+    padding: 16px 16px 0;
+  }
+  .setup-card-title {
+    font-size: 19px;
+  }
+}
+@media (max-width: 620px) {
+  .setup-header-label {
+    display: none;
+  }
+  .setup-main {
+    padding: 27px 0 35px;
+  }
+  .setup-steps {
+    gap: 15px;
+    margin-bottom: 30px;
+    font-size: 10px;
+  }
+  .setup-steps > span {
+    gap: 5px;
+  }
+  .setup-cards {
+    grid-template-columns: 1fr;
+    gap: 18px;
+  }
+  .setup-card {
+    padding: 18px 23px 0;
+  }
+  .setup-card .setup-illustration {
+    height: 156px;
+    margin: 0;
+  }
+  .setup-card-title {
+    font-size: 23px;
+  }
+  .setup-card-detail {
+    min-height: 0;
+  }
+  .setup-bottom {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 5px;
+  }
+  .setup-heading-row {
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+  }
+  .setup-heading-row .setup-eyebrow {
+    margin-bottom: 0;
+  }
+  .setup-workspace {
+    grid-template-columns: 1fr;
+    padding: 25px;
+    gap: 10px;
+  }
+  .setup-workspace .setup-illustration {
+    height: 180px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .setup-shell * {
+    animation: none !important;
+    transition: none !important;
+  }
+}

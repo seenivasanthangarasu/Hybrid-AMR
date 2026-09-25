@@ -1,20 +1,15 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import { MotionConfig } from 'framer-motion';
-import App from './App.jsx';
+import Onboarding from './components/onboarding/Onboarding.jsx';
 import './index.css';
 
-import { MissionProvider } from './context/MissionContext.jsx';
-
-// reducedMotion="user" makes every framer-motion animation honour the OS
-// `prefers-reduced-motion` setting automatically (spec REQ-16/17), so motion
-// stays decorative and never forced.
-ReactDOM.createRoot(document.getElementById('root')).render(
-  <React.StrictMode>
-    <MotionConfig reducedMotion="user">
-      <MissionProvider>
-        <App />
-      </MissionProvider>
-    </MotionConfig>
-  </React.StrictMode>,
-);
+// The legacy dashboard loads its robot services only when explicitly requested.
+if (new URLSearchParams(window.location.search).get('view') === 'dashboard') {
+  import('./dashboard-entry.jsx');
+} else {
+  ReactDOM.createRoot(document.getElementById('root')).render(
+    <React.StrictMode>
+      <Onboarding />
+    </React.StrictMode>,
+  );
+}

@@ -40,8 +40,9 @@ npm install
 npm run dev
 ```
 
-Open the printed local URL. The dashboard connects to ROSBridge automatically
-on load; connection state is shown live in the header.
+Open the printed local URL for the frontend welcome and workspace setup flow.
+The existing dashboard at `/?view=dashboard` connects to ROSBridge automatically
+on load; connection state is shown live in its header.
 
 | Script           | What it does                                           |
 | ---------------- | ------------------------------------------------------ |
@@ -273,3 +274,19 @@ catalog's invariants, and `Dialog` accessibility.
   "reached" — that would need action feedback no server currently sends.
   The route's straight-line length is shown as a sanity check on ordering; it
   is not a drive distance, and no ETA is offered because no speed is known.
+
+
+## Frontend welcome and workspace setup
+
+The default page now opens a frontend-only setup flow: a 2.6-second welcome,
+Indoor / Outdoor / Hybrid selection, mode selection, and a workspace placeholder.
+Run `npm install` and `npm run dev` from `amr-dashboard`, then open the printed URL.
+No robot connection is needed for this flow. Use the **Skip introduction** button
+or `/?skipWelcome=1` to bypass the welcome during testing.
+
+Choices live in React state and survive back navigation; refreshing starts a new
+setup. The placeholder's mode-features section is the integration point for future
+features. Setup choices do not issue commands or change the robot's mode.
+
+The existing operational dashboard is available explicitly at `/?view=dashboard`;
+that entry loads the existing ROS services and connection behavior described above.
