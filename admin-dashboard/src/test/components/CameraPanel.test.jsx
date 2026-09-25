@@ -12,11 +12,11 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import CameraPanel from '../../components/CameraPanel.jsx';
 
 describe('CameraPanel – rendering & player', () => {
-  it('renders Live status badge and MJPEG stream image on initial render', () => {
+  it('renders Live status badge and stream iframe on initial render', () => {
     render(<CameraPanel backendConnected={true} />);
-    const img = screen.getByAltText(/mjpeg camera stream/i);
-    expect(img).toBeInTheDocument();
-    expect(img.getAttribute('src')).toContain('/stream?topic=/camera/camera/color/image_raw');
+    const iframe = screen.getByTitle(/web video server stream/i);
+    expect(iframe).toBeInTheDocument();
+    expect(iframe.getAttribute('src')).toContain('/stream_viewer?topic=/camera/color/image_raw');
   });
 
   it('renders quick switch topic buttons', () => {
@@ -32,8 +32,8 @@ describe('CameraPanel – rendering & player', () => {
     render(<CameraPanel backendConnected={true} />);
     const rawPill = screen.getByRole('button', { name: '/image_raw' });
     fireEvent.click(rawPill);
-    const img = screen.getByAltText(/mjpeg camera stream/i);
-    expect(img.getAttribute('src')).toContain('/stream?topic=/image_raw');
+    const iframe = screen.getByTitle(/web video server stream/i);
+    expect(iframe.getAttribute('src')).toContain('/stream_viewer?topic=/image_raw');
   });
 });
 

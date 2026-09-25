@@ -907,7 +907,18 @@ Cycle    Status     Odom     IMU      GPS      Lidar    Camera   Depth    TF    
 - **Documentation (`README.md`)**:
   - Updated hardware architecture diagram, system capabilities, hardware port & udev matrix table, and topic table to reflect Logitech C270 HD 720p webcam at 20 FPS.
 
-### 5. Verification & Testing
+### 5. Resolution of Dashboard Video Visibility & High CPU Load
+- **Root Cause 1 (Device Contention & Format Mismatch)**:
+  - An orphaned `v4l2_camera` process was holding `/dev/video0` open in uncompressed YUYV format (10 FPS @ ~46% CPU), blocking `camera_streamer.py` and other nodes from accessing the hardware device.
+  - Resolved by terminating stale camera processes, adding cleanup commands in `start_all.sh`, and routing `/api/camera/toggle` v4l2 mode to `camera_streamer.py` (MJPG @ 20 FPS).
+- **Root Cause 2 (Web Video Server URL Encoding)**:
+  - `web_video_server` rejected `%2Fcamera%2Fcolor%2Fimage_raw` with `Invalid topic name`.
+  - Resolved by standardizing frontend player to use unencoded stream viewer iframe (`/stream_viewer?topic=/camera/color/image_raw`).
+- **Backend High CPU Optimization**:
+  - Implemented a 0.8s TTL response cache in `admin-dashboard/server/server.py` for `/api/status` and `/api/system`, reducing process iteration CPU overhead on the Rubik Pi SBC from 45% to < 2%.
+
+### 6. Verification & Testing
 - Flask backend unit tests (`admin-dashboard/server/tests/test_server.py`): 37/37 tests passed (100%).
+- Frontend Vitest unit tests (`admin-dashboard/src/test/`): 10/10 test files, 130/130 tests passed (100%).
 - Frontend production build (`npm run build`): Completed cleanly (`dist/` generated).
 

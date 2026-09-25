@@ -170,12 +170,20 @@ def get_motor_driver_battery():
         pass
     return _battery_cache
 
+_system_cache = {
+    "data": None,
+    "timestamp": 0.0
+}
+
 @app.route("/api/system", methods=["GET"])
 def get_system_metrics():
+    global _system_cache
+    now = time.time()
+    if app.config.get("TESTING") is not True and now - _system_cache["timestamp"] < 0.8 and _system_cache["data"] is not None:
+        return jsonify(_system_cache["data"])
+
     try:
         # Call cpu_percent once; per-core requires percpu=True on the same call.
-        # First call with interval=None uses time since last call (or 0.0 on first invocation).
-        # We call with percpu=True to get both total and per-core in one shot.
         per_core_list = psutil.cpu_percent(interval=None, percpu=True)
         cpu_total = round(sum(per_core_list) / len(per_core_list), 1) if per_core_list else 0.0
         mem = psutil.virtual_memory()
@@ -189,9 +197,9 @@ def get_system_metrics():
         except Exception:
             uptime_seconds = time.time() - psutil.boot_time()
 
-        return jsonify({
+        payload = {
             "status": "ok",
-            "timestamp": time.time(),
+            "timestamp": now,
             "cpu": {
                 "total_percent": cpu_total,
                 "per_core": per_core_list,
@@ -218,7 +226,10 @@ def get_system_metrics():
             "uptime_seconds": round(uptime_seconds),
             "hostname": socket.gethostname(),
             "network": get_network_interfaces()
-        })
+        }
+        _system_cache["data"] = payload
+        _system_cache["timestamp"] = now
+        return jsonify(payload)
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
@@ -295,8 +306,18 @@ def detect_camera_hardware():
         "physical_camera_connected": (realsense_found or len(v4l2_devices) > 0)
     }
 
+_status_cache = {
+    "data": None,
+    "timestamp": 0.0
+}
+
 @app.route("/api/status", methods=["GET"])
 def get_hardware_and_processes():
+    global _status_cache
+    now = time.time()
+    if app.config.get("TESTING") is not True and now - _status_cache["timestamp"] < 0.8 and _status_cache["data"] is not None:
+        return jsonify(_status_cache["data"])
+
     # 1. Serial device status
     def check_dev_path(*paths):
         for p in paths:
@@ -357,7 +378,7 @@ def get_hardware_and_processes():
                                 processes_info[proc_key]["cpu_percent"] = round(p.info['cpu_percent'] or 0.0, 1)
                                 processes_info[proc_key]["memory_percent"] = round(p.info['memory_percent'] or 0.0, 1)
                                 if p.info['create_time']:
-                                    processes_info[proc_key]["uptime_seconds"] = round(time.time() - p.info['create_time'])
+                                    processes_info[proc_key]["uptime_seconds"] = round(now - p.info['create_time'])
                                 break
             except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
                 continue
@@ -367,9 +388,9 @@ def get_hardware_and_processes():
     bat_info = get_motor_driver_battery()
     hw_sabertooth["battery_voltage"] = bat_info.get("voltage")
 
-    return jsonify({
+    payload = {
         "status": "ok",
-        "timestamp": time.time(),
+        "timestamp": now,
         "hardware": {
             "esp32": hw_esp,
             "ydlidar": hw_lidar,
@@ -392,7 +413,10 @@ def get_hardware_and_processes():
             "web_video_server_8080": video_server_reachable
         },
         "managed_processes": processes_info
-    })
+    }
+    _status_cache["data"] = payload
+    _status_cache["timestamp"] = now
+    return jsonify(payload)
 
 @app.route("/api/session", methods=["GET"])
 def get_session_endpoint():
@@ -914,17 +938,15 @@ def toggle_camera_module():
         )
         active_topic = "/camera/camera/color/image_raw"
     elif chosen_mode == "v4l2":
-        dev = hw["v4l2_devices"][0] if hw["v4l2_devices"] else "/dev/video0"
-        image_size = "[1280,720]" if hw.get("logitech") else "[640,480]"
         cmd_str = (
             prefix +
-            f"ros2 run v4l2_camera v4l2_camera_node --ros-args -p video_device:={dev} -p image_size:={image_size} -r image_raw:=/camera/color/image_raw"
+            "python3 /home/ubuntu/Desktop/Xtrmbly/admin-dashboard/server/camera_streamer.py"
         )
         active_topic = "/camera/color/image_raw"
     else:  # diagnostic
         cmd_str = (
             prefix +
-            "python3 /home/ubuntu/Desktop/Xtrmbly/admin-dashboard/server/diagnostic_cam.py"
+            "python3 /home/ubuntu/Desktop/Xtrmbly/admin-dashboard/server/camera_streamer.py"
         )
         active_topic = "/camera/color/image_raw"
 

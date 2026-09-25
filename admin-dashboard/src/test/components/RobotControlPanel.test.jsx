@@ -11,6 +11,7 @@ const MOCK_STATUS_DATA = {
     esp32: { exists: true, accessible: true },
   },
   managed_processes: {
+    session_proc: { running: true, pid: 1000, cpu_percent: 0.5, memory_percent: 0.2, uptime_seconds: 60 },
     urdf_proc: { running: true, pid: 1001, cpu_percent: 1.2, memory_percent: 0.5, uptime_seconds: 60 },
     joint_state_proc: { running: true, pid: 1002, cpu_percent: 0.8, memory_percent: 0.4, uptime_seconds: 60 },
     odom_proc: { running: true, pid: 1003, cpu_percent: 2.1, memory_percent: 0.6, uptime_seconds: 60 },
@@ -42,7 +43,7 @@ describe('RobotControlPanel Component', () => {
     );
 
     expect(screen.getByText(/Robot Startup & Bringup Control/i)).toBeInTheDocument();
-    expect(screen.getByText(/9\/9 Nodes Active/i)).toBeInTheDocument();
+    expect(screen.getByText(/10\/10 Nodes Active/i)).toBeInTheDocument();
     expect(screen.getByText(/14.2V/i)).toBeInTheDocument();
   });
 

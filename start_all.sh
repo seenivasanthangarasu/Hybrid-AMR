@@ -33,6 +33,8 @@ fuser -k 5001/tcp 2>/dev/null || true
 fuser -k 3000/tcp 2>/dev/null || true
 pkill -f depth_colorizer.py 2>/dev/null || true
 pkill -f diagnostic_cam.py 2>/dev/null || true
+pkill -f camera_streamer.py 2>/dev/null || true
+pkill -f v4l2_camera 2>/dev/null || true
 pkill -f session_publisher 2>/dev/null || true
 sleep 0.5
 
