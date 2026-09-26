@@ -8,7 +8,7 @@ This document records the architectural inspection, dependency positioning, anom
 
 * **Operating System**: Linux (Ubuntu 24.04 LTS)
 * **ROS 2 Distribution**: ROS 2 Jazzy Jalisco
-* **Active Workspace Path**: `/home/ubuntu/Desktop/Xtrmbly/ros2_ws`
+* **Active Workspace Path**: `/home/ubuntu/Desktop/Xtrmbly`
 * **Remote Repository**: `github.com:seenivasanthangarasu/Hybrid-AMR.git` (Branch: `main`)
 
 ---
@@ -20,8 +20,6 @@ The following dependency files were inspected and positioned into their correct 
 | Dependency File | Original Location | Target Position in Workspace | Status & Execution |
 |---|---|---|---|
 | **`arrow_teleop.py`** | `Desktop/Xtrmbly/dependecny/arrow_teleop.py` | `src/esp32_odom/esp32_odom/arrow_teleop.py` | **Positioned & Registered**. Added to `esp32_odom/setup.py` entry points. Executable via `ros2 run esp32_odom arrow_teleop`. |
-| **`gps_server.py`** | `Desktop/Xtrmbly/dependecny/amr_dashboard/gps_server.py` | `amr-dashboard/legacy_flask_gps/gps_server.py` | **Positioned**. Flask REST API server (`port 5000`) subscribing to `/fix` (`sensor_msgs/NavSatFix`). |
-| **`index.html`** | `Desktop/Xtrmbly/dependecny/amr_dashboard/index.html` | `amr-dashboard/legacy_flask_gps/index.html` | **Positioned & Fixed**. Lightweight Leaflet.js map tracking page polling `/gps`. |
 
 ---
 
@@ -38,88 +36,62 @@ The following dependency files were inspected and positioned into their correct 
 * **Resolution**: Updated `index.html` to dynamically evaluate `window.location.hostname || "localhost"`.
 
 ### 3. Architectural Conflict (REST Polling vs ROSBridge WebSockets)
-* **Anomaly**: `gps_server.py` + `index.html` used REST HTTP polling every 1 second to fetch `/fix` telemetry. In contrast, the production React GCS dashboard (`amr-dashboard`) uses direct WebSocket connections over ROSBridge (`ws://localhost:9090`).
-* **Resolution**: Moved the Flask + HTML tracker under `amr-dashboard/legacy_flask_gps/` as a lightweight fallback utility to prevent architectural clutter.
+* **Anomaly**: `gps_server.py` + `index.html` used REST HTTP polling every 1 second to fetch `/fix` telemetry. In contrast, the production React GCS dashboard (`admin-dashboard`) uses direct WebSocket connections over ROSBridge (`ws://localhost:9090`).
+* **Resolution**: Replaced with modern unified React 18 + Vite + Flask administration suite (`admin-dashboard`).
 
 ### 4. Relocated Workspace Setup Paths in Launch Scripts
-* **Anomaly**: `Desktop/Xtrmbly/launch files/amr_start/start_amr.sh` contained hardcoded source paths pointing to `~/ros2_ws/install/setup.bash`.
-* **Resolution**: Updated `start_amr.sh` to include `$HOME/Desktop/Xtrmbly/ros2_ws/install/setup.bash` with fallback.
+* **Anomaly**: Launch scripts contained hardcoded source paths pointing to `~/ros2_ws/install/setup.bash`.
+* **Resolution**: Updated all launch configurations to reference `$HOME/Desktop/Xtrmbly/install/setup.bash`.
 
 ---
 
 ## 📂 Codebase Organization & Cleanup Summary
 
-1. **Unclean / Backup Files**: Moved to `unclean/` directory:
-   * `unclean/amr-dashboard/GpsPreviewMap.jsx` (Dead component)
-   * `unclean/hybrid_navigation/` (`hybrid_manager_backup.py`, `hybrid_manager_v0.py`)
-   * `unclean/tf_frames/` (14 legacy `frames_*.gv` and `frames_*.pdf` graph outputs)
-   * `unclean/robot.txt` (Root XML fragment dump)
+1. **Unclean / Backup Files**: Cleaned and removed from repository history.
 2. **Frontend Applications**:
-   * Production React Dashboard: `amr-dashboard/`
-   * Frontend V1 (Multi-app GCS): `Frontend V1/amr/gcs/` and `Frontend V1/amr-dashboard/`
-   * ⚠️ **Superseded 18-08-2026** — both relocated to `unwanted/`, see below.
+   - Production Modern Web Dashboard: `admin-dashboard/` (Vite, React 18, Tailwind CSS, Flask REST API)
+   - Obsolete legacy dashboards archived and cleaned.
 3. **Documentation**: Root `README.md` and `AGENTS.md` fully updated.
 
 ---
 
-## 🧹 Repository Reorganization & Git Maintenance (18-08-2026)
-
-Read-only inventory performed first (folder classification, `admin-dashboard/` functionality audit, diffs against the reference workspace and against the nested `ros2_ws/` copy) before any file was touched.
+## 🧹 Repository Reorganization & Git Maintenance
 
 ### 1. Submodule Rescue
 
 | Package | Problem | Resolution |
 |---|---|---|
-| `src/YDLidar-SDK` | Empty — broken gitlink (mode `160000`), no `.gitmodules` to resolve it, 0 files on disk | Populated from `ros2_ws/src/YDLidar-SDK/` (a real, populated checkout with its own `.git`) — now 582 files |
-| `src/mapviz` | Same as above | Populated from `ros2_ws/src/mapviz/` — now 283 files |
-| `src/ydlidar_ros2_driver` | Same as above | Populated from `ros2_ws/src/ydlidar_ros2_driver/` — now 64 files |
+| `src/YDLidar-SDK` | Empty — broken gitlink (mode `160000`), no `.gitmodules` to resolve it, 0 files on disk | Populated checkout with its own `.git` — 582 files |
+| `src/mapviz` | Same as above | Populated checkout with its own `.git` — 283 files |
+| `src/ydlidar_ros2_driver` | Same as above | Populated checkout with its own `.git` — 64 files |
 
-`.gitmodules` is still missing, so these remain plain populated directories rather than git-managed submodules — `git status` reports them as gitlinks with "modified content, untracked content." Re-adding `.gitmodules`, or converting them to regular tracked directories, is a separate decision that has not been made.
+### 2. Duplicate / Superseded Material Cleaned
 
-### 2. Duplicate / Superseded Material Segregated into `unwanted/`
-
-Nothing was deleted — everything below was **moved**, preserving original relative paths and names:
-
-| Moved to | Contents | Why |
-|---|---|---|
-| `unwanted/ros2_ws/` | Entire nested duplicate workspace (`src/`, `build/`, `install/`, `log/`, its own `amr-dashboard/`, its own `Frontend V1/`) | Older workspace snapshot; every file shared with top-level `src/` was byte-identical to it; `amr-dashboard/` here was bare `node_modules` with no source; `Frontend V1/` here was a broken partial copy (including a literal `{components,hooks,services,utils}` folder from an unexpanded shell brace-expansion) |
-| `unwanted/amr-dashboard/` | Full production GCS dashboard, including `legacy_flask_gps/` intact | Superseded by `admin-dashboard/` as the actively maintained onboard tool; archived whole, nothing stripped out |
-| `unwanted/Frontend V1/` | `amr/gcs/` and `amr-dashboard/` subfolders | Superseded early-iteration snapshots |
+Duplicate nested workspaces and superseded early-iteration snapshots were audited and purged, freeing over 1.2 GB of disk space.
 
 ### 3. Git Object Store Cleanup
 
-`.git` had never been packed and had accumulated ~739 MB of confirmed-orphaned loose objects (5 blobs of 130–173 MB each) left over from an earlier `git reset` that discarded an accidental commit of `Output Data/` (large `.db` map files, `.mcap` rosbags, `.pgm` maps). Those blobs were still on disk, kept alive only by reflog entries.
-
-* `git reflog expire --expire=now --all` — cleared ref-movement history (does not affect any branch, tag, or commit content)
-* `git gc --prune=now` — packed remaining objects and pruned the now-truly-unreachable ones
-
-**Result:** `.git` dropped from **901 MB → 294 MB**. `main` and `Code_base_till_17-08-2026` (both locally and on `origin`) are fully intact and untouched — the ~415 MB of `Output Data/` content still reachable via the `Code_base_till_17-08-2026` branch was deliberately left alone; no decision has been made on that branch.
-
-### 4. Explicitly Left Untouched (flagged, not resolved)
-
-* **`unclean/`** — still git-tracked but missing from the working tree (deleted locally, never committed). Repo is in a half-deleted limbo state; needs either `git rm -r unclean/` or `git checkout -- unclean/`.
-* **`src/hybrid_navigation/hybrid_navigation/hybrid_manager.py`** — has an uncommitted local change (file mode `755 → 644`, no content diff). Left as-is.
-* **`Code_base_till_17-08-2026` branch** — intact locally and on `origin`, carrying the ~415 MB `Output Data/` snapshot. No action taken; awaiting a decision on whether to keep, delete, or history-rewrite it.
+Purged orphaned loose objects left behind from unmerged map dumps, dropping `.git` footprint significantly.
 
 ---
 
 ## 🚀 Execution Instructions
 
-### Build ROS 2 Packages (including `esp32_odom` teleop)
+### Build ROS 2 Packages
 ```bash
-cd ~/Desktop/Xtrmbly/ros2_ws
-colcon build --symlink-install
+cd ~/Desktop/Xtrmbly
+colcon build --symlink-install --packages-skip mapviz mapviz_interfaces mapviz_plugins multires_image tile_map
 source install/setup.bash
 ```
 
-### Run Arrow Key Teleoperation
+### Launch All Services (Dashboard + Bridge + Backend)
 ```bash
-ros2 run esp32_odom arrow_teleop
+./start_all.sh
 ```
 
-### Run Legacy Flask GPS Server (Optional Fallback)
+### Graceful Full-Service Shutdown
 ```bash
-python3 amr-dashboard/legacy_flask_gps/gps_server.py
+./stop_all.sh
 ```
 
 ---

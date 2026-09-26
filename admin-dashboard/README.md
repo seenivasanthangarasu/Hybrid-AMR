@@ -33,11 +33,12 @@ The server-side dashboard operates as an onboard edge-diagnostic layer bridging 
                                                                     ^
                                                                     |
 +-------------------------------------------------------------+     |
-|             Universal Camera Streamer & QoS Bridge          |     |
-|      (camera_streamer.py -> web_video_server :8080)         |-----+
-|  * RealSense RGB (/dev/video4) @ 424x240 15 FPS [RELIABLE]  |
-|  * RealSense Depth (/dev/video0) -> TURBO Colormap          |
-|  * Pro-Max Dynamic Telemetry HUD Fallback Stream            |
+|             Vision System & Nginx CORS Reverse Proxy        |     |
+|      (camera_streamer.py -> web_video_server :8082)         |-----+
+|  * Logitech C270 HD (720p @ 30 FPS MJPG) on /dev/amr_camera |
+|  * Non-blocking capture thread publishing at 15-25 Hz       |
+|  * Multi-threaded web_video_server (4 server / 2 ROS worker)|
+|  * Nginx proxy on :8080 with Access-Control-Allow-Origin: * |
 +-------------------------------------------------------------+
 ```
 
@@ -48,10 +49,11 @@ The server-side dashboard operates as an onboard edge-diagnostic layer bridging 
 | Service | Protocol / Port | Process Entrypoint | Description |
 |---|---|---|---|
 | **Diagnostic UI** | HTTP `3000` | `npm run dev -- --host 0.0.0.0 --port 3000` | React 18 + Vite real-time monitoring interface |
-| **Admin Backend API** | HTTP REST `5001` | `admin-dashboard/server/server.py` | Stack lifecycle, hardware status, PID metrics, battery, logs |
+| **Admin Backend API** | HTTP REST `5001` | `admin-dashboard/server/server.py` | Stack lifecycle, hardware status, PID metrics, battery, shutdown, logs |
 | **ROSBridge WebSocket** | WS `9090` | `ros2 launch rosbridge_server rosbridge_websocket_launch.xml` | JSON WebSocket bridge for ROS topics & services |
-| **MJPEG Video Server** | HTTP `8080` | `ros2 run web_video_server web_video_server` | Real-time MJPEG live camera and depth stream |
-| **Universal Camera Streamer** | ROS 2 Node | `admin-dashboard/server/camera_streamer.py` | Direct V4L2 capture, QoS bridge, and HUD generator |
+| **Public Video Server (Nginx)** | HTTP `8080` | `nginx` proxying to `127.0.0.1:8082` | Low-latency MJPEG live stream & snapshots with permissive CORS |
+| **Internal Video Server** | HTTP `8082` | `ros2 launch rock_bringup web_video_server.launch.py` | Multi-threaded MJPEG ROS image transport bridge |
+| **Universal Camera Streamer** | ROS 2 Node | `admin-dashboard/server/camera_streamer.py` | Non-blocking V4L2 capture, 720p HD streaming, and QoS bridge |
 
 ---
 
@@ -65,16 +67,19 @@ The server-side dashboard operates as an onboard edge-diagnostic layer bridging 
 * **Real-Time Battery Telemetry Card**: Dedicated overview card and header voltage indicator displaying Sabertooth 2x32 live battery state (`/battery_state` and `/sabertooth/battery_voltage`).
 * **Direct Serial Polling Fallback**: Polled periodically via non-blocking DEScribe Plain Text protocol (`M1: getb\r\n`) when ROS 2 nodes are offline.
 
-### 3. Serial Port Isolation & Hardware Attribute Matching
+### 3. Graceful Full-Service Shutdown
+* **One-Click UI Teardown**: "Shutdown Services" button in the global header issues `POST /api/server/shutdown` to terminate the robot stack, ROSBridge, video streamers, session publisher, frontend, and backend cleanly.
+* **Terminal Companion**: Executable `stop_all.sh` provides terminal-level symmetric shutdown matching `start_all.sh`.
+
+### 4. Serial Port Isolation & Hardware Attribute Matching
 * **Hardware Attribute Inspection**: Rewrote port resolvers to match unique USB vendor IDs and hardware serial numbers, completely preventing collisions between ESP32 (`/dev/amr_encoder`), YDLIDAR G4 (`/dev/amr_lidar`), Sabertooth 2x32 (`/dev/sabertooth`), Hiwonder GPS (`/dev/hiwonder_gps`), and Hiwonder IMU (`/dev/hiwonder_imu`).
 
-### 4. USB 2.0 Host Controller Auto-Healing (`scripts/usb_heal.sh`)
+### 5. USB 2.0 Host Controller Auto-Healing (`scripts/usb_heal.sh`)
 * Programmatically unbinds and rebinds the PCIe xHCI host controller (`0000:01:00.0`) to instantly recover from USB bus brownouts (`error -71`) without system reboots.
 
-### 5. Universal Camera Streamer & QoS Bridge (`camera_streamer.py`)
-* Bridges `BEST_EFFORT` camera feeds into `RELIABLE` QoS streams for `web_video_server`.
-* Converts 16-bit millimeter depth maps into high-contrast `TURBO` colormaps.
-* Renders a real-time synthetic Pro-Max Telemetry HUD overlay if optical sensors are detached.
+### 6. High-Definition Vision System & Nginx CORS Proxy
+* Captures native 1280x720 MJPG frames from Logitech C270 HD Webcam via a dedicated non-blocking thread, streaming at 15–25 Hz without CPU choking.
+* Nginx proxy on port 8080 injects `Access-Control-Allow-Origin: *` headers, allowing external browser clients to stream or capture snapshots (`/snapshot?topic=...`) without CORS rejections.
 
 ---
 
@@ -94,6 +99,7 @@ The Flask backend exposes the following REST API endpoints on `http://<ROBOT_IP>
 | `/api/motor/toggle` | `POST` | `{"enable": true}` | Toggles Sabertooth motor controller node independently |
 | `/api/radio/toggle` | `POST` | `{"enable": true}` | Toggles HOT RC DS-600 radio receiver node independently |
 | `/api/camera/toggle` | `POST` | `{"enable": true, "mode": "auto"}` | Toggles the camera streamer module independently |
+| `/api/server/shutdown` | `POST` | — | Gracefully halts all stack nodes, ROSBridge, video streamers, and backend |
 | `/api/restart` | `POST` | `{"process": "lidar_proc"}` | Restarts a specific managed process |
 | `/api/logs` | `GET` | `?source=ros&lines=100&filter=error` | Fetches filtered ROS 2 and `journalctl` log streams |
 | `/api/config` | `GET` | — | Returns current backend configuration and workspace path |
@@ -108,24 +114,32 @@ cd ~/Desktop/Xtrmbly
 ./start_all.sh
 ```
 
-### 2. Access the Dashboard
+### 2. Stop All Services (One Command)
+```bash
+cd ~/Desktop/Xtrmbly
+./stop_all.sh
+```
+
+### 3. Access the Dashboard
 * **Web UI**: Open `http://<ROBOT_IP>:3000` (or `http://localhost:3000`)
 * **Backend API**: `http://<ROBOT_IP>:5001`
-* **Video Stream**: `http://<ROBOT_IP>:8080/stream_viewer?topic=/camera/camera/color/image_raw`
+* **Video Stream (Iframe Viewer)**: `http://<ROBOT_IP>:8080/stream_viewer?topic=/camera/camera/color/image_raw`
+* **Raw Video MJPEG Stream**: `http://<ROBOT_IP>:8080/stream?topic=/camera/camera/color/image_raw&width=640&height=360`
+* **Snapshot JPEG**: `http://<ROBOT_IP>:8080/snapshot?topic=/camera/camera/color/image_raw`
 
-### 3. Run Automated Test Suites
+### 4. Run Automated Test Suites
 ```bash
 cd ~/Desktop/Xtrmbly/admin-dashboard
 
-# Run Backend Python Tests (35 Unit Tests)
+# Run Backend Python Tests (38 Unit Tests)
 pytest server/tests/test_server.py
 
-# Run Frontend Vitest Suite (130 Tests across 10 test files)
+# Run Frontend Vitest Suite (133 Tests across 10 test files)
 npm test -- --run
 ```
 
 ---
 
 ## 🧪 Test Suite Results Summary
-* **Backend Tests (Pytest)**: `35/35 passed` (100% pass rate)
-* **Frontend Tests (Vitest)**: `130/130 passed` across 10 component test suites (100% pass rate)
+* **Backend Tests (Pytest)**: `38/38 passed` (100% pass rate)
+* **Frontend Tests (Vitest)**: `133/133 passed` across 10 component test suites (100% pass rate)

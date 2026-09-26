@@ -1,18 +1,28 @@
+# ROS 2 Build Artifacts
 build/
 install/
 log/
+.ros_log/
 
+# Node & Frontend Build Artifacts
 node_modules/
 dist/
+package-lock.json
 
+# Python & Testing Artifacts
 *.pyc
 __pycache__/
+.pytest_cache/
+*.egg-info/
+
+# IDE & Editor Configuration
 .vscode/
 .idea/
+.claude/
 .DS_Store/
 
+# Legacy / Large Data Dumps
 'Output Data/'
-.ros_log/
 branch_structure.json
 temp_auto_push.bat
 temp_interactive_push.bat

@@ -1,15 +1,15 @@
 # Hybrid AMR (Autonomous Mobile Robot)
 
-A production-grade, full-stack **ROS 2 Jazzy** autonomous mobile robot platform designed for hybrid indoor and outdoor navigation, running on **Ubuntu 24.04 LTS (arm64)** on the **Rubik Pi** single-board computer. 
+A production-grade, full-stack **ROS 2 Jazzy** autonomous mobile robot platform designed for hybrid indoor and outdoor navigation, running on **Ubuntu 24.04 LTS (arm64)** on the **Rubik Pi** single-board computer.
 
-Featuring dual-stage Extended Kalman Filter (EKF) sensor fusion, autonomous outdoor GPS waypoint navigation, 2D SLAM mapping, Sabertooth 2x32 motor driver integration with live battery telemetry, HOT RC DS-600 radio teleoperation via direct Qualcomm GPIO, ESP32-S3 4x quadrature wheel odometry, YDLIDAR G4 12 Hz laser scanning, and a modern real-time onboard Web Admin & Diagnostics Dashboard (React 18 + Vite + Flask).
+Featuring dual-stage Extended Kalman Filter (EKF) sensor fusion, autonomous outdoor GPS waypoint navigation, 2D SLAM mapping, Sabertooth 2x32 motor driver integration with live battery telemetry, HOT RC DS-600 radio teleoperation via direct Qualcomm GPIO, ESP32-S3 4x quadrature wheel odometry, YDLIDAR G4 12 Hz laser scanning, high-definition Logitech C270 camera streaming over Nginx CORS reverse proxy, and a modern real-time onboard Web Admin & Diagnostics Dashboard (React 18 + Vite + Flask).
 
 ![ROS 2 Jazzy](https://img.shields.io/badge/ROS_2-Jazzy%20Jalisco-blue)
 ![OS](https://img.shields.io/badge/OS-Ubuntu%2024.04%20LTS%20arm64-orange)
 ![Frontend](https://img.shields.io/badge/Frontend-React%2018%20%2B%20Vite%20%2B%20Tailwind-61dafb)
 ![Backend](https://img.shields.io/badge/Backend-Flask%20%2B%20ROSBridge-green)
 ![License](https://img.shields.io/badge/License-MIT-purple)
-![Tests](https://img.shields.io/badge/Tests-100%25%20Passing-brightgreen)
+![Tests](https://img.shields.io/badge/Tests-100%25%20Passing%20(187%2F187)-brightgreen)
 
 ---
 
@@ -33,11 +33,11 @@ Featuring dual-stage Extended Kalman Filter (EKF) sensor fusion, autonomous outd
 |                                                  ROS 2 JAZZY CORE STACK                                                 |
 |                                                                                                                         |
 |  +---------------------------+   +---------------------------+   +---------------------------+   +-------------------+  |
-|  |     robot_localization    |   |     outdoor_navigation    |   |       slam_toolbox        |   | amr_data_recorder |  |
-|  | * Stage 1: EKF Local      |   | * WGS-84 Geodesy (ENU)    |   | * 2D SLAM Mapping         |   | * Synchronized    |  |
-|  |   (Odom + IMU -> /odom_f) |   | * Waypoint State Machine  |   | * Ceres Scan Matcher      |   |   MCAP Bagging    |  |
-|  | * Stage 2: EKF Global     |   | * LiDAR Obstacle Stop     |   | * Localization Mode       |   | * Experiment      |  |
-|  |   (/odom_f + GPS -> /glob)|   | * Dynamic Speed Scaling   |   |   (/map -> /odom)         |   |   metadata.yaml   |  |
+|  |     robot_localization    |   |     outdoor_navigation    |   |       slam_toolbox        |   |    amr_session    |  |
+|  | * Stage 1: EKF Local      |   | * WGS-84 Geodesy (ENU)    |   | * 2D SLAM Mapping         |   | * Authoritative   |  |
+|  |   (Odom + IMU -> /odom_f) |   | * Waypoint State Machine  |   | * Ceres Scan Matcher      |   |   Boot ID Session |  |
+|  | * Stage 2: EKF Global     |   | * LiDAR Obstacle Stop     |   | * Localization Mode       |   | * Transient Local |  |
+|  |   (/odom_f + GPS -> /glob)|   | * Dynamic Speed Scaling   |   |   (/map -> /odom)         |   |   QoS Heartbeat   |  |
 |  +---------------------------+   +---------------------------+   +---------------------------+   +-------------------+  |
 |                                                                                                                         |
 |  +---------------------------+   +---------------------------+   +---------------------------+   +-------------------+  |
@@ -47,6 +47,13 @@ Featuring dual-stage Extended Kalman Filter (EKF) sensor fusion, autonomous outd
 |  | * Live Battery Telemetry  |   | * Low-Pass EMA & Slew Clam|   | * Monotonic Timestamps    |   | * 9 kHz Sampling  |  |
 |  | * 0 dB Silent Idle State  |   | * 350ms Failsafe Watchdog |   | * Auto-Reconnection       |   | * Auto-Resync     |  |
 |  +---------------------------+   +---------------------------+   +---------------------------+   +-------------------+  |
+|                                                                                                                         |
+|  +-------------------------------------------------------------------------------------------------------------------+  |
+|  |                                  web_video_server + Nginx CORS Reverse Proxy                                      |  |
+|  | * Logitech C270 720p HD @ 30 FPS MJPG (/dev/amr_camera) -> /camera/camera/color/image_raw (15-25 Hz)               |  |
+|  | * Internal multi-threaded web_video_server on :8082 (4 server threads, 2 ROS threads)                             |  |
+|  | * Nginx proxy on :8080 with full Access-Control-Allow-Origin: * for cross-origin browser client apps                 |  |
+|  +-------------------------------------------------------------------------------------------------------------------+  |
 +-------------------------------------------------------------------------------------------------------------------------+
                                                                |
                                                                v
@@ -56,8 +63,8 @@ Featuring dual-stage Extended Kalman Filter (EKF) sensor fusion, autonomous outd
 |  [Sabertooth 2x32 Controller]    [HOT RC DS-600 Receiver]    [ESP32-S3 Optical Encoders]     [YDLIDAR G4 Scanner]       |
 |  `/dev/sabertooth` (115200)      `gpiochip4` (Lines 8 & 24)  `/dev/amr_encoder` (115200)     `/dev/amr_lidar` (230400)  |
 |                                                                                                                         |
-|  [Hiwonder 9-DOF IMU]            [Hiwonder GNSS GPS]         [Logitech C270 HD Web Camera]             |
-|  `/dev/hiwonder_imu` (9600)      `/dev/hiwonder_gps` (9600)  `/dev/amr_camera` (1280x720 @ 20 FPS)     |
+|  [Hiwonder 9-DOF IMU]            [Hiwonder GNSS GPS]         [Logitech C270 HD Web Camera]                             |
+|  `/dev/hiwonder_imu` (9600)      `/dev/hiwonder_gps` (9600)  `/dev/amr_camera` (1280x720 @ 30 FPS MJPG)                 |
 +-------------------------------------------------------------------------------------------------------------------------+
 ```
 
@@ -77,7 +84,7 @@ Featuring dual-stage Extended Kalman Filter (EKF) sensor fusion, autonomous outd
 
 ### 3. 🗺️ 2D SLAM Mapping & Localization (`rock_bringup` / `indoor_amr`)
 * **SLAM Toolbox Integration**: Optimized Ceres scan matching parameters (`mapper_mapping.yaml`) with active barycenter centroid tracking (`use_scan_barycenter: true`) for robust loop-closure in dynamic indoor environments.
-* **Saved Map Localization**: Seamless transition into AMCL-like pose tracking against saved occupancy grids.
+* **Saved Map Localization**: Seamless transition into AMCL-like pose tracking against saved occupancy grids (`mapper_localization.yaml`).
 
 ### 4. ⚡ Sabertooth 2x32 Motor Driver & Live Battery Telemetry (`sabertooth_driver`)
 * **USB CDC ACM Plain Text Protocol**: Direct high-speed serial communication on `/dev/sabertooth` (115200 baud).
@@ -100,9 +107,19 @@ Featuring dual-stage Extended Kalman Filter (EKF) sensor fusion, autonomous outd
 * **Stream Resynchronization**: Fixed-position byte rewind on checksum failures preventing false sync packet header loss.
 * **Clean Shutdown**: POSIX signal handlers (`SIGINT`, `SIGTERM`, `SIGHUP`) assert CP2102 DTR line clearing to halt motor rotation immediately on node exit.
 
-### 8. 💻 Web Admin & Diagnostics Dashboard (`admin-dashboard`)
-* **Robot Control Panel**: Full stack bringup with animated launch stages, live streaming bringup logs, 1-click Radio Teleop & Motor Drive toggle (`[⚡ Turn ON Radio Teleop Drive]` / `[🛑 Turn OFF Radio Teleop Drive]`), and live battery indicator pill.
-* **Universal Camera Streamer**: High-performance V4L2 streamer with native support for Logitech C270 HD (1280x720 @ 30 FPS MJPG), persistent `/dev/amr_camera` symlink discovery, and Pro-Max Telemetry HUD fallback stream on `http://<ROBOT_IP>:8080`.
+### 8. 📹 Vision System & Nginx CORS Reverse Proxy (`camera_streamer.py`)
+* **Hardware Capture**: Logitech C270 HD Webcam running at 1280x720 (720p HD @ 30 FPS MJPG) on `/dev/video0` with dynamic framerate disabled for consistent indoor/outdoor performance.
+* **Decoupled Architecture**: Non-blocking capture thread publishing frames to `/camera/camera/color/image_raw` and `/camera/color/image_raw` at 15–25 Hz.
+* **Multi-Threaded Video Server**: `web_video_server` running on internal port `8082` with 4 server threads and 2 ROS worker threads.
+* **Nginx Reverse Proxy**: Publicly accessible on port `8080` with full CORS headers (`Access-Control-Allow-Origin: *`, preflight `OPTIONS` support) enabling remote web client video embedding and snapshots.
+
+### 9. 🆔 Authoritative Power-Cycle Session Manager (`amr_session`)
+* **Boot-Bound Identity**: Idempotent session UUID bound to the Linux kernel boot ID (`/proc/sys/kernel/random/boot_id`). System reboots spawn a new session; web page refreshes or node restarts seamlessly reconnect to the active session.
+* **State Lifecycle**: Publishes on `/amr/session` with `TRANSIENT_LOCAL` durability (depth: 1) every 2.0s while `active`, broadcasting `"state": "ended"` on graceful shutdown.
+
+### 10. 💻 Web Admin & Diagnostics Dashboard (`admin-dashboard`)
+* **Robot Control Panel**: Full stack bringup with animated launch stages, live streaming console logs, 1-click Radio Teleop & Motor Drive toggle (`[⚡ Turn ON Radio Teleop Drive]` / `[🛑 Turn OFF Radio Teleop Drive]`), live battery indicator pill, and live camera preview.
+* **Full Service Shutdown**: One-click **"Shutdown Services"** action in the UI (backed by `POST /api/server/shutdown`) and terminal CLI (`./stop_all.sh`) for clean, systematic teardown.
 * **Live System & ROS 2 Diagnostics**: Real-time topic rates, TF tree staleness, node registry, CPU/RAM/Disk/Network health, and `journalctl`/ROS log viewers.
 
 ---
@@ -111,6 +128,7 @@ Featuring dual-stage Extended Kalman Filter (EKF) sensor fusion, autonomous outd
 
 ```
 ├── start_all.sh                     # Single-command startup script (ROSBridge, Flask API, Vite UI)
+├── stop_all.sh                      # Single-command shutdown script (Gracefully halts all services & nodes)
 ├── fastdds_udp.xml                  # FastDDS UDPv4 transport profile (eliminates /dev/shm mutex lockups)
 ├── rc_calibration_final.json        # HOT RC DS-600 radio transmitter calibration profile
 ├── udev_rules/
@@ -118,7 +136,8 @@ Featuring dual-stage Extended Kalman Filter (EKF) sensor fusion, autonomous outd
 ├── scripts/
 │   ├── usb_heal.sh                  # PCIe xHCI host controller auto-healer for USB error -71 recovery
 │   ├── calibrate_imu.py             # IMU gyroscope and accelerometer calibration script
-│   └── find_north.py                # Magnetometer true north alignment utility
+│   ├── find_north.py                # Magnetometer true north alignment utility
+│   └── amr-session.service          # Systemd unit service for authoritative session publisher
 ├── admin-dashboard/                 # Onboard Web Admin & Diagnostics Suite (React 18 + Vite + Flask)
 │   ├── src/                         # React UI Components, Hooks, and Vitest test suites
 │   ├── server/                      # Local Flask REST API (Port 5001), camera streamer, and Pytest tests
@@ -132,9 +151,10 @@ Featuring dual-stage Extended Kalman Filter (EKF) sensor fusion, autonomous outd
     ├── hiwonder_gps/                # Hiwonder GNSS GPS NMEA and NavSatFix driver
     ├── hiwonder_imu/                # Hiwonder 9-DOF IMU acceleration, angular velocity, and magnetometer driver
     ├── gogo_description/            # Robot URDF (Xacro) geometry, joint states, and TF tree definition
-    ├── rock_bringup/                # Top-level bringup launch files (navigation, mapping, EKF local/global)
+    ├── rock_bringup/                # Top-level bringup launch files (navigation, mapping, EKF local/global, video)
     ├── indoor_amr/                  # Indoor SLAM navigation launch configurations
     ├── hybrid_navigation/           # Hybrid GPS <-> SLAM state transition manager
+    ├── amr_session/                 # Authoritative power-cycle session lifecycle publisher
     ├── amr_data_recorder/           # Synchronized MCAP ROS bag recorder with metadata generator
     ├── ydlidar_ros2_driver/         # YDLIDAR G4 ROS 2 driver node (12 Hz scan rate)
     ├── YDLidar-SDK/                 # Core YDLidar C++ communication library
@@ -155,30 +175,32 @@ All USB and serial devices are uniquely identified and mapped to persistent syml
 | **YDLIDAR G4 Scanner** | CP2102 (`serial: 0001`) | 230400 baud | `/dev/amr_lidar` | `/scan` (12.0 Hz) |
 | **Hiwonder GNSS GPS** | USB-Serial CH340 (`port: 1-2.2`) | 9600 baud | `/dev/hiwonder_gps` | `/hiwonder/gps/fix`, `/hiwonder/gps/nmea` |
 | **Hiwonder 9-DOF IMU** | USB-Serial CH340 (`port: 1-2.3`) | 9600 baud | `/dev/hiwonder_imu` | `/hiwonder/imu/data_raw`, `/hiwonder/imu/mag` |
-| **Logitech C270 HD Web Camera** | USB 2.0 (`046d:0825`) | V4L2 MJPG (1280x720 @ 20 FPS) | `/dev/amr_camera` | `/camera/color/image_raw` |
+| **Logitech C270 HD Web Camera** | USB 2.0 (`046d:0825`) | V4L2 MJPG (1280x720 @ 30 FPS) | `/dev/amr_camera` | `/camera/camera/color/image_raw` |
 
 ---
 
 ## 📡 ROS 2 Topic & Service Contract
 
-| Topic | Message Type | Description |
-|---|---|---|
-| `/cmd_vel` | `geometry_msgs/Twist` | Primary motor velocity commands (from teleop or autonomous navigation) |
-| `/odom` | `nav_msgs/Odometry` | Raw ESP32-S3 circular arc wheel odometry |
-| `/odometry/filtered` | `nav_msgs/Odometry` | Local fused odometry (Wheel Odom + 9-DOF IMU) from Stage 1 EKF |
-| `/odometry/global` | `nav_msgs/Odometry` | Global earth-frame odometry (Local Filter + GPS) from Stage 2 EKF |
-| `/scan` | `sensor_msgs/LaserScan` | 2D LiDAR range scan data (12 Hz, YDLIDAR G4) |
-| `/hiwonder/gps/fix` | `sensor_msgs/NavSatFix` | Raw GNSS GPS coordinates (latitude, longitude, altitude) |
-| `/hiwonder/imu/data_raw` | `sensor_msgs/Imu` | 9-DOF linear acceleration and angular velocity |
-| `/hiwonder/imu/mag` | `sensor_msgs/MagneticField` | Calibrated magnetometer vector |
-| `/battery_state` | `sensor_msgs/BatteryState` | Sabertooth 2x32 live battery voltage, current, and temperature |
-| `/sabertooth/battery_voltage` | `std_msgs/Float32` | Instantaneous battery voltage float |
-| `/radio/channels` | `sensor_msgs/Joy` | Normalized HOT RC DS-600 joystick axis positions |
-| `/radio/status` | `std_msgs/String` | Radio receiver link state (`CONNECTED` / `DISCONNECTED`) |
-| `/outdoor_nav/state` | `std_msgs/String` | Current outdoor navigation state machine mode |
-| `/outdoor_nav/current_goal` | `geometry_msgs/PoseStamped` | Active GPS waypoint goal in local ENU frame |
-| `/map` | `nav_msgs/OccupancyGrid` | 2D SLAM occupancy grid map from `slam_toolbox` |
-| `/tf`, `/tf_static` | `tf2_msgs/TFMessage` | Coordinate frame tree (`map -> odom -> base_link -> laser_frame`) |
+| Topic | Message Type | QoS | Description |
+|---|---|---|---|
+| `/cmd_vel` | `geometry_msgs/Twist` | Volatile / Depth 10 | Primary motor velocity commands (from teleop or autonomous navigation) |
+| `/odom` | `nav_msgs/Odometry` | Volatile / Depth 10 | Raw ESP32-S3 circular arc wheel odometry |
+| `/odometry/filtered` | `nav_msgs/Odometry` | Volatile / Depth 10 | Local fused odometry (Wheel Odom + 9-DOF IMU) from Stage 1 EKF |
+| `/odometry/global` | `nav_msgs/Odometry` | Volatile / Depth 10 | Global earth-frame odometry (Local Filter + GPS) from Stage 2 EKF |
+| `/scan` | `sensor_msgs/LaserScan` | SensorData (Best Effort) | 2D LiDAR range scan data (12 Hz, YDLIDAR G4) |
+| `/hiwonder/gps/fix` | `sensor_msgs/NavSatFix` | Volatile / Depth 10 | Raw GNSS GPS coordinates (latitude, longitude, altitude) |
+| `/hiwonder/imu/data_raw` | `sensor_msgs/Imu` | Volatile / Depth 10 | 9-DOF linear acceleration and angular velocity |
+| `/hiwonder/imu/mag` | `sensor_msgs/MagneticField` | Volatile / Depth 10 | Calibrated magnetometer vector |
+| `/battery_state` | `sensor_msgs/BatteryState` | Volatile / Depth 10 | Sabertooth 2x32 live battery voltage, current, and temperature |
+| `/sabertooth/battery_voltage` | `std_msgs/Float32` | Volatile / Depth 10 | Instantaneous battery voltage float |
+| `/radio/channels` | `sensor_msgs/Joy` | Volatile / Depth 10 | Normalized HOT RC DS-600 joystick axis positions |
+| `/radio/status` | `std_msgs/String` | Volatile / Depth 10 | Radio receiver link state (`CONNECTED` / `DISCONNECTED`) |
+| `/outdoor_nav/state` | `std_msgs/String` | Volatile / Depth 10 | Current outdoor navigation state machine mode |
+| `/outdoor_nav/current_goal` | `geometry_msgs/PoseStamped` | Volatile / Depth 10 | Active GPS waypoint goal in local ENU frame |
+| `/map` | `nav_msgs/OccupancyGrid` | Transient Local / Depth 1 | 2D SLAM occupancy grid map from `slam_toolbox` |
+| `/tf`, `/tf_static` | `tf2_msgs/TFMessage` | Volatile / Depth 100 | Coordinate frame tree (`map -> odom -> base_link -> laser_frame`) |
+| `/amr/session` | `std_msgs/String` | Transient Local / Depth 1 | Authoritative power-cycle session metadata JSON (2.0 Hz) |
+| `/camera/camera/color/image_raw` | `sensor_msgs/Image` | Reliable / Depth 5 | Logitech C270 HD camera stream (15–25 Hz) |
 
 ---
 
@@ -187,12 +209,13 @@ All USB and serial devices are uniquely identified and mapped to persistent syml
 ### 1. Prerequisites
 * **Ubuntu 24.04 LTS arm64** (or x86_64) with **ROS 2 Jazzy Jalisco**.
 * **Node.js** (v18+) & **npm** (v9+).
+* **Nginx** reverse proxy (for CORS video streaming on port 8080).
 * **System packages**:
   ```bash
   sudo apt update
   sudo apt install -y ros-jazzy-rosbridge-server ros-jazzy-slam-toolbox \
       ros-jazzy-robot-localization ros-jazzy-robot-state-publisher \
-      ros-jazzy-web-video-server python3-pyserial python3-flask python3-flask-cors python3-psutil
+      ros-jazzy-web-video-server nginx python3-pyserial python3-flask python3-flask-cors python3-psutil
   ```
 
 ### 2. Install Udev Rules
@@ -211,10 +234,10 @@ source install/setup.bash
 
 ---
 
-## 🚀 Launching the Robot
+## 🚀 Launching & Stopping the Robot
 
 ### 🌟 All-in-One Dashboard Launch (Recommended)
-To launch the background services, ROSBridge WebSocket, Flask API, and Vite Web Dashboard with a single command:
+To launch background services, ROSBridge WebSocket, Flask API, and Vite Web Dashboard with a single command:
 
 ```bash
 cd ~/Desktop/Xtrmbly
@@ -224,6 +247,16 @@ cd ~/Desktop/Xtrmbly
 Open `http://<ROBOT_IP>:3000` (or `http://localhost:3000`) in any browser on the local network.
 * Go to the **Robot Control** panel to bring up the full navigation stack with 1-click.
 * Click **`[ ⚡ Turn ON Radio Teleop Drive ]`** to activate the HOT RC DS-600 radio and Sabertooth motor drive.
+
+### 🛑 Graceful Shutdown (One Command)
+To safely stop all ROS 2 nodes, launch scripts, ROSBridge, video streamers, Flask backend, and Vite frontend:
+
+```bash
+cd ~/Desktop/Xtrmbly
+./stop_all.sh
+```
+
+Or click **"Shutdown Services"** in the top navigation bar of the Web Admin Dashboard.
 
 ---
 
@@ -254,9 +287,14 @@ ros2 launch rock_bringup mapping.launch.py start_manual_drive:=true
 ros2 run amr_data_recorder record
 ```
 
-#### 6. Authoritative Power-Cycle Session Publisher (/amr/session)
+#### 6. Authoritative Power-Cycle Session Publisher
 ```bash
 ros2 run amr_session session_publisher
+```
+
+#### 7. Multi-Threaded Web Video Server
+```bash
+ros2 launch rock_bringup web_video_server.launch.py
 ```
 
 ---
@@ -290,16 +328,16 @@ The robot manages an authoritative power-cycle session conforming to the browser
 The codebase includes comprehensive unit test suites covering the frontend, backend server, and autonomous navigation algorithms:
 
 ```bash
-# 1. Run Outdoor Navigation Geodesy & State Machine Tests
+# 1. Run Outdoor Navigation Geodesy & State Machine Tests (7 Tests)
 pytest src/outdoor_navigation/test/
 
-# 2. Run AMR Session Manager Unit Tests (9 Unit Tests)
+# 2. Run AMR Session Manager Unit Tests (9 Tests)
 PYTHONPATH=src/amr_session pytest src/amr_session/test/
 
-# 3. Run Dashboard Flask Backend Tests (37 Unit Tests)
+# 3. Run Dashboard Flask Backend Tests (38 Tests)
 pytest admin-dashboard/server/tests/test_server.py
 
-# 4. Run Dashboard Frontend Vitest Suite (130 Unit Tests across 10 test suites)
+# 4. Run Dashboard Frontend Vitest Suite (133 Tests across 10 test suites)
 cd admin-dashboard && npm test -- --run
 ```
 
@@ -307,8 +345,9 @@ cd admin-dashboard && npm test -- --run
 |---|---|---|---|
 | **Outdoor Navigation Algorithms** | Pytest | 7 | **100% (7/7 Passed)** |
 | **AMR Power-Cycle Session Manager** | Pytest | 9 | **100% (9/9 Passed)** |
-| **Admin Backend Server API** | Pytest | 37 | **100% (37/37 Passed)** |
-| **React Frontend Diagnostics UI** | Vitest | 130 | **100% (130/130 Passed)** |
+| **Admin Backend Server API** | Pytest | 38 | **100% (38/38 Passed)** |
+| **React Frontend Diagnostics UI** | Vitest | 133 | **100% (133/133 Passed)** |
+| **Total Comprehensive Test Suite** | — | **187** | **100% (187/187 Passed)** |
 
 ---
 
