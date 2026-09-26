@@ -7,6 +7,7 @@ import FreshnessBadge from './ui/FreshnessBadge.jsx';
 import { toneFor } from './ui/signalTones.js';
 import { classifyFreshness } from '../utils/freshness.js';
 import { dopQuality, fixed, formatDistance, satCountQuality } from '../utils/gnss.js';
+import { useWorkspace } from '../context/WorkspaceContext.jsx';
 
 // Stale values are still shown (dimmed) so the operator sees the last reading;
 // LIVE values render at full weight, NO DATA renders the placeholder.
@@ -58,74 +59,25 @@ function Row({ label, value, unit, valueClass = 'text-ink-high', badge }) {
   );
 }
 
-export default function StatusPanel({ mode, connectionStatus }) {
-  const now = useNow(1000);
-  const odom = useOdometry();
+// Separate component for GPS rows to ensure zero GPS/GNSS subscriptions exist in indoor mode
+function GpsStatusRows({ now }) {
   const gps = useGps();
-  // Glance-level fix quality. The full breakdown lives in the GNSS QUALITY
-  // panel; the three figures that decide whether to trust a position — how many
-  // satellites, how good the geometry, how big the error — belong next to the
-  // coordinates themselves.
   const gnss = useGnssQuality();
 
-  const odomFresh = classifyFreshness(
-    { hasData: odom.hasData, hasEverData: odom.hasEverData, lastReceivedAt: odom.lastReceivedAt },
-    now,
-  );
   const gpsFresh = classifyFreshness(
     { hasData: gps.hasData, hasEverData: gps.hasEverData, lastReceivedAt: gps.lastReceivedAt },
     now,
   );
 
-  const connLabel = {
-    connected: 'LINKED',
-    connecting: 'CONNECTING',
-    error: 'ERROR',
-    closed: 'CLOSED',
-    disconnected: 'OFFLINE',
-  }[connectionStatus];
-  const connTone =
-    connectionStatus === 'connected' ? 'live' : connectionStatus === 'connecting' ? 'warn' : 'critical';
-  const modeClass = mode === 'INDOOR' ? 'text-signal-violet' : 'text-signal-cyan';
-
-  const speed = odom.linearVelocity != null ? odom.linearVelocity.toFixed(2) : null;
-  const heading = odom.heading != null ? odom.heading.toFixed(1) : null;
-  const distance = odom.hasEverData ? odom.distanceTravelled.toFixed(1) : null;
-
   const hdop = gnss.dop?.hdop ?? null;
   const hdopQ = dopQuality(hdop);
   const satsUsed = gnss.solution?.satellitesUsed ?? gnss.sats?.used ?? null;
   const satsVisible = gnss.sats?.visible ?? null;
-  // Tone-coded so "5 satellites" reads as marginal rather than as just a number.
   const satQ = satCountQuality(satsUsed);
-  // Receiver estimate first, covariance-derived 1σ as the fallback.
   const accuracy = formatDistance(gnss.estimated?.horizontal ?? gnss.derived?.sigmaH ?? null);
 
   return (
-    <div className="panel h-full overflow-auto rounded-md p-3 shadow-panel">
-      <PanelHeader title="STATUS" />
-
-      {/* Hero readouts — the three values watched most, largest weight */}
-      <div className="mb-2 grid grid-cols-3 gap-2">
-        <Hero label="Mode" value={mode} valueClass={modeClass} />
-        <Hero
-          label="Speed"
-          value={speed}
-          unit="m/s"
-          valueClass={valueClassFor(odomFresh.state)}
-          badge={<FreshnessBadge freshness={odomFresh} dotOnly />}
-        />
-        <Hero label="Link" value={connLabel} valueClass={toneFor(connTone).text} />
-      </div>
-
-      <Row
-        label="Heading"
-        value={heading}
-        unit="deg"
-        valueClass={valueClassFor(odomFresh.state)}
-        badge={<FreshnessBadge freshness={odomFresh} dotOnly />}
-      />
-      <Row label="Distance" value={distance} unit="m" valueClass={valueClassFor(odomFresh.state)} />
+    <>
       <Row
         label="GPS Status"
         value={gps.fixStatus}
@@ -158,6 +110,69 @@ export default function StatusPanel({ mode, connectionStatus }) {
         unit={accuracy?.unit}
         valueClass={valueClassFor(gpsFresh.state)}
       />
+    </>
+  );
+}
+
+export default function StatusPanel({ mode, connectionStatus, environment }) {
+  const now = useNow(1000);
+  const odom = useOdometry();
+  const workspace = useWorkspace();
+
+  const effectiveEnv =
+    environment || workspace.effectiveEnvironment || (mode?.toLowerCase() === 'indoor' ? 'indoor' : 'outdoor');
+  const isIndoor = effectiveEnv === 'indoor';
+
+  const odomFresh = classifyFreshness(
+    { hasData: odom.hasData, hasEverData: odom.hasEverData, lastReceivedAt: odom.lastReceivedAt },
+    now,
+  );
+
+  const connLabel = {
+    connected: 'LINKED',
+    connecting: 'CONNECTING',
+    error: 'ERROR',
+    closed: 'CLOSED',
+    disconnected: 'OFFLINE',
+  }[connectionStatus];
+  const connTone =
+    connectionStatus === 'connected' ? 'live' : connectionStatus === 'connecting' ? 'warn' : 'critical';
+
+  const displayMode = workspace.isConfigured ? workspace.environment?.toUpperCase() : mode;
+  const modeClass = displayMode === 'INDOOR' ? 'text-signal-violet' : 'text-signal-cyan';
+
+  const speed = odom.linearVelocity != null ? odom.linearVelocity.toFixed(2) : null;
+  const heading = odom.heading != null ? odom.heading.toFixed(1) : null;
+  const distance = odom.hasEverData ? odom.distanceTravelled.toFixed(1) : null;
+
+  return (
+    <div className="panel h-full overflow-auto rounded-md p-3 shadow-panel">
+      <PanelHeader title="STATUS" />
+
+      {/* Hero readouts — the three values watched most, largest weight */}
+      <div className="mb-2 grid grid-cols-3 gap-2">
+        <Hero label="Mode" value={displayMode} valueClass={modeClass} />
+        <Hero
+          label="Speed"
+          value={speed}
+          unit="m/s"
+          valueClass={valueClassFor(odomFresh.state)}
+          badge={<FreshnessBadge freshness={odomFresh} dotOnly />}
+        />
+        <Hero label="Link" value={connLabel} valueClass={toneFor(connTone).text} />
+      </div>
+
+      <Row
+        label="Heading"
+        value={heading}
+        unit="deg"
+        valueClass={valueClassFor(odomFresh.state)}
+        badge={<FreshnessBadge freshness={odomFresh} dotOnly />}
+      />
+      <Row label="Distance" value={distance} unit="m" valueClass={valueClassFor(odomFresh.state)} />
+
+      {/* Only mount GPS and GNSS rows in outdoor / hybrid-outdoor modes */}
+      {!isIndoor && <GpsStatusRows now={now} />}
 
       {/* A rejected odometry jump (localization reset / TF discontinuity) is
           surfaced instead of being silently discarded (spec REQ-07). */}

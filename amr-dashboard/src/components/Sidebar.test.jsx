@@ -2,6 +2,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi } from 'vitest';
 import Sidebar from './Sidebar.jsx';
+import { WorkspaceProvider } from '../context/WorkspaceContext.jsx';
 
 describe('Sidebar', () => {
   it('renders nothing when closed', () => {
@@ -43,6 +44,8 @@ describe('Sidebar', () => {
   it.each([
     ['GNSS quality', 'onOpenGnssQuality'],
     ['Nav2 threshold tuning', 'onOpenNav2Threshold'],
+    ['Switch mode / environment', 'onOpenWorkspaceSetup'],
+    ['Saved maps', 'onOpenSavedMaps'],
     ['Data & backups', 'onOpenDataHandling'],
     ['Error reference', 'onOpenErrorReference'],
   ])('opening "%s" closes the sidebar and invokes its handler', async (label, propName) => {
@@ -84,5 +87,14 @@ describe('Sidebar', () => {
     last.focus();
     await userEvent.tab();
     expect(document.activeElement).toBe(focusable[0]);
+  });
+
+  it('hides GNSS quality when indoor environment is active', () => {
+    render(
+      <WorkspaceProvider initialConfig={{ environment: 'indoor', mode: 'manual' }}>
+        <Sidebar open onClose={() => {}} />
+      </WorkspaceProvider>,
+    );
+    expect(screen.queryByRole('menuitem', { name: /GNSS quality/i })).not.toBeInTheDocument();
   });
 });

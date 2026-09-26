@@ -57,10 +57,10 @@ export default function ControlPanel({ connectionStatus }) {
   const [fault, setFault] = useState(null); // { error, context }
   const disabled = connectionStatus !== 'connected';
 
-  function dispatch(key, label) {
+  async function dispatch(key, label) {
     setStatus({ state: 'SENDING', label, at: new Date() });
     try {
-      const result = RobotCommandService[key]?.();
+      const result = await RobotCommandService[key]?.();
       setStatus({ state: result?.state ?? 'SENT_UNCONFIRMED', label, at: new Date() });
     } catch (err) {
       setStatus({ state: 'FAILED', label, at: new Date(), detail: errorDetail(err) });

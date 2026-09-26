@@ -193,3 +193,27 @@ describe('StatusPanel odometry resync notice', () => {
     expect(screen.queryByText(/resync detected/)).not.toBeInTheDocument();
   });
 });
+
+describe('StatusPanel environment-aware filtering', () => {
+  beforeEach(() => {
+    useOdometry.mockReset();
+    useGps.mockReset();
+  });
+
+  it('omits all GPS and GNSS rows when in indoor environment', () => {
+    useOdometry.mockReturnValue({ ...noOdom, hasData: true, linearVelocity: 0.5, heading: 45 });
+    render(<StatusPanel mode="INDOOR" environment="indoor" connectionStatus="connected" />);
+
+    expect(screen.getByText('Heading')).toBeInTheDocument();
+    expect(screen.getByText('Distance')).toBeInTheDocument();
+
+    expect(screen.queryByText('GPS Status')).not.toBeInTheDocument();
+    expect(screen.queryByText('Latitude')).not.toBeInTheDocument();
+    expect(screen.queryByText('Longitude')).not.toBeInTheDocument();
+    expect(screen.queryByText('Satellites')).not.toBeInTheDocument();
+    expect(screen.queryByText('HDOP')).not.toBeInTheDocument();
+    expect(screen.queryByText('Accuracy')).not.toBeInTheDocument();
+
+    expect(useGps).not.toHaveBeenCalled();
+  });
+});

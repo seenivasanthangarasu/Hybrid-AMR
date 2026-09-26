@@ -40,9 +40,13 @@ npm install
 npm run dev
 ```
 
-Open the printed local URL for the frontend welcome and workspace setup flow.
-The existing dashboard at `/?view=dashboard` connects to ROSBridge automatically
-on load; connection state is shown live in its header.
+Open the printed local URL for the Xtrmbly workspace onboarding flow.
+The application operates within a unified React root with workspace-driven layout and topic filtering:
+- **Indoor Mode**: Hides GPS previews, unmounts all GPS/GNSS topic subscriptions, and switches navigation to 2D occupancy grid navigation.
+- **Outdoor Mode**: Uses GPS and geographic waypoints; Mapping Mode is completely removed.
+- **Hybrid Mode**: Supports switching active segments (Indoor or Outdoor) with environment-appropriate tooling.
+- **Indoor Mapping**: Dedicated workspace managing the SLAM state machine via `/amr/mapping/cmd` and saving validated packages (`manifest.json`, `map.yaml`, `map.pgm`) to the client-local session folder.
+- **Indoor Navigation Gate**: Every fresh navigation entry enforces explicit user map selection and activation confirmation via `/amr/map/activate` before goal dispatching.
 
 | Script           | What it does                                           |
 | ---------------- | ------------------------------------------------------ |
@@ -113,7 +117,11 @@ robot's actual interfaces in `src/services/RobotCommandService.js`):
 | Topic / Action       | Type                                                 | Trigger                        |
 | -------------------- | ---------------------------------------------------- | ------------------------------ |
 | `/mission_state_cmd` | `std_msgs/String`                                    | START / PAUSE / RESUME / STOP  |
-| `/navigate_to_pose`  | `nav2_msgs/action/NavigateToPose`                    | STOP (cancel), RETURN HOME     |
+| `/navigate_to_pose`  | `nav2_msgs/action/NavigateToPose`                    | STOP (cancel), RETURN HOME, Indoor Nav Goal |
+| `/goal_pose`         | `geometry_msgs/PoseStamped`                          | Indoor Nav Goal (compatibility topic) |
+| `/initialpose`       | `geometry_msgs/PoseWithCovarianceStamped`            | Initial 2D Pose estimate for AMCL |
+| `/amr/mapping/cmd`   | `std_msgs/String`                                    | Indoor Mapping start/finish/cancel |
+| `/amr/map/activate`  | `std_msgs/String`                                    | Indoor Map activation request  |
 | `/emergency_stop`    | `std_msgs/Bool`                                      | EMERGENCY STOP                 |
 | `/cmd_vel`           | `geometry_msgs/Twist`                                | EMERGENCY STOP (zero velocity) |
 | `/follow_gps_waypoints` | `nav2_msgs/action/FollowGPSWaypoints`             | Mission Planner "SEND ROUTE"   |
@@ -277,6 +285,27 @@ catalog's invariants, and `Dialog` accessibility.
   The route's straight-line length is shown as a sanity check on ordering; it
   is not a drive distance, and no ETA is offered because no speed is known.
 
+
+## Power-on session folders
+
+The robot must publish the versioned `/amr/session` contract described in
+[the server implementation prompt](../docs/server-session-agent-prompt.md).
+The client does not infer power-on from a WebSocket connection.
+
+In **Data & Backups**, choose a parent folder and grant browser write access.
+A confirmed server session automatically creates a UTC timestamped child folder,
+with robot/session IDs appended to prevent collisions. MCAP files, `session.json`,
+and the `camera/` image folder stay inside that session. No recording is allowed
+before confirmation. If browser permissions expire, grant access again using
+Start Recording. Folder creation is automatic; recording remains operator-started.
+
+A browser reload or reconnect reuses the same server session folder. Link loss,
+10 seconds without a session heartbeat, session end, or a new session stops
+capture. After confirmation returns, press Start Recording to resume. Each
+recording/capture filename has a UUID so rapid restarts cannot overwrite files.
+Backups lists files across dated session folders; retention stays within each
+session. Keep the browser open to collect data; this client cannot backfill data
+missed while closed or offline.
 
 ## Frontend welcome and workspace setup
 

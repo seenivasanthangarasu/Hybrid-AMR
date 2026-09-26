@@ -1,6 +1,6 @@
 import { McapWriter } from '@mcap/core';
 import rosService from './RosConnectionService.js';
-import { backupFileName, enforceRetention } from './BackupRotationService.js';
+import { uniqueBackupFileName, enforceRetention } from './BackupRotationService.js';
 
 /**
  * McapRecordingService
@@ -121,7 +121,17 @@ class McapRecordingService {
     this._paused = rosService.status !== 'connected';
     this._startedAt = Date.now();
 
-    await this._openNewFile();
+    try {
+      await this._openNewFile();
+    } catch (err) {
+      this._sessionActive = false;
+      this._setStatus('stopped');
+      throw err;
+    }
+    if (!this._sessionActive) {
+      await this._enqueueWrite(() => this._closeCurrentFile());
+      return;
+    }
     this._subscribe();
     this._unsubConnection = rosService.onStatusChange((s) => this._handleConnectionChange(s));
     if (this._rotationMs) this._scheduleRotation();
@@ -161,7 +171,7 @@ class McapRecordingService {
   }
 
   async _openNewFile() {
-    const fileName = backupFileName(this._prefix, 'mcap');
+    const fileName = uniqueBackupFileName(this._prefix, 'mcap');
     const fileHandle = await this._dirHandle.getFileHandle(fileName, { create: true });
     const stream = await fileHandle.createWritable();
     const writable = new FileSystemWritable(stream);

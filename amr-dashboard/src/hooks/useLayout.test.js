@@ -90,4 +90,20 @@ describe('useLayout persistence + sanitizing', () => {
     expect(result.current.layout.find((p) => p.i === 'ghost-panel')).toBeUndefined();
     expect(result.current.layout).toHaveLength(DEFAULT_LAYOUT.length);
   });
+
+  it('uses DEFAULT_INDOOR_LAYOUT without GPS panel for indoor environment', () => {
+    const { result } = renderHook(() => useLayout('indoor'));
+    expect(result.current.layout.find((p) => p.i === 'gps')).toBeUndefined();
+    expect(overlappingPairs(result.current.layout)).toEqual([]);
+    expect(result.current.layout.map((p) => p.i).sort()).toEqual(
+      ['main', 'lidar', 'camera', 'status', 'mission', 'control', 'imu', 'urdf'].sort(),
+    );
+  });
+
+  it('migrates legacy stored layout by stripping GPS when switching to indoor', () => {
+    localStorage.setItem('amr-layout-v3', JSON.stringify(DEFAULT_LAYOUT));
+    const { result } = renderHook(() => useLayout('indoor'));
+    expect(result.current.layout.find((p) => p.i === 'gps')).toBeUndefined();
+    expect(result.current.layout.find((p) => p.i === 'main')).toBeTruthy();
+  });
 });

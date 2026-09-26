@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useId, useRef } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
+import { useWorkspace } from '../context/WorkspaceContext.jsx';
 
 const FOCUSABLE = 'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])';
 
@@ -56,8 +57,12 @@ export default function Sidebar({
   onOpenGnssQuality,
   onOpenNav2Threshold,
   onOpenDataHandling,
+  onOpenSavedMaps,
+  onOpenWorkspaceSetup,
   onOpenErrorReference,
 }) {
+  const workspace = useWorkspace();
+  const isIndoor = workspace?.effectiveEnvironment === 'indoor';
   const panelRef = useRef(null);
   const restoreRef = useRef(null);
   const titleId = useId();
@@ -181,20 +186,22 @@ export default function Sidebar({
               />
 
               <SidebarSectionLabel>PANELS</SidebarSectionLabel>
-              <SidebarItem
-                onClick={() => {
-                  onClose?.();
-                  onOpenGnssQuality?.();
-                }}
-                icon={
-                  <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 shrink-0 text-ink-mid" fill="none" stroke="currentColor" strokeWidth="1.8">
-                    <circle cx="12" cy="12" r="9" />
-                    <path d="M12 3v3M12 18v3M3 12h3M18 12h3" />
-                  </svg>
-                }
-                label="GNSS quality"
-                description="fix quality, DOP, RF front-end"
-              />
+              {!isIndoor && (
+                <SidebarItem
+                  onClick={() => {
+                    onClose?.();
+                    onOpenGnssQuality?.();
+                  }}
+                  icon={
+                    <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 shrink-0 text-ink-mid" fill="none" stroke="currentColor" strokeWidth="1.8">
+                      <circle cx="12" cy="12" r="9" />
+                      <path d="M12 3v3M12 18v3M3 12h3M18 12h3" />
+                    </svg>
+                  }
+                  label="GNSS quality"
+                  description="fix quality, DOP, RF front-end"
+                />
+              )}
               <SidebarItem
                 onClick={() => {
                   onClose?.();
@@ -212,7 +219,39 @@ export default function Sidebar({
                 description="costmap/controller thresholds"
               />
 
+              <SidebarSectionLabel>WORKSPACE</SidebarSectionLabel>
+              <SidebarItem
+                onClick={() => {
+                  onClose?.();
+                  onOpenWorkspaceSetup?.();
+                }}
+                icon={
+                  <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 shrink-0 text-ink-mid" fill="none" stroke="currentColor" strokeWidth="1.8">
+                    <rect x="3" y="3" width="7" height="7" rx="1" />
+                    <rect x="14" y="3" width="7" height="7" rx="1" />
+                    <rect x="3" y="14" width="7" height="7" rx="1" />
+                    <rect x="14" y="14" width="7" height="7" rx="1" />
+                  </svg>
+                }
+                label="Switch mode / environment"
+                description="change active workspace"
+              />
+
               <SidebarSectionLabel>DATA</SidebarSectionLabel>
+              <SidebarItem
+                onClick={() => {
+                  onClose?.();
+                  onOpenSavedMaps?.();
+                }}
+                icon={
+                  <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 shrink-0 text-ink-mid" fill="none" stroke="currentColor" strokeWidth="1.8">
+                    <path d="M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3V6z" />
+                    <path d="M9 3v15M15 6v15" />
+                  </svg>
+                }
+                label="Saved maps"
+                description="indoor map library and manifests"
+              />
               <SidebarItem
                 onClick={() => {
                   onClose?.();

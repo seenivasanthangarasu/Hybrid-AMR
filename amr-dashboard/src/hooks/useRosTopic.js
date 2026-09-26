@@ -11,7 +11,7 @@ import { useConnectionEpoch } from './useRosConnection.js';
  * No fallback values are ever synthesized here — if nothing has been
  * received, `data` stays null and consumers must render NO DATA.
  */
-export default function useRosTopic({ name, messageType, throttle_rate = 100, staleMs = 4000 }) {
+export default function useRosTopic({ name, messageType, throttle_rate = 100, staleMs = 4000, enabled = true }) {
   const [data, setData] = useState(null);
   const [lastReceivedAt, setLastReceivedAt] = useState(null);
   const [stale, setStale] = useState(true);
@@ -21,7 +21,7 @@ export default function useRosTopic({ name, messageType, throttle_rate = 100, st
   const epoch = useConnectionEpoch();
 
   useEffect(() => {
-    if (!name || !messageType) return undefined;
+    if (!enabled || !name || !messageType) return undefined;
 
     const topic = rosService.getTopic({ name, messageType, throttle_rate });
     topicRef.current = topic;
@@ -37,7 +37,7 @@ export default function useRosTopic({ name, messageType, throttle_rate = 100, st
     return () => {
       topic.unsubscribe(handler);
     };
-  }, [name, messageType, throttle_rate, epoch]);
+  }, [name, messageType, throttle_rate, epoch, enabled]);
 
   // Staleness watchdog — if no message has arrived recently, surface NO DATA
   useEffect(() => {

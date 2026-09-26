@@ -24,12 +24,16 @@ export function backupFileName(prefix, extension, date = new Date()) {
   return `${prefix}-${timestampSuffix(date)}.${extension}`;
 }
 
+export function uniqueBackupFileName(prefix, extension) {
+  return `${prefix}-${timestampSuffix()}-${crypto.randomUUID()}.${extension}`;
+}
+
 function escapeRegExp(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 function fileNamePattern(prefix, extension) {
-  return new RegExp(`^${escapeRegExp(prefix)}-(\\d{8}-\\d{6})\\.${escapeRegExp(extension)}$`);
+  return new RegExp(`^${escapeRegExp(prefix)}-(\\d{8}-\\d{6})(?:-[a-f0-9-]{36})?\\.${escapeRegExp(extension)}$`);
 }
 
 /** All files in `dirHandle` matching this backup's naming scheme, oldest first. */

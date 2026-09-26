@@ -8,11 +8,12 @@ import useRosTopic from './useRosTopic.js';
  *
  * NavSatFix.status.status values: -1 = NO_FIX, 0 = FIX, 1 = SBAS_FIX, 2 = GBAS_FIX
  */
-export default function useGps() {
+export default function useGps({ enabled = true } = {}) {
   const { data, hasData, stale, lastReceivedAt } = useRosTopic({
     name: '/hiwonder/gps/fix',
     messageType: 'sensor_msgs/NavSatFix',
     throttle_rate: 200,
+    enabled,
   });
 
   // See useOdometry: last-known values are surfaced even when stale so the

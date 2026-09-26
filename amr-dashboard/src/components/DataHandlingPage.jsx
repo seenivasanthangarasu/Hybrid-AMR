@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import amrSession from '../services/AmrSessionService.js';
 import Dialog from './ui/Dialog.jsx';
 import McapStorageService from '../services/McapStorageService.js';
 import mcapRecordingService from '../services/McapRecordingService.js';
@@ -46,6 +47,11 @@ async function listAllBackups(dirHandle) {
   if (!dirHandle) return [];
   const out = [];
   for await (const entry of dirHandle.values()) {
+    if (entry.kind === 'directory' && /^\d{4}-\d{2}-\d{2}T.*__/.test(entry.name)) {
+      // eslint-disable-next-line no-await-in-loop
+      const children = await listAllBackups(entry);
+      out.push(...children.map((child) => ({ ...child, id: `${entry.name}/${child.id}`, name: `${entry.name}/${child.name}` })));
+    }
     if (entry.kind === 'file' && entry.name.endsWith('.mcap')) {
       // eslint-disable-next-line no-await-in-loop -- small local folder listing, sequential is fine
       const file = await entry.getFile();
@@ -76,6 +82,10 @@ export default function DataHandlingPage({ open, onClose }) {
   const isSupported = McapStorageService.isSupported;
   const now = useNow(1000);
 
+  const [amrState, setAmrState] = useState(amrSession.getState());
+  const [starting, setStarting] = useState(false);
+  useEffect(() => amrSession.subscribe(setAmrState), []);
+
   const [folder, setFolder] = useState(null);
   const [folderError, setFolderError] = useState(null);
   const [backups, setBackups] = useState([]);
@@ -92,6 +102,8 @@ export default function DataHandlingPage({ open, onClose }) {
   useEffect(() => mcapRecordingService.onStatusChange(() => setRecordingState(mcapRecordingService.getState())), []);
   useEffect(() => cameraSnapshotService.onStatusChange(() => setCameraState(cameraSnapshotService.getState())), []);
   useEffect(() => cameraSnapshotService.onCapture((url) => setThumbnail(url)), []);
+  useEffect(() => cameraSnapshotService.onError?.((err) => setFolderError(err.message)), []);
+  useEffect(() => mcapRecordingService.onError?.((err) => setFolderError(err.message)), []);
 
   const topicSources = enabledSources.filter((s) => s.kind === 'topic');
   const cameraEnabled = enabled['camera-snapshots'];
@@ -101,7 +113,8 @@ export default function DataHandlingPage({ open, onClose }) {
       setBackups([]);
       return;
     }
-    setBackups(await listAllBackups(folder));
+    try { setBackups(await listAllBackups(folder)); }
+    catch (err) { setFolderError(err.message); }
   }, [folder]);
 
   useEffect(() => {
@@ -117,13 +130,14 @@ export default function DataHandlingPage({ open, onClose }) {
     });
   }, [open, isSupported]);
 
-  const sessionActive = recordingState.status !== 'idle' && recordingState.status !== 'stopped';
+  const sessionActive = starting || cameraState.status === 'capturing' || (recordingState.status !== 'idle' && recordingState.status !== 'stopped');
 
   async function handlePickFolder() {
     setFolderError(null);
     try {
       const handle = await McapStorageService.pickFolder();
       setFolder(handle);
+      await amrSession.setRoot(handle);
     } catch (err) {
       if (err?.name !== 'AbortError') setFolderError('Could not open the folder picker.');
     }
@@ -133,35 +147,31 @@ export default function DataHandlingPage({ open, onClose }) {
     if (!folder || (topicSources.length === 0 && !cameraEnabled)) return;
     setFolderError(null);
 
-    const granted = await McapStorageService.verifyPermission(folder);
-    if (!granted) {
-      setFolderError('Write permission for the chosen folder was denied.');
-      return;
-    }
-
-    if (topicSources.length > 0) {
-      await mcapRecordingService.start({
-        dirHandle: folder,
-        sources: topicSources.map((s) => ({ id: s.id, messageType: s.messageType })),
-        prefix: topicSetLabel(topicSources.map((s) => s.id)),
-        rotationIntervalMin,
-        retainCount: retentionCount,
+    setStarting(true);
+    try {
+      const granted = await McapStorageService.verifyPermission(folder);
+      if (!granted) throw new Error('Write permission for the chosen folder was denied.');
+      if (amrState.status === 'needs-permission') await amrSession.setRoot(folder);
+      await amrSession.startCapture({
+        recording: topicSources.length ? {
+          sources: topicSources.map((s) => ({ id: s.id, messageType: s.messageType })),
+          prefix: topicSetLabel(topicSources.map((s) => s.id)),
+          rotationIntervalMin,
+          retainCount: retentionCount,
+        } : null,
+        snapshots: cameraEnabled ? {
+          streamUrl: CAMERA_STREAM,
+          intervalSec: snapshotIntervalSec,
+          retainCount: retentionCount,
+        } : null,
       });
-    }
-    if (cameraEnabled) {
-      await cameraSnapshotService.start({
-        dirHandle: folder,
-        streamUrl: CAMERA_STREAM,
-        intervalSec: snapshotIntervalSec,
-        retainCount: retentionCount,
-      });
-    }
+    } catch (err) { setFolderError(err.message); }
+    finally { setStarting(false); }
   }
 
   async function handleStop() {
-    await mcapRecordingService.stop();
-    cameraSnapshotService.stop();
-    refreshBackups();
+    try { await amrSession.stopCapture(); await refreshBackups(); }
+    catch (err) { setFolderError(err.message); }
   }
 
   async function handleDelete(entry) {
@@ -185,7 +195,9 @@ export default function DataHandlingPage({ open, onClose }) {
 
   const startDisabledReason = !folder
     ? 'Pick a folder first'
-    : topicSources.length === 0 && !cameraEnabled
+    : !['ready', 'needs-permission'].includes(amrState.status)
+      ? 'Waiting for a confirmed server session and session folder'
+      : topicSources.length === 0 && !cameraEnabled
       ? 'Select at least one data source'
       : null;
 
@@ -204,6 +216,12 @@ export default function DataHandlingPage({ open, onClose }) {
         </div>
       ) : (
         <div className="space-y-5">
+          <section className="rounded border border-deck-line p-3 font-mono text-[11px] text-ink-mid" aria-live="polite">
+            <p>AMR SESSION · {amrState.status.toUpperCase()}</p>
+            <p>{amrState.folderName || 'Waiting for the robot to announce its power-on session'}</p>
+            <p>{amrState.error || 'Recordings and camera images are saved only inside this session folder.'}</p>
+            {amrState.status === 'needs-permission' && <p>Press Start Recording to grant folder access.</p>}
+          </section>
           {/* Folder */}
           <section>
             <h3 className="mb-2 font-display text-[11px] font-bold tracking-[0.14em] text-signal-cyan">FOLDER</h3>
@@ -326,7 +344,7 @@ export default function DataHandlingPage({ open, onClose }) {
                 <button
                   type="button"
                   onClick={sessionActive ? handleStop : handleStart}
-                  disabled={!sessionActive && !!startDisabledReason}
+                  disabled={starting || (!sessionActive && !!startDisabledReason)}
                   className={`rounded px-4 py-2 font-display text-xs font-bold tracking-[0.1em] ring-1 transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
                     sessionActive
                       ? 'bg-signal-red/20 text-signal-red ring-signal-red/50 hover:bg-signal-red/30'

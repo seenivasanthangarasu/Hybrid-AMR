@@ -1,4 +1,4 @@
-import { backupFileName, enforceRetention } from './BackupRotationService.js';
+import { uniqueBackupFileName, enforceRetention } from './BackupRotationService.js';
 
 /**
  * CameraSnapshotService
@@ -25,6 +25,8 @@ import { backupFileName, enforceRetention } from './BackupRotationService.js';
  */
 class CameraSnapshotService {
   constructor() {
+    this._generation = 0;
+    this._busy = false;
     this.status = 'idle'; // idle | capturing | unavailable | stopped
     this._statusListeners = new Set();
     this._captureListeners = new Set();
@@ -62,12 +64,15 @@ class CameraSnapshotService {
 
   async start({ dirHandle, streamUrl, intervalSec, retainCount = null, quality = 0.85 }) {
     if (this._intervalId) return;
+    const generation = ++this._generation;
     this._streamUrl = streamUrl;
     this._quality = quality;
     this._retainCount = retainCount;
     this._cameraDir = await dirHandle.getDirectoryHandle('camera', { create: true });
 
+    if (generation !== this._generation) return;
     const ok = await this._attemptCapture();
+    if (generation !== this._generation) return;
     if (!ok) {
       this._setStatus('unavailable');
       return;
@@ -77,6 +82,7 @@ class CameraSnapshotService {
   }
 
   stop() {
+    this._generation += 1;
     if (this._intervalId) {
       clearInterval(this._intervalId);
       this._intervalId = null;
@@ -95,6 +101,22 @@ class CameraSnapshotService {
 
   /** @returns {boolean} true if capture should keep being attempted, false if the failure is terminal (unavailable). */
   async _attemptCapture() {
+    if (this._busy) return true;
+    this._busy = true;
+    const generation = this._generation;
+    try { return await this._captureAndSave(); }
+    catch (err) {
+      if (generation !== this._generation) return false;
+      this._errorListeners.forEach((cb) => cb(err));
+      this.stop();
+      this._setStatus('unavailable');
+      return false;
+    } finally { this._busy = false; }
+  }
+
+  async _captureAndSave() {
+    const generation = this._generation;
+    const dir = this._cameraDir;
     let blob;
     try {
       blob = await this._captureFrame(this._streamUrl, this._quality);
@@ -109,16 +131,18 @@ class CameraSnapshotService {
       return true;
     }
 
-    const fileName = backupFileName('camera', 'jpg');
-    const fileHandle = await this._cameraDir.getFileHandle(fileName, { create: true });
+    if (generation !== this._generation) return false;
+    const fileName = uniqueBackupFileName('camera', 'jpg');
+    const fileHandle = await dir.getFileHandle(fileName, { create: true });
     const writable = await fileHandle.createWritable();
     await writable.write(blob);
     await writable.close();
 
     if (this._retainCount) {
-      await enforceRetention(this._cameraDir, { prefix: 'camera', extension: 'jpg', retainCount: this._retainCount });
+      await enforceRetention(dir, { prefix: 'camera', extension: 'jpg', retainCount: this._retainCount });
     }
 
+    if (generation !== this._generation) return false;
     if (this._lastCaptureUrl) URL.revokeObjectURL(this._lastCaptureUrl);
     this._lastCaptureUrl = URL.createObjectURL(blob);
     this._lastCaptureAt = Date.now();
@@ -130,8 +154,15 @@ class CameraSnapshotService {
   _captureFrame(streamUrl, quality) {
     return new Promise((resolve, reject) => {
       const img = new Image();
+      const timer = setTimeout(() => {
+        img.onload = null;
+        img.onerror = null;
+        img.src = '';
+        reject(new Error('Camera frame timed out'));
+      }, 8000);
       img.crossOrigin = 'anonymous';
       img.onload = () => {
+        clearTimeout(timer);
         const canvas = document.createElement('canvas');
         canvas.width = img.naturalWidth || 1;
         canvas.height = img.naturalHeight || 1;
@@ -147,7 +178,7 @@ class CameraSnapshotService {
           reject(err);
         }
       };
-      img.onerror = () => reject(new Error('camera stream image failed to load'));
+      img.onerror = () => { clearTimeout(timer); reject(new Error('camera stream image failed to load')); };
       // Cache-bust so each capture re-fetches a fresh frame rather than the
       // browser's cached copy of the MJPEG boundary image.
       const sep = streamUrl.includes('?') ? '&' : '?';

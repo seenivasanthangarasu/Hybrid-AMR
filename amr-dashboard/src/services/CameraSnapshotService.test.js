@@ -175,4 +175,31 @@ describe('CameraSnapshotService', () => {
       vi.useRealTimers();
     }
   });
+  it('discards an in-flight frame when the session stops', async () => {
+    const dir = fakeDirHandle();
+    let finish;
+    service._captureFrame = vi.fn(() => new Promise((resolve) => { finish = resolve; }));
+    const starting = service.start({ dirHandle: dir, streamUrl: 'http://robot/stream', intervalSec: 5 });
+    await Promise.resolve(); await Promise.resolve();
+    service.stop();
+    finish(new Blob(['old-session-image']));
+    await starting;
+    expect(dir.camera.files.size).toBe(0);
+    expect(service.status).toBe('stopped');
+    expect(service._intervalId).toBeNull();
+  });
+
+  it('never overwrites a capture when restarted within the same second', async () => {
+    vi.useFakeTimers();
+    try {
+      const dir = fakeDirHandle();
+      service._captureFrame = vi.fn().mockResolvedValue(new Blob(['image']));
+      await service.start({ dirHandle: dir, streamUrl: 'http://robot/stream', intervalSec: 5 });
+      service.stop();
+      await service.start({ dirHandle: dir, streamUrl: 'http://robot/stream', intervalSec: 5 });
+      service.stop();
+      expect(dir.camera.files.size).toBe(2);
+    } finally { vi.useRealTimers(); }
+  });
+
 });

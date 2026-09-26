@@ -1,4 +1,5 @@
 import useRosTopic from './useRosTopic.js';
+import { getProximitySector, classifyProximity } from '../utils/proximitySector.js';
 
 /**
  * useLaserScan
@@ -19,24 +20,48 @@ export default function useLaserScan() {
   const timing = { hasData, hasEverData: !!data, stale, lastReceivedAt };
 
   if (!hasData || !data || !Array.isArray(data.ranges)) {
-    return { ...timing, hasData: false, points: [], minRange: null, raw: null };
+    return {
+      ...timing,
+      hasData: false,
+      points: [],
+      minRange: null,
+      nearestPoint: null,
+      proximityStatus: 'NO_DATA',
+      raw: null,
+    };
   }
 
   const { angle_min, angle_increment, ranges, range_min, range_max } = data;
   const points = [];
   let nearestRange = null;
+  let nearestPoint = null;
 
   ranges.forEach((r, i) => {
     if (!Number.isFinite(r) || r < range_min || r > range_max) return;
     const angle = angle_min + i * angle_increment;
-    points.push({
+    const pt = {
       angle,
       range: r,
       x: r * Math.cos(angle),
       y: r * Math.sin(angle),
-    });
-    if (nearestRange === null || r < nearestRange) nearestRange = r;
+      sector: getProximitySector(angle),
+    };
+    points.push(pt);
+    if (nearestRange === null || r < nearestRange) {
+      nearestRange = r;
+      nearestPoint = pt;
+    }
   });
 
-  return { ...timing, hasData: true, points, minRange: nearestRange, raw: data };
+  const proximityStatus = classifyProximity(nearestRange);
+
+  return {
+    ...timing,
+    hasData: true,
+    points,
+    minRange: nearestRange,
+    nearestPoint,
+    proximityStatus,
+    raw: data,
+  };
 }

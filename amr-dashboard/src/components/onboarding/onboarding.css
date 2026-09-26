@@ -193,6 +193,19 @@
   box-shadow: inset 0 0 0 1px var(--accent);
   background: var(--wash);
 }
+.setup-card:disabled,
+.setup-card.is-disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
+  filter: grayscale(0.5);
+}
+.setup-card:disabled:hover,
+.setup-card.is-disabled:hover {
+  border-color: rgb(var(--deck-line));
+  background: rgb(var(--deck-800));
+  box-shadow: none;
+}
 .setup-shell button:focus-visible {
   outline: 3px solid rgb(var(--signal-cyan));
   outline-offset: 4px;
@@ -366,6 +379,27 @@
     monospace;
   text-transform: uppercase;
   border-radius: 4px;
+}
+.setup-launch-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 20px;
+  padding: 12px 22px;
+  border: 1px solid rgb(var(--signal-cyan) / 0.5);
+  background: rgb(var(--signal-cyan) / 0.15);
+  color: rgb(var(--signal-cyan));
+  font:
+    600 13px 'IBM Plex Mono',
+    monospace;
+  letter-spacing: 0.5px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease-out;
+}
+.setup-launch-button:hover {
+  background: rgb(var(--signal-cyan) / 0.25);
+  border-color: rgb(var(--signal-cyan));
 }
 @keyframes setup-load {
   from {

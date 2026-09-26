@@ -1,7 +1,8 @@
+import { webcrypto } from 'node:crypto';
 // Vitest global setup — extends `expect` with jest-dom matchers
 // (toBeInTheDocument, toBeDisabled, …) and clears the DOM between tests.
 import '@testing-library/jest-dom/vitest';
-import { afterEach, beforeEach } from 'vitest';
+import { afterEach } from 'vitest';
 import { cleanup } from '@testing-library/react';
 
 // Polyfill localStorage in jsdom environment if missing or incomplete
@@ -44,7 +45,40 @@ if (!globalThis.localStorage || typeof globalThis.localStorage.clear !== 'functi
   }
 }
 
+Object.defineProperty(globalThis.crypto, 'subtle', { value: webcrypto.subtle, configurable: true });
+
+if (typeof globalThis.ResizeObserver === 'undefined') {
+  globalThis.ResizeObserver = class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  };
+}
+
+if (typeof HTMLCanvasElement !== 'undefined') {
+  HTMLCanvasElement.prototype.getContext = function () {
+    return {
+      setTransform: () => {},
+      fillRect: () => {},
+      clearRect: () => {},
+      createImageData: (w,h) => ({ data: new Uint8ClampedArray(w*h*4) }),
+      putImageData: () => {},
+      drawImage: () => {},
+      beginPath: () => {},
+      arc: () => {},
+      fill: () => {},
+      save: () => {},
+      translate: () => {},
+      rotate: () => {},
+      moveTo: () => {},
+      lineTo: () => {},
+      closePath: () => {},
+      restore: () => {},
+      stroke: () => {},
+    };
+  };
+}
+
 afterEach(() => {
   cleanup();
 });
-

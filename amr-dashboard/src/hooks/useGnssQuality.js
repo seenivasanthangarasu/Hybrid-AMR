@@ -61,34 +61,39 @@ function timingOf({ data, hasData, stale, lastReceivedAt }) {
   return { hasData, hasEverData: !!data, stale, lastReceivedAt };
 }
 
-export default function useGnssQuality() {
-  const gps = useGps();
+export default function useGnssQuality({ enabled = true } = {}) {
+  const gps = useGps({ enabled });
 
   const pvtTopic = useRosTopic({
     name: topic('/navpvt'),
     messageType: 'ublox_msgs/NavPVT',
     throttle_rate: NAV_THROTTLE,
+    enabled,
   });
   const dopTopic = useRosTopic({
     name: topic('/navdop'),
     messageType: 'ublox_msgs/NavDOP',
     throttle_rate: NAV_THROTTLE,
+    enabled,
   });
   const satTopic = useRosTopic({
     name: topic('/navsat'),
     messageType: 'ublox_msgs/NavSAT',
     throttle_rate: NAV_THROTTLE,
+    enabled,
   });
   const statusTopic = useRosTopic({
     name: topic('/navstatus'),
     messageType: 'ublox_msgs/NavSTATUS',
     throttle_rate: NAV_THROTTLE,
+    enabled,
   });
   const hwTopic = useRosTopic({
     name: topic('/monhw'),
     messageType: 'ublox_msgs/MonHW',
     throttle_rate: MON_THROTTLE,
     staleMs: MON_STALE_MS,
+    enabled,
   });
 
   const pvt = pvtTopic.data;

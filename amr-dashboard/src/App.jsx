@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
+import WorkspaceStatus from './components/WorkspaceStatus.jsx';
 import Header from './components/Header.jsx';
 import GpsMapView from './components/GpsMapView.jsx';
 import LidarView from './components/LidarView.jsx';
@@ -20,6 +21,11 @@ import GnssQualityPage from './components/GnssQualityPage.jsx';
 import Nav2ThresholdPage from './components/Nav2ThresholdPage.jsx';
 import Sidebar from './components/Sidebar.jsx';
 import ImuPanel from './components/ImuPanel.jsx';
+import IndoorMapPicker from './components/maps/IndoorMapPicker.jsx';
+import IndoorMappingWorkspace from './components/mapping/IndoorMappingWorkspace.jsx';
+import IndoorNavGate from './components/navigation/IndoorNavGate.jsx';
+import IndoorNavPlanner from './components/navigation/IndoorNavPlanner.jsx';
+import { useWorkspace } from './context/WorkspaceContext.jsx';
 import useRosConnection from './hooks/useRosConnection.js';
 import useRobotMode from './hooks/useRobotMode.js';
 import useLayout from './hooks/useLayout.js';
@@ -37,9 +43,18 @@ export default function App() {
   const retrying = retry.attempt > 0 && !retry.exhausted;
   const { mode, isDefault } = useRobotMode();
 
+  const {
+    operatingMode,
+    effectiveEnvironment,
+    setOperatingMode,
+  } = useWorkspace();
+
+  const isIndoor = effectiveEnvironment === 'indoor';
+  const { layout, setLayout, reset } = useLayout(effectiveEnvironment || 'outdoor');
+
   const [mainView, setMainView] = useState('auto'); // 'auto' | 'gps' | 'lidar' | 'camera'
   const [editMode, setEditMode] = useState(false);
-  const { layout, setLayout, reset } = useLayout();
+  const [showSavedMaps, setShowSavedMaps] = useState(false);
 
   const [fault, setFault] = useState(null); // { error, context } — explains an empty view
   const [showSidebar, setShowSidebar] = useState(false);
@@ -49,39 +64,30 @@ export default function App() {
   const [showNav2Threshold, setShowNav2Threshold] = useState(false);
   const [cameraOnline, setCameraOnline] = useState(true);
 
-  // These subscriptions are shared with the panels themselves (RosConnection
-  // caches one ROSLIB.Topic per name), so reading them here to decide whether a
-  // view has anything to show costs no extra traffic.
-  const gps = useGps();
+  // GPS subscription is disabled entirely when isIndoor is true (no GPS topics in indoor mode)
+  const gps = useGps({ enabled: !isIndoor });
   const scan = useLaserScan();
-  const map = useOccupancyGrid();
+  const map = useOccupancyGrid({ enabled: isIndoor });
 
   // Is the view the operator just picked actually able to draw anything?
   const viewHealth = {
-    gps: { live: gps.hasData, seen: gps.hasEverData, label: 'GPS · /hiwonder/gps/fix' },
+    gps: { live: !isIndoor && gps.hasData, seen: !isIndoor && gps.hasEverData, label: 'GPS · /hiwonder/gps/fix' },
     lidar: { live: scan.hasData, seen: scan.hasEverData, label: 'LIDAR · /scan' },
     slam: { live: map.hasData, seen: map.hasEverData, label: 'SLAM · /map' },
     camera: { live: cameraOnline, seen: cameraOnline, label: 'CAMERA · /camera/color/image_raw (MJPEG)', isCamera: true },
   };
 
-  // A manual pin now SURVIVES a robot-mode change (spec F5). When the view is
-  // on 'auto' it already tracks `mode` reactively via `resolvedView` below, so
-  // no reset is needed; when the operator has pinned a specific view, a mode
-  // flip (e.g. INDOOR→OUTDOOR once /robot_mode is published) must not yank
-  // their chosen view away. The operator clears the pin by clicking the
-  // already-active preview, or it falls back to auto on reload.
-  const resolvedView = mainView === 'auto' ? (mode === 'INDOOR' ? 'slam' : 'gps') : mainView;
+  const defaultMainView = isIndoor ? 'slam' : 'gps';
+  const resolvedView =
+    operatingMode === 'mapping'
+      ? 'slam'
+      : mainView === 'auto'
+        ? defaultMainView
+        : (isIndoor && mainView === 'gps' ? 'slam' : mainView);
 
-  // While editing the layout, a preview click should not switch the main view
-  // (the drag scrim also shields it) — panels are being arranged, not driven.
-  //
-  // Selecting a view that has nothing to draw used to just swap in an empty
-  // panel, leaving the operator to guess whether the sensor was dead, the link
-  // was down, or they had mis-clicked. The view still switches (so the inline
-  // fallback is visible), but a dialog now names the specific cause and the
-  // steps to fix it.
   function selectView(v) {
     if (editMode) return;
+    if (isIndoor && v === 'gps') return;
     setMainView(v);
 
     const health = viewHealth[v];
@@ -99,9 +105,12 @@ export default function App() {
   }
 
   function renderMain() {
+    if (isIndoor && operatingMode === 'mapping') {
+      return <IndoorMappingWorkspace onProceedToNavigation={() => setOperatingMode('navigation')} />;
+    }
     switch (resolvedView) {
       case 'gps':
-        return <GpsMapView />;
+        return isIndoor ? <SlamView /> : <GpsMapView />;
       case 'slam':
         return <SlamView />;
       case 'lidar':
@@ -109,12 +118,13 @@ export default function App() {
       case 'camera':
         return <CameraView onStreamState={setCameraOnline} />;
       default:
-        return <GpsMapView />;
+        return isIndoor ? <SlamView /> : <GpsMapView />;
     }
   }
 
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-deck-950 text-ink-high">
+      <WorkspaceStatus />
       <Header
         connectionStatus={connectionStatus}
         mode={mode}
@@ -184,9 +194,31 @@ export default function App() {
           </div>
 
           <div key="mission" className="h-full w-full">
-            <PanelFrame title="MISSION PLANNER" editMode={editMode}>
+            <PanelFrame
+              title={
+                operatingMode === 'mapping'
+                  ? 'INDOOR MAPPING'
+                  : isIndoor && operatingMode === 'navigation'
+                    ? 'INDOOR NAVIGATION'
+                    : 'MISSION PLANNER'
+              }
+              editMode={editMode}
+            >
               <ErrorBoundary label="MISSION PLANNER">
-                <MissionPlanner connectionStatus={connectionStatus} />
+                {operatingMode === 'mapping' ? (
+                  <div className="flex h-full flex-col items-center justify-center p-4 text-center font-mono text-xs text-ink-mid bg-deck-950">
+                    <p className="font-bold text-signal-cyan mb-1">MAPPING MODE ACTIVE</p>
+                    <p className="text-ink-low max-w-xs">
+                      Live SLAM rendering and map controls are active in the Main View panel.
+                    </p>
+                  </div>
+                ) : isIndoor && operatingMode === 'navigation' ? (
+                  <IndoorNavGate>
+                    <IndoorNavPlanner connectionStatus={connectionStatus} />
+                  </IndoorNavGate>
+                ) : (
+                  <MissionPlanner connectionStatus={connectionStatus} />
+                )}
               </ErrorBoundary>
             </PanelFrame>
           </div>
@@ -208,19 +240,21 @@ export default function App() {
           </div>
 
           {/* PREVIEWS */}
-          <div key="gps" className="h-full w-full">
-            <PanelFrame title="GPS PREVIEW" editMode={editMode}>
-              <PreviewPanel
-                title="GPS PREVIEW"
-                active={resolvedView === 'gps'}
-                onClick={() => selectView('gps')}
-              >
-                <ErrorBoundary label="GPS PREVIEW">
-                  <GpsMapView compact />
-                </ErrorBoundary>
-              </PreviewPanel>
-            </PanelFrame>
-          </div>
+          {!isIndoor && (
+            <div key="gps" className="h-full w-full">
+              <PanelFrame title="GPS PREVIEW" editMode={editMode}>
+                <PreviewPanel
+                  title="GPS PREVIEW"
+                  active={resolvedView === 'gps'}
+                  onClick={() => selectView('gps')}
+                >
+                  <ErrorBoundary label="GPS PREVIEW">
+                    <GpsMapView compact />
+                  </ErrorBoundary>
+                </PreviewPanel>
+              </PanelFrame>
+            </div>
+          )}
 
           <div key="lidar" className="h-full w-full">
             <PanelFrame title="LIDAR PREVIEW" editMode={editMode}>
@@ -304,6 +338,16 @@ export default function App() {
         onOpenNav2Threshold={() => setShowNav2Threshold(true)}
         onOpenDataHandling={() => setShowDataHandling(true)}
         onOpenErrorReference={() => setShowErrorRef(true)}
+        onOpenSavedMaps={() => setShowSavedMaps(true)}
+      />
+
+      <IndoorMapPicker
+        open={showSavedMaps}
+        onClose={() => setShowSavedMaps(false)}
+        onGoToMapping={() => {
+          setShowSavedMaps(false);
+          setOperatingMode('mapping');
+        }}
       />
     </div>
   );

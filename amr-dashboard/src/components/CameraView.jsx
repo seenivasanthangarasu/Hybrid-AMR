@@ -1,339 +1,341 @@
 import { useEffect, useState, useMemo } from 'react';
 import DataFallback from './DataFallback.jsx';
-import {
-  DEFAULT_CAMERA_TOPIC,
-  CAMERA_NAME,
-  CAMERA_SPECS,
-  getCameraStreamUrl,
-  getCameraViewerUrl,
-  getVideoServerUrl,
-} from '../config/endpoints.js';
-import useBackendApi from '../hooks/useBackendApi.js';
+import useCameraSettings, {
+  CAMERA_RESOLUTIONS,
+  SNAPSHOT_PRESETS,
+  CAMERA_TOPIC,
+} from '../hooks/useCameraSettings.js';
 
 const RETRY_MS = 3000;
 
-/**
- * CameraView
- * ----------
- * Renders the Logitech C270 HD 720p Web Camera stream via web_video_server MJPEG.
- * Topic: /camera/color/image_raw (sensor_msgs/msg/Image)
- * Endpoint: /stream?topic=/camera/color/image_raw&quality=75&default_transport=raw&framerate=30
- * Viewer Fallback: /stream_viewer?topic=/camera/color/image_raw
- */
 export default function CameraView({ compact = false, onStreamState }) {
+  const {
+    mode,
+    setMode,
+    resolution,
+    setResolution,
+    snapshotFrames,
+    snapshotSeconds,
+    setSnapshotConfig,
+    isPaused,
+    togglePause,
+    triggerSnapshot,
+    downloadSnapshot,
+    lastCaptureAt,
+    nextCaptureIn,
+    streamUrl,
+    snapshotUrl,
+  } = useCameraSettings();
+
   const [errored, setErrored] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
-  const [quality, setQuality] = useState(75);
-  const [framerate, setFramerate] = useState(30);
-  const [showSettings, setShowSettings] = useState(false);
-  const [viewMode, setViewMode] = useState('mjpeg'); // 'mjpeg' | 'viewer' | 'snapshot'
-  const [toggleMsg, setToggleMsg] = useState(null);
+  const [showCustomInterval, setShowCustomInterval] = useState(false);
+  const [customFrames, setCustomFrames] = useState(snapshotFrames);
+  const [customSeconds, setCustomSeconds] = useState(snapshotSeconds);
 
-  const { backendConnected, cameraHardware, toggleCamera, loading: backendLoading } = useBackendApi();
+  // Sync custom input fields if snapshot config changed from outside
+  useEffect(() => {
+    setCustomFrames(snapshotFrames);
+    setCustomSeconds(snapshotSeconds);
+  }, [snapshotFrames, snapshotSeconds]);
 
-  // Generate clean default stream URL matching http://<IP>:8080/stream?topic=/camera/color/image_raw
-  const streamUrl = useMemo(() => {
-    if (showSettings) {
-      return getCameraStreamUrl({ topic: DEFAULT_CAMERA_TOPIC, quality, framerate });
-    }
-    return getCameraStreamUrl({ topic: DEFAULT_CAMERA_TOPIC });
-  }, [showSettings, quality, framerate]);
-
-  const viewerUrl = useMemo(
-    () => getCameraViewerUrl(DEFAULT_CAMERA_TOPIC),
-    [],
-  );
-
-  const snapshotUrl = useMemo(
-    () => `${getVideoServerUrl()}/snapshot?topic=${DEFAULT_CAMERA_TOPIC}`,
-    [],
-  );
-
-  // Report stream status upward to App.jsx
+  // Report stream health upward
   useEffect(() => {
     onStreamState?.(!errored);
   }, [errored, onStreamState]);
 
-  // Auto-retry polling while stream is down
+  // Periodic retry when connection fails
   useEffect(() => {
     if (!errored) return undefined;
     const id = setInterval(() => setReloadKey((k) => k + 1), RETRY_MS);
     return () => clearInterval(id);
   }, [errored]);
 
-  const activeSrc = viewMode === 'snapshot'
-    ? `${snapshotUrl}&_snap=${reloadKey}`
-    : reloadKey === 0
-      ? streamUrl
-      : `${streamUrl}&_r=${reloadKey}`;
-
-  const handleToggleMode = async (mode = 'v4l2') => {
-    setToggleMsg(`Switching camera to ${mode}...`);
-    const res = await toggleCamera(true, mode);
-    if (res.status === 'ok' || res.success) {
-      setToggleMsg(`Camera active (${mode})`);
-      setTimeout(() => {
-        setReloadKey((k) => k + 1);
-        setToggleMsg(null);
-      }, 1500);
-    } else {
-      setToggleMsg(`Toggle failed: ${res.message || 'unknown error'}`);
-      setTimeout(() => setToggleMsg(null), 3500);
+  // Active image source
+  const currentSrc = useMemo(() => {
+    if (mode === 'snapshot') {
+      return reloadKey === 0 ? snapshotUrl : `${snapshotUrl}&_r=${reloadKey}`;
     }
+    return reloadKey === 0 ? streamUrl : `${streamUrl}&_r=${reloadKey}`;
+  }, [mode, streamUrl, snapshotUrl, reloadKey]);
+
+  // Format last capture time
+  const formattedLastCapture = useMemo(() => {
+    if (!lastCaptureAt) return null;
+    const d = new Date(lastCaptureAt);
+    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  }, [lastCaptureAt]);
+
+  const activeRes = CAMERA_RESOLUTIONS[resolution] || CAMERA_RESOLUTIONS.auto;
+
+  const handleCustomSubmit = (e) => {
+    e?.preventDefault?.();
+    setSnapshotConfig({ frames: customFrames, seconds: customSeconds });
+    setShowCustomInterval(false);
   };
 
-  if (compact) {
-    return (
-      <div className="relative h-full w-full overflow-hidden bg-deck-900">
-        <img
-          key={reloadKey}
-          src={activeSrc}
-          alt="Logitech C270 Preview"
-          className={`h-full w-full object-cover ${errored ? 'invisible' : ''}`}
-          onError={() => setErrored(true)}
-          onLoad={() => setErrored(false)}
-        />
-
-        {errored && (
-          <div className="absolute inset-0 flex items-center justify-center bg-deck-900/90 p-2 text-center">
-            <DataFallback topic={DEFAULT_CAMERA_TOPIC} label="NO CAMERA STREAM" tone="idle" />
-          </div>
-        )}
-
-        {!errored && (
-          <div className="pointer-events-none absolute bottom-1 left-1.5 rounded bg-deck-950/80 px-1.5 py-0.5 font-mono text-[9px] text-signal-cyan backdrop-blur-sm">
-            720p · LIVE
-          </div>
-        )}
-      </div>
-    );
-  }
-
   return (
-    <div className="relative flex h-full w-full flex-col overflow-hidden bg-deck-950 font-mono">
-      {/* Top Header Bar for Main View */}
-      <div className="z-10 flex shrink-0 items-center justify-between border-b border-deck-line bg-deck-900 px-3 py-1.5 shadow-sm">
-        <div className="flex items-center gap-2">
-          <span className={`h-2.5 w-2.5 rounded-full ${!errored ? 'bg-signal-green shadow-[0_0_8px_#37e29a]' : 'bg-signal-amber animate-pulse'}`} />
-          <span className="font-display text-[11px] font-bold tracking-wider text-ink-high">
-            {CAMERA_NAME}
-          </span>
-          <span className="rounded bg-deck-800 px-1.5 py-0.5 text-[9px] text-signal-cyan ring-1 ring-deck-line">
-            {CAMERA_SPECS}
-          </span>
-          {cameraHardware?.physical_camera_connected && (
-            <span className="rounded bg-signal-green/15 px-1.5 py-0.5 text-[9px] text-signal-green">
-              /dev/amr_camera
+    <div className="group relative flex h-full w-full flex-col overflow-hidden bg-deck-900 select-none">
+      {/* Top Controls Overlay */}
+      <div
+        className={`pointer-events-auto z-10 flex flex-wrap items-center justify-between gap-2 border-b border-deck-line/60 bg-deck-950/85 px-3 py-1.5 backdrop-blur-sm transition-opacity duration-200 ${
+          compact ? 'px-2 py-1 text-[10px]' : 'text-xs'
+        }`}
+        onClick={(e) => compact && e.stopPropagation()}
+      >
+        {/* Left: Mode Toggle */}
+        <div className="flex items-center gap-1.5">
+          <div className="inline-flex rounded border border-deck-line bg-deck-900 p-0.5">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setMode('stream');
+              }}
+              className={`flex items-center gap-1 rounded px-2 py-0.5 font-mono text-[10px] font-semibold transition-colors ${
+                mode === 'stream'
+                  ? 'bg-signal-cyan/20 text-signal-cyan shadow-sm'
+                  : 'text-ink-low hover:text-ink-mid'
+              }`}
+              title="Continuous live MJPEG stream"
+            >
+              <span
+                className={`h-1.5 w-1.5 rounded-full ${
+                  mode === 'stream' && !errored ? 'animate-pulse bg-signal-cyan' : 'bg-ink-low'
+                }`}
+              />
+              LIVE STREAM
+            </button>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setMode('snapshot');
+              }}
+              className={`flex items-center gap-1 rounded px-2 py-0.5 font-mono text-[10px] font-semibold transition-colors ${
+                mode === 'snapshot'
+                  ? 'bg-signal-amber/20 text-signal-amber shadow-sm'
+                  : 'text-ink-low hover:text-ink-mid'
+              }`}
+              title="Interval snapshot mode (reduces bandwidth)"
+            >
+              <svg viewBox="0 0 24 24" className="h-3 w-3 fill-none stroke-currentColor" strokeWidth="2">
+                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+                <circle cx="12" cy="13" r="4" />
+              </svg>
+              SNAPSHOT
+            </button>
+          </div>
+
+          {/* Snapshot mode quick info */}
+          {mode === 'snapshot' && !compact && (
+            <span className="font-mono text-[11px] text-signal-amber">
+              {snapshotFrames} frame{snapshotFrames > 1 ? 's' : ''} / {snapshotSeconds}s
+              {isPaused ? ' (PAUSED)' : nextCaptureIn ? ` · next in ${nextCaptureIn}s` : ''}
             </span>
           )}
         </div>
 
-        <div className="flex items-center gap-2 text-[10px]">
-          {toggleMsg && (
-            <span className="text-signal-cyan animate-pulse font-bold">{toggleMsg}</span>
-          )}
-
-          {/* Mode Switchers */}
-          <div className="inline-flex rounded border border-deck-line bg-deck-800 p-0.5">
-            <button
-              type="button"
-              onClick={() => { setViewMode('mjpeg'); setErrored(false); }}
-              className={`rounded px-2 py-0.5 transition-colors ${viewMode === 'mjpeg' ? 'bg-signal-cyan/20 text-signal-cyan font-bold' : 'text-ink-mid hover:text-ink-high'}`}
-            >
-              Stream
-            </button>
-            <button
-              type="button"
-              onClick={() => { setViewMode('viewer'); setErrored(false); }}
-              className={`rounded px-2 py-0.5 transition-colors ${viewMode === 'viewer' ? 'bg-signal-cyan/20 text-signal-cyan font-bold' : 'text-ink-mid hover:text-ink-high'}`}
-            >
-              Viewer
-            </button>
-            <button
-              type="button"
-              onClick={() => { setViewMode('snapshot'); setErrored(false); }}
-              className={`rounded px-2 py-0.5 transition-colors ${viewMode === 'snapshot' ? 'bg-signal-cyan/20 text-signal-cyan font-bold' : 'text-ink-mid hover:text-ink-high'}`}
-            >
-              Snapshot
-            </button>
+        {/* Center / Right: Resolution Picker & Actions */}
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Resolution Selector */}
+          <div className="flex items-center gap-1">
+            <span className="font-mono text-[9px] uppercase tracking-wider text-ink-low">RES:</span>
+            <div className="inline-flex rounded border border-deck-line bg-deck-900 p-0.5">
+              {Object.values(CAMERA_RESOLUTIONS).map((res) => (
+                <button
+                  key={res.id}
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setResolution(res.id);
+                  }}
+                  className={`rounded px-1.5 py-0.5 font-mono text-[10px] font-semibold transition-colors ${
+                    resolution === res.id
+                      ? 'bg-deck-700 text-ink-high'
+                      : 'text-ink-low hover:text-ink-mid'
+                  }`}
+                  title={
+                    res.width ? `${res.label} (${res.width}x${res.height})` : 'Auto (Camera native resolution)'
+                  }
+                >
+                  {res.label}
+                </button>
+              ))}
+            </div>
           </div>
 
-          <button
-            type="button"
-            onClick={() => setShowSettings((v) => !v)}
-            className={`rounded border px-2 py-0.5 transition-colors ${showSettings ? 'border-signal-cyan text-signal-cyan bg-signal-cyan/10' : 'border-deck-line bg-deck-800 text-ink-mid hover:text-ink-high'}`}
-          >
-            ⚙ Settings
-          </button>
+          {/* Snapshot controls (Capture Now, Pause, Download) */}
+          {mode === 'snapshot' && (
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  triggerSnapshot();
+                }}
+                className="flex items-center gap-1 rounded border border-deck-line bg-deck-800 px-2 py-0.5 font-mono text-[10px] text-ink-mid hover:border-ink-low hover:text-ink-high"
+                title="Capture a single frame immediately"
+              >
+                <svg viewBox="0 0 24 24" className="h-3 w-3 fill-none stroke-currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="10" />
+                  <circle cx="12" cy="12" r="3" />
+                </svg>
+                Snap
+              </button>
 
-          <a
-            href={viewerUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            title="Open raw web_video_server stream viewer in new tab"
-            className="rounded border border-deck-line bg-deck-800 px-2 py-0.5 text-ink-mid hover:border-signal-cyan hover:text-signal-cyan"
-          >
-            Pop-out ↗
-          </a>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  togglePause();
+                }}
+                className={`rounded border border-deck-line px-1.5 py-0.5 font-mono text-[10px] transition-colors ${
+                  isPaused
+                    ? 'bg-signal-amber/20 text-signal-amber border-signal-amber/40'
+                    : 'bg-deck-800 text-ink-mid hover:text-ink-high'
+                }`}
+                title={isPaused ? 'Resume periodic snapshots' : 'Pause periodic snapshots'}
+              >
+                {isPaused ? '▶' : '⏸'}
+              </button>
+
+              {!compact && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    downloadSnapshot();
+                  }}
+                  className="rounded border border-deck-line bg-deck-800 px-1.5 py-0.5 font-mono text-[10px] text-ink-mid hover:border-ink-low hover:text-ink-high"
+                  title="Download current snapshot as JPEG"
+                >
+                  ↓ Save
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Settings Overlay Drawer */}
-      {showSettings && (
-        <div className="z-20 flex flex-wrap items-center justify-between border-b border-deck-line bg-deck-900 px-3 py-2 text-xs">
-          <div className="flex items-center gap-4">
-            <label className="flex items-center gap-1.5">
-              <span className="text-[10px] text-ink-low">QUALITY</span>
-              <input
-                type="range"
-                min="30"
-                max="100"
-                step="5"
-                value={quality}
-                onChange={(e) => setQuality(Number(e.target.value))}
-                className="h-1.5 w-20 accent-signal-cyan cursor-pointer"
-              />
-              <span className="w-8 text-[10px] text-signal-cyan">{quality}%</span>
-            </label>
-
-            <label className="flex items-center gap-1.5">
-              <span className="text-[10px] text-ink-low">FPS</span>
-              <select
-                value={framerate}
-                onChange={(e) => setFramerate(Number(e.target.value))}
-                className="rounded border border-deck-line bg-deck-800 px-1.5 py-0.5 text-[10px] text-ink-high"
-              >
-                <option value="15">15 FPS</option>
-                <option value="20">20 FPS</option>
-                <option value="30">30 FPS (Default)</option>
-              </select>
-            </label>
+      {/* Snapshot Interval Selection Bar (Full View Only) */}
+      {mode === 'snapshot' && !compact && (
+        <div className="z-10 flex flex-wrap items-center justify-between gap-2 border-b border-deck-line/40 bg-deck-950/70 px-3 py-1 font-mono text-[11px] text-ink-mid backdrop-blur-sm">
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] uppercase tracking-wider text-ink-low">Rate:</span>
+            {SNAPSHOT_PRESETS.map((p) => {
+              const active =
+                !showCustomInterval &&
+                snapshotFrames === p.frames &&
+                snapshotSeconds === p.seconds;
+              return (
+                <button
+                  key={p.label}
+                  type="button"
+                  onClick={() => {
+                    setShowCustomInterval(false);
+                    setSnapshotConfig({ frames: p.frames, seconds: p.seconds });
+                  }}
+                  className={`rounded border px-1.5 py-0.5 text-[10px] transition-colors ${
+                    active
+                      ? 'border-signal-amber bg-signal-amber/15 font-semibold text-signal-amber'
+                      : 'border-deck-line bg-deck-900 text-ink-low hover:text-ink-mid'
+                  }`}
+                >
+                  {p.label}
+                </button>
+              );
+            })}
+            <button
+              type="button"
+              onClick={() => setShowCustomInterval((v) => !v)}
+              className={`rounded border px-1.5 py-0.5 text-[10px] transition-colors ${
+                showCustomInterval
+                  ? 'border-signal-cyan bg-signal-cyan/15 font-semibold text-signal-cyan'
+                  : 'border-deck-line bg-deck-900 text-ink-low hover:text-ink-mid'
+              }`}
+            >
+              Custom...
+            </button>
           </div>
 
-          {backendConnected && (
-            <div className="flex items-center gap-2">
+          {showCustomInterval && (
+            <form onSubmit={handleCustomSubmit} className="flex items-center gap-1.5">
+              <input
+                type="number"
+                min="1"
+                max="60"
+                value={customFrames}
+                onChange={(e) => setCustomFrames(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                className="w-12 rounded border border-deck-line bg-deck-900 px-1 py-0.5 text-center text-[10px] text-ink-high"
+                title="Number of frames"
+              />
+              <span className="text-[10px] text-ink-low">frame(s) in</span>
+              <input
+                type="number"
+                min="1"
+                max="3600"
+                value={customSeconds}
+                onChange={(e) => setCustomSeconds(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                className="w-14 rounded border border-deck-line bg-deck-900 px-1 py-0.5 text-center text-[10px] text-ink-high"
+                title="Seconds"
+              />
+              <span className="text-[10px] text-ink-low">sec</span>
               <button
-                type="button"
-                disabled={backendLoading}
-                onClick={() => handleToggleMode('v4l2')}
-                className="rounded bg-signal-cyan/15 px-2 py-1 text-[10px] font-semibold text-signal-cyan hover:bg-signal-cyan/25 disabled:opacity-50"
+                type="submit"
+                className="rounded bg-signal-cyan/20 px-2 py-0.5 text-[10px] font-semibold text-signal-cyan hover:bg-signal-cyan/30"
               >
-                Restart V4L2
+                Set
               </button>
-              <button
-                type="button"
-                disabled={backendLoading}
-                onClick={() => handleToggleMode('diagnostic')}
-                title="Generates test color bars to verify display pipeline"
-                className="rounded border border-signal-amber/40 bg-signal-amber/15 px-2 py-1 text-[10px] font-semibold text-signal-amber hover:bg-signal-amber/25 disabled:opacity-50"
-              >
-                Test Color Bars
-              </button>
+            </form>
+          )}
+
+          {formattedLastCapture && (
+            <div className="text-[10px] text-ink-low">
+              Last frame: <span className="text-ink-mid">{formattedLastCapture}</span>
             </div>
           )}
         </div>
       )}
 
-      {/* Main Video Stream Container */}
-      <div className="relative flex flex-1 items-center justify-center overflow-hidden bg-black">
-        {viewMode === 'viewer' ? (
-          <iframe
-            key={reloadKey}
-            src={viewerUrl}
-            title="Logitech C270 Web Video Server Stream Viewer"
-            className="h-full w-full border-0 bg-black"
-          />
-        ) : (
-          <img
-            key={`${reloadKey}-${viewMode}`}
-            src={activeSrc}
-            alt="Logitech C270 Live Camera Stream"
-            className={`h-full w-full object-contain ${errored ? 'invisible' : ''}`}
-            onError={() => setErrored(true)}
-            onLoad={() => setErrored(false)}
-          />
-        )}
+      {/* Main Stream / Snapshot Image */}
+      <div className="relative flex-1 overflow-hidden">
+        <img
+          key={`${mode}-${resolution}-${reloadKey}`}
+          src={currentSrc}
+          alt={mode === 'snapshot' ? 'Camera snapshot' : 'Live camera stream'}
+          className={`h-full w-full object-contain ${errored ? 'invisible' : ''}`}
+          onError={() => setErrored(true)}
+          onLoad={() => setErrored(false)}
+        />
 
-        {/* Stream Overlay Details */}
-        {!errored && (
-          <div className="pointer-events-none absolute top-2 left-2 flex items-center gap-2">
-            <span className="rounded bg-deck-950/80 px-2 py-0.5 text-[9px] text-signal-green backdrop-blur-sm border border-deck-line">
-              ● LIVE
-            </span>
-            <span className="rounded bg-deck-950/80 px-2 py-0.5 text-[9px] text-ink-mid backdrop-blur-sm border border-deck-line">
-              {viewMode === 'viewer'
-                ? 'CANVAS VIEWER'
-                : viewMode === 'snapshot'
-                  ? 'SNAPSHOT'
-                  : '720p · MJPEG DIRECT'}
-            </span>
-          </div>
-        )}
-
-        {/* Fallback Screen when Stream is Down */}
-        {errored && viewMode !== 'viewer' && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-deck-900/95 p-4 text-center">
+        {/* Fallback overlay when server down / no stream */}
+        {errored && (
+          <div className="absolute inset-0 flex items-center justify-center bg-deck-900/85">
             <DataFallback
-              topic={DEFAULT_CAMERA_TOPIC}
-              label="NO LOGITECH C270 CAMERA STREAM"
+              topic={CAMERA_TOPIC}
+              label={mode === 'snapshot' ? 'NO CAMERA SNAPSHOT' : 'NO CAMERA STREAM'}
               tone="idle"
             />
-            <p className="max-w-md text-[11px] text-ink-mid">
-              Web video server on port 8080 is unreachable or topic <code className="text-signal-cyan">{DEFAULT_CAMERA_TOPIC}</code> is not publishing.
-            </p>
-
-            <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
-              <button
-                type="button"
-                onClick={() => { setErrored(false); setReloadKey((k) => k + 1); }}
-                className="rounded border border-signal-cyan/50 bg-signal-cyan/15 px-3 py-1 text-[11px] text-signal-cyan hover:bg-signal-cyan/25"
-              >
-                Retry Stream ↻
-              </button>
-
-              <button
-                type="button"
-                onClick={() => { setViewMode('viewer'); setErrored(false); }}
-                className="rounded border border-deck-line bg-deck-800 px-3 py-1 text-[11px] text-signal-cyan hover:bg-deck-700"
-              >
-                Switch to Canvas Viewer
-              </button>
-
-              <a
-                href={viewerUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="rounded border border-deck-line bg-deck-800 px-3 py-1 text-[11px] text-ink-mid hover:text-ink-high"
-              >
-                Open Stream Viewer ↗
-              </a>
-
-              <a
-                href={snapshotUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="rounded border border-deck-line bg-deck-800 px-3 py-1 text-[11px] text-ink-mid hover:text-ink-high"
-              >
-                Direct Snapshot ↗
-              </a>
-
-              {backendConnected && (
-                <button
-                  type="button"
-                  disabled={backendLoading}
-                  onClick={() => handleToggleMode('v4l2')}
-                  className="rounded border border-signal-green/40 bg-signal-green/15 px-3 py-1 text-[11px] text-signal-green hover:bg-signal-green/25 disabled:opacity-50"
-                >
-                  Start V4L2 Camera Node
-                </button>
-              )}
-            </div>
           </div>
         )}
 
-        {/* Bottom Topic Tag for Main View */}
-        <div className="pointer-events-none absolute bottom-2 left-2 rounded bg-deck-900/80 px-2 py-1 font-mono text-[10px] text-ink-mid backdrop-blur-sm border border-deck-line">
-          {DEFAULT_CAMERA_TOPIC} · 1280x720 (16:9)
+        {/* Bottom Metadata Badges */}
+        <div className="pointer-events-none absolute bottom-2 left-2 flex items-center gap-1.5">
+          <div className="rounded bg-deck-900/80 px-2 py-1 font-mono text-[10px] text-ink-mid backdrop-blur-xs">
+            {CAMERA_TOPIC}
+          </div>
+          {mode === 'snapshot' && (
+            <div className="rounded bg-signal-amber/15 border border-signal-amber/30 px-1.5 py-0.5 font-mono text-[9px] font-bold tracking-wider text-signal-amber">
+              SNAPSHOT · {snapshotFrames}F/{snapshotSeconds}S
+            </div>
+          )}
+        </div>
+
+        <div className="pointer-events-none absolute bottom-2 right-2 flex items-center gap-1.5 font-mono text-[10px]">
+          <div className="rounded bg-deck-900/80 px-2 py-1 text-ink-mid backdrop-blur-xs">
+            {activeRes.badge} {activeRes.width ? `(${activeRes.width}×${activeRes.height})` : ''}
+          </div>
         </div>
       </div>
     </div>

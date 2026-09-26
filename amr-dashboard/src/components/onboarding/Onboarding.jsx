@@ -2,9 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import './onboarding.css';
 
 const environments = [
-  ['indoor', 'Indoor', 'For rooms, corridors, and enclosed spaces.', 'ENCLOSED SPACES'],
-  ['outdoor', 'Outdoor', 'For open spaces, grounds, and outdoor paths.', 'OPEN SPACES'],
-  ['hybrid', 'Hybrid', 'For journeys that move between inside and out.', 'CONNECTED SPACES'],
+  ['indoor', 'Indoor', 'For rooms, corridors, and enclosed spaces.', 'ENCLOSED SPACES', false],
+  ['outdoor', 'Outdoor', 'For open spaces, grounds, and outdoor paths.', 'OPEN SPACES', false],
+  ['hybrid', 'Hybrid', 'For journeys that move between inside and out.', 'CONNECTED SPACES', true],
 ];
 const modes = [
   ['manual', 'Manual Mode', 'A workspace for direct robot operation.', 'DIRECT OPERATION'],
@@ -88,13 +88,19 @@ function Illustration({ kind }) {
   );
 }
 
-export default function Onboarding() {
+export default function Onboarding({ onComplete }) {
   const [step, setStep] = useState(() =>
     new URLSearchParams(window.location.search).has('skipWelcome') ? 'environment' : 'welcome',
   );
   const [environment, setEnvironment] = useState(null);
   const [mode, setMode] = useState(null);
+  const [segment, setSegment] = useState(null);
   const heading = useRef(null);
+
+  const availableModes = modes.filter(([id]) => {
+    if (environment === 'outdoor' && id === 'mapping') return false;
+    return true;
+  });
   useEffect(() => {
     if (step !== 'welcome') return;
     const timer = setTimeout(() => setStep('environment'), 2600);
@@ -174,34 +180,44 @@ export default function Onboarding() {
                   role="group"
                   aria-label={step === 'environment' ? 'Choose an environment' : 'Choose a mode'}
                 >
-                  {(step === 'environment' ? environments : modes).map(([id, title, detail, tag], index) => {
+                  {(step === 'environment' ? environments : availableModes).map(([id, title, detail, tag, disabled], index) => {
+                    const isDisabled = Boolean(disabled);
                     const selected = (step === 'environment' ? environment : mode) === id;
                     return (
                       <button
                         key={id}
-                        className={`setup-card tone-${id}`}
+                        type="button"
+                        disabled={isDisabled}
+                        aria-disabled={isDisabled}
+                        title={isDisabled ? `${title} is currently disabled` : undefined}
+                        className={`setup-card tone-${id}${isDisabled ? ' is-disabled opacity-45 cursor-not-allowed pointer-events-none' : ''}`}
                         aria-pressed={selected}
                         onClick={() => {
+                          if (isDisabled) return;
                           if (step === 'environment') {
                             setEnvironment(id);
+                            if (id === 'outdoor' && mode === 'mapping') {
+                              setMode(null);
+                            }
                             setStep('mode');
                           } else {
                             setMode(id);
+                                setSegment(null);
                             setStep('ready');
                           }
                         }}
                       >
                         <span className="setup-card-top">
                           <span>0{index + 1}</span>
-                          <span className="setup-check">{selected ? '✓' : '↗'}</span>
+                          <span className="setup-check">{isDisabled ? '—' : selected ? '✓' : '↗'}</span>
                         </span>
                         <Illustration kind={id} />
-                        <span className="setup-tag">{tag}</span>
+                        <span className="setup-tag">{isDisabled ? `${tag} · DISABLED` : tag}</span>
                         <span className="setup-card-title">{title}</span>
                         <span className="setup-card-detail">{detail}</span>
                         <span className="setup-card-action">
-                          {selected ? 'Selected' : `Choose ${title.toLowerCase()}`}{' '}
-                          <span aria-hidden="true">→</span>
+                          {isDisabled ? 'Disabled' : selected ? 'Selected' : `Choose ${title.toLowerCase()}`}{' '}
+                          {!isDisabled && <span aria-hidden="true">→</span>}
                         </span>
                       </button>
                     );
@@ -212,12 +228,27 @@ export default function Onboarding() {
                   <Illustration kind={mode} />
                   <div>
                     <span className="setup-tag">WORKSPACE READY</span>
-                    <h2>{modeLabel} Active</h2>
+                    <h2>{modeLabel} features</h2>
+                    {environment === 'hybrid' && <fieldset className="my-4"><legend>Choose the active segment</legend>{['indoor', 'outdoor'].map(value => <label key={value} className="inline-flex min-h-11 items-center gap-2 mr-5"><input type="radio" name="segment" value={value} checked={segment === value} disabled={mode === 'mapping' && value === 'outdoor'} onChange={() => setSegment(value)} />{value}</label>)}</fieldset>}
                     <p>
                       Selected environment: <strong>{environmentLabel}</strong> ({environments.find((item) => item[0] === environment)?.[2]})<br />
                       Operating mode: <strong>{modeLabel}</strong> ({modes.find((item) => item[0] === mode)?.[2]})
                     </p>
                     <div style={{ marginTop: '20px', display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                      <button
+                        type="button"
+                        className="setup-launch-button"
+                        onClick={() => {
+                          if (environment === 'hybrid' && !segment) return;
+                          onComplete?.({
+                            environment,
+                            mode,
+                            activeSegment: environment === 'hybrid' ? segment : environment,
+                          });
+                        }}
+                      >
+                        Open {modeLabel} →
+                      </button>
                       <a
                         href="?view=dashboard"
                         className="setup-primary-launch-button"

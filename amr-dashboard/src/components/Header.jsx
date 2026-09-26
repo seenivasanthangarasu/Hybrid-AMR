@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import useTheme from '../hooks/useTheme.js';
 import SignalChip from './ui/SignalChip.jsx';
+import { useWorkspace } from '../context/WorkspaceContext.jsx';
 
 function HamburgerButton({ onClick }) {
   return (
@@ -95,6 +96,7 @@ function RetryIndicator({ retry, now }) {
 
 export default function Header({ connectionStatus, mode, isModeDefault, onReconnect, retry, onOpenSidebar }) {
   const [now, setNow] = useState(new Date());
+  const workspace = useWorkspace();
 
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 1000);
@@ -122,24 +124,72 @@ export default function Header({ connectionStatus, mode, isModeDefault, onReconn
           </svg>
         </div>
         <h1 className="font-display text-sm font-bold tracking-[0.18em] text-ink-high">
-          HYBRID AMR COMMAND CENTER
+          XTRMBLY COMMAND CENTER
         </h1>
       </div>
 
       <div className="flex items-center gap-6">
-        <div className="flex items-center gap-2">
-          <span className="data-label">MODE</span>
-          <span
-            className={`rounded px-2 py-0.5 font-mono text-xs font-semibold tracking-wide ${
-              mode === 'INDOOR'
-                ? 'bg-signal-violet/15 text-signal-violet'
-                : 'bg-signal-cyan/15 text-signal-cyan'
-            }`}
-          >
-            {mode}
-            {isModeDefault && <span className="ml-1 text-[9px] text-ink-low">(default)</span>}
-          </span>
-        </div>
+        {workspace.isConfigured ? (
+          <div className="flex items-center gap-2">
+            <span className="data-label">WORKSPACE</span>
+            <div className="flex items-center gap-1.5">
+              <span
+                className={`rounded px-2 py-0.5 font-mono text-xs font-semibold tracking-wide ${
+                  workspace.effectiveEnvironment === 'indoor'
+                    ? 'bg-signal-violet/15 text-signal-violet'
+                    : 'bg-signal-cyan/15 text-signal-cyan'
+                }`}
+              >
+                {workspace.environment?.toUpperCase()}
+                {workspace.environment === 'hybrid' && (
+                  <span className="ml-1 text-[9px] text-ink-low">
+                    ({workspace.activeSegment?.toUpperCase()})
+                  </span>
+                )}
+                <span className="mx-1 text-ink-low">·</span>
+                <span className="text-ink-high">{workspace.operatingMode?.toUpperCase()}</span>
+              </span>
+
+              {workspace.environment === 'hybrid' && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    workspace.setActiveSegment(
+                      workspace.activeSegment === 'indoor' ? 'outdoor' : 'indoor',
+                    )
+                  }
+                  title="Switch active hybrid segment"
+                  className="rounded border border-signal-cyan/40 bg-signal-cyan/10 px-1.5 py-0.5 font-mono text-[9px] font-bold text-signal-cyan hover:bg-signal-cyan/20"
+                >
+                  TO {workspace.activeSegment === 'indoor' ? 'OUTDOOR' : 'INDOOR'}
+                </button>
+              )}
+
+              {workspace.isEnvironmentMismatch && (
+                <span
+                  title={`Robot reports ${workspace.reportedRobotEnvironment} via /robot_mode`}
+                  className="rounded border border-signal-amber/40 bg-signal-amber/15 px-1.5 py-0.5 font-mono text-[9px] text-signal-amber"
+                >
+                  ROBOT: {workspace.reportedRobotEnvironment}
+                </span>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2">
+            <span className="data-label">MODE</span>
+            <span
+              className={`rounded px-2 py-0.5 font-mono text-xs font-semibold tracking-wide ${
+                mode === 'INDOOR'
+                  ? 'bg-signal-violet/15 text-signal-violet'
+                  : 'bg-signal-cyan/15 text-signal-cyan'
+              }`}
+            >
+              {mode}
+              {isModeDefault && <span className="ml-1 text-[9px] text-ink-low">(default)</span>}
+            </span>
+          </div>
+        )}
 
         <div className="data-value text-xs text-ink-mid">
           {now.toLocaleTimeString([], { hour12: false })}

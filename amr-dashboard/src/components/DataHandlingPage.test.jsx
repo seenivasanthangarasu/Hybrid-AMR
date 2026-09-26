@@ -2,6 +2,23 @@ import { render, screen, fireEvent, waitFor, within } from '@testing-library/rea
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { dataSources } from '../config/dataSources.js';
 
+vi.mock('../services/AmrSessionService.js', async () => {
+  const recorder = (await import('../services/McapRecordingService.js')).default;
+  const camera = (await import('../services/CameraSnapshotService.js')).default;
+  const state = { status: 'ready', folderName: 'test-session' };
+  let root;
+  return { default: {
+    getState: () => state,
+    subscribe: (cb) => { cb(state); return () => {}; },
+    setRoot: vi.fn(async (handle) => { root = handle; }),
+    startCapture: vi.fn(async ({ recording, snapshots }) => {
+      if (recording) await recorder.start({ ...recording, dirHandle: root });
+      if (snapshots) await camera.start({ ...snapshots, dirHandle: root });
+    }),
+    stopCapture: async () => { await recorder.stop(); camera.stop(); },
+  } };
+});
+
 vi.mock('../services/McapStorageService.js', () => ({
   default: {
     isSupported: true,

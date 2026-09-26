@@ -6,13 +6,17 @@ import useRosTopic from './useRosTopic.js';
  * Returns raw grid data + metadata; rendering happens in the SLAM canvas
  * component. No grid is synthesized when the topic is unavailable.
  */
-export default function useOccupancyGrid() {
-  const { data, hasData, stale, lastReceivedAt } = useRosTopic({
+export default function useOccupancyGrid(options = {}) {
+  const topicArgs = {
     name: '/map',
     messageType: 'nav_msgs/OccupancyGrid',
     throttle_rate: 0, // map updates are infrequent — no throttling needed
     staleMs: 15000, // maps are typically latched / published rarely
-  });
+  };
+  if (options.enabled !== undefined) {
+    topicArgs.enabled = options.enabled;
+  }
+  const { data, hasData, stale, lastReceivedAt } = useRosTopic(topicArgs);
 
   // Freshness signals mirrored from useOdometry/useGps (spec REQ-21).
   const timing = { hasData, hasEverData: !!data, stale, lastReceivedAt };
@@ -21,9 +25,9 @@ export default function useOccupancyGrid() {
     hasData &&
     !!data &&
     !!data.info &&
-    Number.isFinite(data.info.width) &&
-    Number.isFinite(data.info.height) &&
-    Array.isArray(data.data);
+    Number.isInteger(data.info.width) && data.info.width > 0 &&
+    Number.isInteger(data.info.height) && data.info.height > 0 &&
+    Array.isArray(data.data) && data.data.length === data.info.width * data.info.height && data.data.length <= 16000000 && Number.isFinite(data.info.resolution) && data.info.resolution > 0;
 
   if (!validShape) {
     return {
