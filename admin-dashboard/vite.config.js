@@ -21,6 +21,7 @@ export default defineConfig(({ mode }) => ({
     setupFiles: ['./src/test/setup.js'],
     resolveSnapshotPath: (testPath, snapshotExt) => testPath + snapshotExt,
     globals: true,
+    fileParallelism: false,
     alias: {
       roslib: path.resolve(__dirname, './src/test/__mocks__/roslib.js'),
     },

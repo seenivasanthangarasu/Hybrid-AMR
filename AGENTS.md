@@ -922,3 +922,79 @@ Cycle    Status     Odom     IMU      GPS      Lidar    Camera   Depth    TF    
 - Frontend Vitest unit tests (`admin-dashboard/src/test/`): 10/10 test files, 130/130 tests passed (100%).
 - Frontend production build (`npm run build`): Completed cleanly (`dist/` generated).
 
+---
+
+## 🚀 Session Log (2026-09-26) — Dashboard UI/UX Streamlining & Full Service Shutdown
+
+### 1. Architectural & UX Restructuring
+- **Decluttered Robot Control Main Page (`RobotControlPanel.jsx`)**:
+  - Reorganized the main view around 3 prominent, high-contrast operational cards:
+    1. **Core Robot & Navigation Stack** (Odom, IMU, Lidar, SLAM, TF bringup & termination)
+    2. **Radio Teleop & Motor Drive** (One-click toggle for HOT RC DS-600 receiver & Sabertooth 2x32 driver)
+    3. **Camera Vision System** (Logitech C270 HD stream toggle + in-card live preview)
+  - Stacked dense low-priority information into collapsible accordions:
+    - **Subsystem Modules & Topic Telemetry (10 Nodes)**: Collapsible drawer with quick status ribbon dots when collapsed, detailed PID/RAM/CPU/Uptime cards when expanded.
+    - **Authoritative Power-Cycle Session**: Compact identity bar with copyable UUID and collapsible metadata.
+    - **Live Launch Console Output**: Collapsible terminal with line counter, auto-scroll toggle, and refresh buttons.
+- **Enhanced Global Header (`Header.jsx`)**:
+  - Added streamlined navigation tabs, real-time battery voltage badge, ROS WebSocket and Backend API health indicators.
+  - Added dedicated **"Shutdown Services"** action button.
+
+### 2. Full Dashboard & Backend Shutdown Architecture
+- **Backend Endpoint (`server/server.py` - `POST /api/server/shutdown`)**:
+  - Cleanly stops the robot navigation stack (`stop_robot_stack()`).
+  - Gracefully terminates ROSBridge WebSocket (Port 9090), Web Video Server (Port 8080), camera stream helpers, session publisher, Vite frontend (Port 3000), and all remaining ROS 2 node processes.
+  - Asynchronously terminates the Flask backend process (`Port 5001`) after sending an HTTP 200 confirmation payload to the client.
+- **Frontend Shutdown Flow (`Header.jsx` & `App.jsx`)**:
+  - Integrated confirmation modal warning user about service termination.
+  - Added clean post-shutdown screen displaying instructions for restarting the stack via `./start_all.sh`.
+- **CLI Companion Script (`stop_all.sh`)**:
+  - Created executable `/home/ubuntu/Desktop/Xtrmbly/stop_all.sh` to stop all dashboard, bridge, video, frontend, and backend processes from the terminal.
+
+### 3. Verification & Test Suite
+- **Flask Backend Unit Tests (`test_server.py`)**: 38/38 tests passing (100%).
+- **Frontend Vitest Unit Tests**: 10/10 test files, 133/133 tests passing (100%).
+- **Production Build (`npm run build`)**: Vite bundle generated cleanly in `dist/`.
+
+---
+
+## 🚀 Session Log (2026-09-26, continued) — AMR Session Lifecycle Alignment, Multi-Threaded Camera Streaming, & Nginx CORS Setup
+
+### 1. Session Lifecycle Approval & Alignment
+- Validated client confirmation for authoritative `/amr/session` publisher (`boot_id` idempotency, millisecond UTC timestamps, 2.0s heartbeat, QoS `TRANSIENT_LOCAL depth=1`, and graceful `"state": "ended"` on shutdown).
+- Client folder structure aligned for client-side MCAP and snapshot management:
+  `<parent-folder>/<started_at>__<robot_id>__<session_id>/` with `session.json`, `rec-*.mcap`, and `camera/camera-*.jpg`.
+- Zero robot-side ROS bag overhead; all recording client-side over ROSBridge.
+
+### 2. Multi-Threaded `web_video_server` Setup (`src/rock_bringup/launch/web_video_server.launch.py`)
+- Created `web_video_server.launch.py` with multi-threading:
+  - `port: 8082` (internal port)
+  - `address: '0.0.0.0'`
+  - `server_threads: 4` (concurrent continuous `/stream` and polling `/snapshot`)
+  - `ros_threads: 2`
+  - `default_transport: 'raw'`
+- Registered and compiled inside `rock_bringup` via `colcon build --symlink-install --packages-select rock_bringup`.
+
+### 3. Nginx Reverse Proxy with Permissive CORS Headers (Port 8080)
+- Configured `/etc/nginx/sites-available/camera-cors` listening on port `8080`, proxying to `http://127.0.0.1:8082`.
+- Added required headers:
+  - `Access-Control-Allow-Origin: *` (with `proxy_hide_header Access-Control-Allow-Origin;` to prevent duplicate header)
+  - `Access-Control-Allow-Methods: GET, HEAD, OPTIONS`
+  - `Access-Control-Allow-Headers: Range, Content-Type, Accept, Origin`
+  - `Access-Control-Expose-Headers: Content-Length, Content-Range`
+  - HTTP 204 preflight response for `OPTIONS` requests.
+- Disabled proxy buffering and caching for low-latency live MJPEG feeds.
+
+### 4. Camera Streamer & Native Resolution Profile (`camera_streamer.py`)
+- **Native Hardware Resolution**: Logitech C270 HD Webcam running at **1280x720 (720p HD @ 30 FPS, MJPG)** on `/dev/video0`.
+- **Non-blocking Capture Thread**: Decoupled V4L2 acquisition from ROS 2 timer publishing loop into a dedicated thread, delivering stable **15–25 Hz** on `/camera/camera/color/image_raw` and `/camera/color/image_raw`.
+- **Dynamic Framerate Control**: Disabled UVC `exposure_dynamic_framerate` to avoid low-light sensor throttling.
+
+### 5. Verification & Testing
+- **Stream 360p Resizing**: `curl -I "http://localhost:8080/stream?topic=/camera/camera/color/image_raw&width=640&height=360"` $\rightarrow$ `HTTP/1.1 200 OK`, `Content-Type: multipart/x-mixed-replace`.
+- **Snapshot 720p Resizing**: `curl -I "http://localhost:8080/snapshot?topic=/camera/camera/color/image_raw&width=1280&height=720"` $\rightarrow$ `HTTP/1.1 200 OK`, `Content-Type: image/jpeg`.
+- **CORS Preflight & Response**: Verified `Access-Control-Allow-Origin: *` on both `/stream` and `/snapshot` and HTTP 204 on `OPTIONS`.
+- **Topic Publication Rate**: Verified on `/camera/camera/color/image_raw` at stable **15–25 Hz**.
+- **Test Suites**: 38/38 backend tests passing in `test_server.py`; 133/133 frontend tests passing in Vitest.
+
+

@@ -17,6 +17,7 @@ import cv2
 import numpy as np
 
 import rclpy
+import threading
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPolicy
 from sensor_msgs.msg import Image, NavSatFix, Imu
@@ -37,7 +38,7 @@ def open_video_capture(device_target):
     cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'MJPG'))
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
-    cap.set(cv2.CAP_PROP_FPS, 20)
+    cap.set(cv2.CAP_PROP_FPS, 30)
 
     ret, frame = cap.read()
     if ret and frame is not None and frame.shape[0] > 0 and frame.shape[1] > 0:
@@ -114,6 +115,10 @@ class CameraStreamerNode(Node):
         # Hardware Camera Video Capture
         self.video_dev = find_rgb_video_device()
         self.cap = None
+        self.lock = threading.Lock()
+        self.latest_frame = None
+        self.running = True
+
         if self.video_dev is not None:
             try:
                 self.cap = open_video_capture(self.video_dev)
@@ -129,6 +134,10 @@ class CameraStreamerNode(Node):
                 self.cap = None
         else:
             self.get_logger().info("No physical optical RGB camera found. Running Pro-Max Telemetry HUD streamer.")
+
+        # Dedicated background worker thread for non-blocking V4L2 acquisition
+        self.capture_thread = threading.Thread(target=self._capture_worker, daemon=True)
+        self.capture_thread.start()
 
         # Timer at 20 FPS (50.0 ms) for smooth low-CPU streaming
         self.timer = self.create_timer(1.0 / 20.0, self.timer_tick)
@@ -225,25 +234,39 @@ class CameraStreamerNode(Node):
 
         return frame
 
-    def timer_tick(self):
-        if not rclpy.ok():
-            return
-        frame = None
-        if self.cap is not None:
-            ret, captured = self.cap.read()
-            if ret and captured is not None:
-                frame = captured
-            else:
-                self.cap.release()
-                self.video_dev = find_rgb_video_device()
-                if self.video_dev is not None:
-                    self.cap = open_video_capture(self.video_dev)
+    def _capture_worker(self):
+        while self.running and rclpy.ok():
+            if self.cap is not None and self.cap.isOpened():
+                ret, frame = self.cap.read()
+                if ret and frame is not None and frame.shape[0] > 0 and frame.shape[1] > 0:
+                    try:
+                        now = self.get_clock().now().to_msg()
+                        img_msg = self.bridge.cv2_to_imgmsg(frame, encoding='bgr8')
+                        img_msg.header.stamp = now
+                        img_msg.header.frame_id = "camera_color_optical_frame"
+                        if rclpy.ok():
+                            self.pub_color.publish(img_msg)
+                            self.pub_color2.publish(img_msg)
+                    except Exception:
+                        pass
                 else:
-                    self.cap = None
+                    time.sleep(0.01)
+            else:
+                # Try auto-detecting camera device
+                dev = find_rgb_video_device()
+                if dev is not None:
+                    cap = open_video_capture(dev)
+                    if cap is not None:
+                        self.video_dev = dev
+                        self.cap = cap
+                time.sleep(0.5)
 
-        if frame is None:
-            frame = self.generate_hud_frame()
+    def timer_tick(self):
+        # Fallback HUD timer (active when no physical camera is connected)
+        if not rclpy.ok() or (self.cap is not None and self.cap.isOpened()):
+            return
 
+        frame = self.generate_hud_frame()
         self.frame_idx += 1
         try:
             now = self.get_clock().now().to_msg()
@@ -258,6 +281,7 @@ class CameraStreamerNode(Node):
             pass
 
     def destroy_node(self):
+        self.running = False
         if self.cap is not None:
             try:
                 self.cap.release()

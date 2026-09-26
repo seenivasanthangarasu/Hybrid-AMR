@@ -296,5 +296,23 @@ describe('useBackendApi – stack, teleop, motor, and radio toggles', () => {
     expect(JSON.parse(call[1].body)).toEqual({ enable: true });
     expect(res.status).toBe('ok');
   });
+
+  it('calls /api/server/shutdown on shutdownServices()', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ status: 'ok', message: 'services shutting down' })
+    });
+    const { result } = renderHook(() => useBackendApi(5000));
+
+    let res;
+    await act(async () => {
+      res = await result.current.shutdownServices();
+    });
+
+    const call = global.fetch.mock.calls.find(([url]) => url.includes('/api/server/shutdown'));
+    expect(call).toBeDefined();
+    expect(res.status).toBe('ok');
+  });
 });
+
 

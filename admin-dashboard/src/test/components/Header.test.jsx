@@ -115,3 +115,34 @@ describe('Header – tab navigation', () => {
     expect(processBtn.className).toMatch(/bg-cyan-500/);
   });
 });
+
+describe('Header – Shutdown Services', () => {
+  it('opens confirmation modal when Shutdown Services button is clicked', () => {
+    render(<Header {...baseProps} />);
+    const shutdownBtn = screen.getByRole('button', { name: /shutdown services/i });
+    fireEvent.click(shutdownBtn);
+
+    expect(screen.getByText(/Shutdown Dashboard & Backend Services\?/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Confirm Shutdown All Services/i })).toBeInTheDocument();
+  });
+
+  it('calls shutdownServices when confirmed', async () => {
+    const shutdownServicesMock = vi.fn().mockResolvedValue({ status: 'ok' });
+    const onShutdownTriggeredMock = vi.fn();
+
+    render(
+      <Header
+        {...baseProps}
+        shutdownServices={shutdownServicesMock}
+        onShutdownTriggered={onShutdownTriggeredMock}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /shutdown services/i }));
+    const confirmBtn = screen.getByRole('button', { name: /Confirm Shutdown All Services/i });
+    fireEvent.click(confirmBtn);
+
+    expect(shutdownServicesMock).toHaveBeenCalled();
+  });
+});
+

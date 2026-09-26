@@ -25,10 +25,10 @@ if [ -f "$WORKSPACE_DIR/scripts/usb_heal.sh" ]; then
     sudo "$WORKSPACE_DIR/scripts/usb_heal.sh" || true
 fi
 
-# 2. Cleanup any stale processes on ports 9090, 8080, 5001, 3000 and helper nodes
-echo "🧹 Checking & freeing ports (9090, 8080, 5001, 3000)..."
+# 2. Cleanup any stale processes on ports 9090, 8082, 5001, 3000 and helper nodes
+echo "🧹 Checking & freeing ports (9090, 8082, 5001, 3000)..."
 fuser -k 9090/tcp 2>/dev/null || true
-fuser -k 8080/tcp 2>/dev/null || true
+fuser -k 8082/tcp 2>/dev/null || true
 fuser -k 5001/tcp 2>/dev/null || true
 fuser -k 3000/tcp 2>/dev/null || true
 pkill -f depth_colorizer.py 2>/dev/null || true
@@ -37,6 +37,9 @@ pkill -f camera_streamer.py 2>/dev/null || true
 pkill -f v4l2_camera 2>/dev/null || true
 pkill -f session_publisher 2>/dev/null || true
 sleep 0.5
+
+# 2a. Ensure Nginx CORS reverse proxy is running on port 8080
+sudo systemctl start nginx 2>/dev/null || true
 
 # 2b. Start Authoritative AMR Power-Cycle Session Publisher (/amr/session)
 echo "🆔 Launching Authoritative AMR Session Publisher (/amr/session)..."
@@ -50,19 +53,13 @@ setsid ros2 launch rosbridge_server rosbridge_websocket_launch.xml port:=9090 </
 ROSBRIDGE_PID=$!
 echo "   ↳ ROSBridge PID: $ROSBRIDGE_PID"
 
-# 4. Start Web Video Server for MJPEG Video Streaming (Port 8080)
-echo "📹 Launching Web Video Server (port 8080)..."
-setsid ros2 run web_video_server web_video_server </dev/null > /tmp/web_video_server.log 2>&1 &
-VIDEO_SERVER_PID=$!
-echo "   ↳ Video Server PID: $VIDEO_SERVER_PID"
+# 4. Camera & Video Pipeline (Disabled by default - controlled on-demand via Dashboard)
+echo "📹 Camera & Video Streaming are OFF by default (manage via Dashboard)."
+pkill -f camera_streamer.py 2>/dev/null || true
+pkill -f depth_colorizer.py 2>/dev/null || true
+pkill -f web_video_server 2>/dev/null || true
+fuser -k 8082/tcp 2>/dev/null || true
 
-# 4b. Start Universal Camera Streamer (RealSense RGB/Depth + Telemetry HUD Streamer)
-echo "🌈 Starting Universal Camera Streamer..."
-pkill -9 -f camera_streamer.py 2>/dev/null || true
-pkill -9 -f depth_colorizer.py 2>/dev/null || true
-setsid python3 "$WORKSPACE_DIR/admin-dashboard/server/camera_streamer.py" </dev/null > /tmp/camera_streamer.log 2>&1 &
-CAMERA_STREAM_PID=$!
-echo "   ↳ Camera Streamer PID: $CAMERA_STREAM_PID"
 
 # 5. Start Admin Backend Server (Port 5001)
 echo "⚙️  Starting Flask Admin Backend API (port 5001)..."

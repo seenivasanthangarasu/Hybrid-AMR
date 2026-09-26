@@ -208,6 +208,19 @@ export default function useBackendApi(pollIntervalMs = 2000) {
     }
   };
 
+  const shutdownServices = async () => {
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/server/shutdown`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const data = await res.json();
+      return data;
+    } catch (err) {
+      return { status: 'error', message: err.message };
+    }
+  };
+
   return {
     systemData,
     statusData,
@@ -225,6 +238,7 @@ export default function useBackendApi(pollIntervalMs = 2000) {
     toggleRadio,
     fetchCameraStatus,
     rescanCamera,
+    shutdownServices,
     backendUrl: BACKEND_URL
   };
 }

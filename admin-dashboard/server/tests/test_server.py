@@ -463,3 +463,18 @@ class TestApiSession:
             assert sess["state"] in ("active", "ended")
             assert "robot_id" in sess
             assert "session_id" in sess
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# /api/server/shutdown
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestApiServerShutdown:
+
+    def test_shutdown_endpoint_returns_200(self, client):
+        rv = client.post("/api/server/shutdown")
+        assert rv.status_code == 200
+        data = rv.get_json()
+        assert data["status"] == "ok"
+        assert "shutting down" in data["message"].lower()
+

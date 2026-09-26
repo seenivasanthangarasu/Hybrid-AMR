@@ -347,7 +347,7 @@ def get_hardware_and_processes():
     
     # 2. Port reachability
     rosbridge_reachable = check_port_reachable("127.0.0.1", 9090)
-    video_server_reachable = check_port_reachable("127.0.0.1", 8080)
+    video_server_reachable = check_port_reachable("127.0.0.1", 8080) and check_port_reachable("127.0.0.1", 8082)
     
     # 3. Process introspection
     processes_info = {}
@@ -487,6 +487,7 @@ def restart_managed_process():
 
 GLOBAL_STACK_PROC = None
 GLOBAL_CAMERA_PROC = None
+GLOBAL_VIDEO_SERVER_PROC = None
 GLOBAL_TELEOP_PROC = None
 GLOBAL_MOTOR_PROC = None
 GLOBAL_RADIO_PROC = None
@@ -747,11 +748,11 @@ def get_stack_logs():
 
 @app.route("/api/stack/stop", methods=["POST"])
 def stop_robot_stack():
-    global GLOBAL_STACK_PROC, GLOBAL_CAMERA_PROC, GLOBAL_TELEOP_PROC, GLOBAL_MOTOR_PROC, GLOBAL_RADIO_PROC
+    global GLOBAL_STACK_PROC, GLOBAL_CAMERA_PROC, GLOBAL_VIDEO_SERVER_PROC, GLOBAL_TELEOP_PROC, GLOBAL_MOTOR_PROC, GLOBAL_RADIO_PROC, GLOBAL_CAMERA_MODE
     killed_pids = []
 
-    # 1. Stop main stack process group with gentle SIGINT then SIGTERM/SIGKILL
-    for proc_ref_name in ["GLOBAL_STACK_PROC", "GLOBAL_CAMERA_PROC", "GLOBAL_TELEOP_PROC", "GLOBAL_MOTOR_PROC", "GLOBAL_RADIO_PROC"]:
+    # 1. Stop main stack process groups with gentle SIGINT then SIGTERM/SIGKILL
+    for proc_ref_name in ["GLOBAL_STACK_PROC", "GLOBAL_CAMERA_PROC", "GLOBAL_VIDEO_SERVER_PROC", "GLOBAL_TELEOP_PROC", "GLOBAL_MOTOR_PROC", "GLOBAL_RADIO_PROC"]:
         proc_obj = globals().get(proc_ref_name)
         if proc_obj and proc_obj.poll() is None:
             try:
@@ -770,11 +771,13 @@ def stop_robot_stack():
                     pass
             globals()[proc_ref_name] = None
 
-    # 2. Terminate any remaining stack processes by pattern
+    GLOBAL_CAMERA_MODE = "off"
+
+    # 2. Terminate any remaining stack and video processes by pattern
     to_kill = []
     for proc_key, patterns in MANAGED_PROCESS_PATTERNS.items():
-        if proc_key in ["rosbridge_proc", "video_server_proc"]:
-            continue  # Keep infrastructure servers alive
+        if proc_key in ["rosbridge_proc", "session_proc"]:
+            continue  # Keep core bridge/session infrastructure servers alive
         for p in psutil.process_iter(['pid', 'name', 'cmdline']):
             try:
                 cmdline_str = " ".join(p.info['cmdline'] or [])
@@ -802,6 +805,12 @@ def stop_robot_stack():
         if alive:
             psutil.wait_procs(alive, timeout=0.5)
 
+    # Free video server port 8082 if lingering
+    try:
+        subprocess.run(["fuser", "-k", "8082/tcp"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=2)
+    except Exception:
+        pass
+
     # 3. Clean USB bus transaction translator state and wait for udev to settle
     try:
         subprocess.run(
@@ -817,11 +826,11 @@ def stop_robot_stack():
         "killed_pids": list(set(killed_pids))
     })
 
-GLOBAL_CAMERA_MODE = "auto"
+GLOBAL_CAMERA_MODE = "off"
 
 @app.route("/api/camera/status", methods=["GET"])
 def get_camera_status():
-    global GLOBAL_CAMERA_PROC, GLOBAL_CAMERA_MODE
+    global GLOBAL_CAMERA_PROC, GLOBAL_VIDEO_SERVER_PROC, GLOBAL_CAMERA_MODE
     hw = detect_camera_hardware()
     
     is_running = False
@@ -873,33 +882,51 @@ def rescan_camera_devices():
 
 @app.route("/api/camera/toggle", methods=["POST"])
 def toggle_camera_module():
-    global GLOBAL_CAMERA_PROC, GLOBAL_CAMERA_MODE
+    global GLOBAL_CAMERA_PROC, GLOBAL_VIDEO_SERVER_PROC, GLOBAL_CAMERA_MODE
     data = request.json or {}
     enable = data.get("enable", True)
     req_mode = data.get("mode", "auto")
 
-    # Stop any running camera process first
+    # Stop any running camera and video server processes first
     killed = []
     if GLOBAL_CAMERA_PROC and GLOBAL_CAMERA_PROC.poll() is None:
         try:
-            os.killpg(os.getpgid(GLOBAL_CAMERA_PROC.pid), 15)
+            pgid = os.getpgid(GLOBAL_CAMERA_PROC.pid)
+            os.killpg(pgid, signal.SIGINT)
+            time.sleep(0.2)
+            os.killpg(pgid, signal.SIGTERM)
             killed.append(GLOBAL_CAMERA_PROC.pid)
         except Exception:
             try:
-                os.killpg(os.getpgid(GLOBAL_CAMERA_PROC.pid), 15)
+                GLOBAL_CAMERA_PROC.kill()
                 killed.append(GLOBAL_CAMERA_PROC.pid)
             except Exception:
                 pass
         GLOBAL_CAMERA_PROC = None
 
-    patterns = MANAGED_PROCESS_PATTERNS["camera_proc"]
+    if GLOBAL_VIDEO_SERVER_PROC and GLOBAL_VIDEO_SERVER_PROC.poll() is None:
+        try:
+            pgid = os.getpgid(GLOBAL_VIDEO_SERVER_PROC.pid)
+            os.killpg(pgid, signal.SIGINT)
+            time.sleep(0.2)
+            os.killpg(pgid, signal.SIGTERM)
+            killed.append(GLOBAL_VIDEO_SERVER_PROC.pid)
+        except Exception:
+            try:
+                GLOBAL_VIDEO_SERVER_PROC.kill()
+                killed.append(GLOBAL_VIDEO_SERVER_PROC.pid)
+            except Exception:
+                pass
+        GLOBAL_VIDEO_SERVER_PROC = None
+
+    patterns = MANAGED_PROCESS_PATTERNS["camera_proc"] + MANAGED_PROCESS_PATTERNS["video_server_proc"]
     for p in psutil.process_iter(['pid', 'name', 'cmdline']):
         try:
             cmdline_str = " ".join(p.info['cmdline'] or [])
             pname = p.info['name'] or ""
             full_str = f"{pname} {cmdline_str}"
             for pat in patterns:
-                if pat in full_str:
+                if pat in full_str and p.pid != os.getpid():
                     p.terminate()
                     killed.append(p.info['pid'])
                     break
@@ -908,9 +935,15 @@ def toggle_camera_module():
 
     if not enable:
         GLOBAL_CAMERA_MODE = "off"
+        # Release port 8082 cleanly (Nginx runs on 8080)
+        try:
+            subprocess.run(["fuser", "-k", "8082/tcp"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=2)
+        except Exception:
+            pass
+
         return jsonify({
             "status": "ok",
-            "message": "Camera module turned OFF.",
+            "message": "Camera module and Web Video Server turned OFF.",
             "mode": "off",
             "killed_pids": list(set(killed))
         })
@@ -931,6 +964,18 @@ def toggle_camera_module():
         "source /home/ubuntu/Desktop/Xtrmbly/install/setup.bash && "
     )
 
+    # 1. Start web_video_server (Port 8082, reverse-proxied with CORS on 8080) for MJPEG streaming
+    try:
+        GLOBAL_VIDEO_SERVER_PROC = subprocess.Popen(
+            ["/bin/bash", "-c", prefix + "ros2 launch rock_bringup web_video_server.launch.py"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            preexec_fn=os.setsid
+        )
+    except Exception as e:
+        print(f"Error starting web_video_server: {e}")
+
+    # 2. Start Camera Node
     if chosen_mode == "realsense":
         cmd_str = (
             prefix +
@@ -957,7 +1002,7 @@ def toggle_camera_module():
         )
         return jsonify({
             "status": "ok",
-            "message": f"Camera module turned ON ({chosen_mode} mode).",
+            "message": f"Camera module and Web Video Server turned ON ({chosen_mode} mode).",
             "mode": chosen_mode,
             "active_topic": active_topic,
             "hardware": hw,
@@ -1009,6 +1054,51 @@ def get_logs():
         "source": source,
         "lines": logs
     })
+
+def _perform_server_shutdown():
+    time.sleep(0.5)
+    try:
+        # Free ports and kill processes (keep Nginx proxy on 8080 intact)
+        for port in ["9090", "8082", "3000"]:
+            subprocess.run(["fuser", "-k", f"{port}/tcp"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=2)
+        subprocess.run(["pkill", "-f", "vite"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=2)
+        subprocess.run(["pkill", "-f", "rosbridge_websocket"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=2)
+        subprocess.run(["pkill", "-f", "session_publisher"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=2)
+        subprocess.run(["pkill", "-f", "web_video_server"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=2)
+        subprocess.run(["pkill", "-f", "camera_streamer.py"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=2)
+        for pat in [
+            "navigation.launch.py", "rock_bringup", "esp32_odom",
+            "hiwonder_imu", "hiwonder_gps", "ydlidar_ros2_driver",
+            "slam_toolbox", "robot_state_publisher", "joint_state_publisher",
+            "sabertooth", "radio_receiver"
+        ]:
+            subprocess.run(["pkill", "-f", pat], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=2)
+    except Exception as e:
+        print(f"Error during services shutdown: {e}")
+
+    time.sleep(0.3)
+    os.kill(os.getpid(), signal.SIGTERM)
+
+@app.route("/api/server/shutdown", methods=["POST"])
+def shutdown_dashboard_services():
+    try:
+        # 1. First trigger stack stop to cleanly release serial handles & motors
+        try:
+            stop_robot_stack()
+        except Exception:
+            pass
+
+        # 2. Schedule async shutdown for backend and associated server processes
+        import threading
+        if not app.config.get("TESTING"):
+            threading.Thread(target=_perform_server_shutdown, daemon=True).start()
+
+        return jsonify({
+            "status": "ok",
+            "message": "All dashboard servers (ports 3000, 5001, 8080, 9090) and robot backend services are shutting down."
+        })
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 if __name__ == "__main__":
     print(f"Starting Rubik Pi ROS 2 Admin Backend on 0.0.0.0:{PORT}...")

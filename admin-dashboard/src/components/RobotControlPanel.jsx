@@ -1,5 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Power, Camera, Cpu, Navigation, Compass, Radio, CheckCircle2, XCircle, AlertTriangle, RefreshCw, Layers, Terminal, Activity, Clock, Zap, Sliders, Shield } from 'lucide-react';
+import {
+  Power, Camera, Cpu, Navigation, Compass, Radio, CheckCircle2,
+  XCircle, AlertTriangle, RefreshCw, Layers, Terminal, Activity,
+  Clock, Zap, Sliders, Shield, ChevronDown, ChevronUp, Copy,
+  Check, PowerOff, ExternalLink, ShieldAlert
+} from 'lucide-react';
 
 export default function RobotControlPanel({
   statusData,
@@ -13,6 +18,7 @@ export default function RobotControlPanel({
   toggleRadio,
   fetchStackLogs,
   backendConnected,
+  shutdownServices,
 }) {
   const [cameraAlone, setCameraAlone] = useState(false);
   const [motorsIncluded, setMotorsIncluded] = useState(false);
@@ -22,6 +28,10 @@ export default function RobotControlPanel({
   const [launchProgressStage, setLaunchProgressStage] = useState('');
   const [logs, setLogs] = useState([]);
   const [autoScroll, setAutoScroll] = useState(true);
+  const [isDiagnosticsExpanded, setIsDiagnosticsExpanded] = useState(true);
+  const [isConsoleExpanded, setIsConsoleExpanded] = useState(false);
+  const [isSessionExpanded, setIsSessionExpanded] = useState(false);
+  const [copiedSession, setCopiedSession] = useState(false);
   const logTerminalRef = useRef(null);
 
   const currentVoltage = batteryVoltage ?? statusData?.battery?.voltage ?? statusData?.hardware?.sabertooth?.battery_voltage ?? null;
@@ -82,6 +92,13 @@ export default function RobotControlPanel({
     };
   }, [fetchStackLogs, autoScroll]);
 
+  const handleCopySession = (text) => {
+    if (!text) return;
+    navigator.clipboard?.writeText?.(text);
+    setCopiedSession(true);
+    setTimeout(() => setCopiedSession(false), 2000);
+  };
+
   const handleStartStack = async () => {
     setActionInProgress('starting');
     setLaunchProgressStage('Initializing environment & checking hardware ports...');
@@ -115,6 +132,7 @@ export default function RobotControlPanel({
           text: res.message || 'Failed to trigger robot stack bringup.',
           details: 'Check if another launch process is already bound to the serial ports or check console output below.'
         });
+        setIsConsoleExpanded(true);
       }
     } catch (err) {
       setFeedback({
@@ -123,6 +141,7 @@ export default function RobotControlPanel({
         text: err.message || 'Unable to communicate with Admin Backend (port 5001).',
         details: 'Verify that server.py is running and reachable over the network.'
       });
+      setIsConsoleExpanded(true);
     } finally {
       clearTimeout(stageTimer1);
       clearTimeout(stageTimer2);
@@ -231,107 +250,49 @@ export default function RobotControlPanel({
     }
   };
 
-  const handleToggleMotor = async (targetState) => {
-    setActionInProgress(targetState ? 'motor_on' : 'motor_off');
-    setFeedback(null);
-    try {
-      if (toggleMotor) {
-        const res = await toggleMotor(targetState);
-        if (res.status === 'ok') {
-          setFeedback({
-            type: 'success',
-            title: targetState ? 'Motor Driver Activated' : 'Motor Driver Stopped',
-            text: res.message || `Sabertooth motor driver turned ${targetState ? 'ON' : 'OFF'}.`,
-            details: targetState ? 'Driver node: sabertooth_node · Port: /dev/sabertooth' : 'Motor driver terminated.'
-          });
-        } else {
-          setFeedback({
-            type: 'error',
-            title: 'Motor Command Failed',
-            text: res.message || `Failed to toggle motor driver.`,
-            details: 'Check /dev/sabertooth connection.'
-          });
-        }
-      }
-    } catch (err) {
-      setFeedback({
-        type: 'error',
-        title: 'Motor Request Failed',
-        text: err.message,
-        details: 'Verify backend connection.'
-      });
-    } finally {
-      setActionInProgress(null);
-    }
-  };
-
-  const handleToggleRadio = async (targetState) => {
-    setActionInProgress(targetState ? 'radio_on' : 'radio_off');
-    setFeedback(null);
-    try {
-      if (toggleRadio) {
-        const res = await toggleRadio(targetState);
-        if (res.status === 'ok') {
-          setFeedback({
-            type: 'success',
-            title: targetState ? 'Radio Receiver Activated' : 'Radio Receiver Stopped',
-            text: res.message || `Radio receiver turned ${targetState ? 'ON' : 'OFF'}.`,
-            details: targetState ? 'Receiver node: radio_receiver_node · Pins: GPIO 8 & 24' : 'Radio receiver terminated.'
-          });
-        } else {
-          setFeedback({
-            type: 'error',
-            title: 'Radio Command Failed',
-            text: res.message || `Failed to toggle radio receiver.`,
-            details: 'Check GPIO permissions on Qualcomm TLMM.'
-          });
-        }
-      }
-    } catch (err) {
-      setFeedback({
-        type: 'error',
-        title: 'Radio Request Failed',
-        text: err.message,
-        details: 'Verify backend connection.'
-      });
-    } finally {
-      setActionInProgress(null);
-    }
-  };
-
   return (
-    <div className="space-y-6">
-      {/* Header Banner with Real-Time Stack Summary */}
-      <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div className="space-y-5">
+      {/* Top Hero Command Strip */}
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2">
-            <h2 className="text-lg font-bold text-slate-100 flex items-center gap-2">
-              <Power className="w-5 h-5 text-cyan-400" />
-              Robot Startup & Bringup Control
-            </h2>
-            <span className="px-2.5 py-0.5 text-xs font-mono bg-cyan-500/10 text-cyan-400 rounded-full border border-cyan-500/30">
-              {runningCount}/{autoStackNodes.length} Nodes Active
-            </span>
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-cyan-500/10 border border-cyan-500/30 rounded-xl text-cyan-400">
+              <Power className="w-6 h-6" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2.5">
+                <h2 className="text-lg font-bold text-slate-100 tracking-tight">
+                  Robot Startup & Bringup Control
+                </h2>
+                <span className="px-2.5 py-0.5 text-xs font-mono font-bold bg-cyan-500/10 text-cyan-400 rounded-full border border-cyan-500/30">
+                  {runningCount}/{autoStackNodes.length} Nodes Active
+                </span>
+              </div>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Single-click operational control for Autonomous Navigation, Radio Teleop, and Vision Stream
+              </p>
+            </div>
           </div>
-          <p className="text-xs text-slate-400 mt-1">
-            Triggers <code className="font-mono text-cyan-400">ros2 launch rock_bringup navigation.launch.py</code> to launch Motors, Radio Teleop, Odom, IMU, YDLidar, URDF, and SLAM with selective camera streaming.
-          </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        {/* Quick Hero Status Badges */}
+        <div className="flex items-center gap-2.5 flex-wrap">
           {currentVoltage !== null && (
-            <div className="px-3 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-xs font-mono flex items-center gap-2 shadow-sm">
+            <div className="px-3 py-1.5 bg-slate-950 border border-slate-800 rounded-xl text-xs font-mono flex items-center gap-2 shadow-inner">
               <Zap className={`w-4 h-4 ${batColorClass}`} />
-              <span className="text-slate-400">Battery: <strong className={batColorClass}>{typeof currentVoltage === 'number' ? `${currentVoltage.toFixed(1)}V` : `${currentVoltage}V`}</strong></span>
+              <span className="text-slate-400">
+                Battery: <strong className={batColorClass}>{typeof currentVoltage === 'number' ? `${currentVoltage.toFixed(1)}V` : `${currentVoltage}V`}</strong>
+              </span>
             </div>
           )}
+
           {anyStackRunning ? (
-            <span className="px-3 py-1.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 rounded-lg text-xs font-bold flex items-center gap-2 shadow-sm">
+            <span className="px-3 py-1.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 rounded-xl text-xs font-bold flex items-center gap-2 shadow-sm">
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
               Stack Running ({runningCount} Nodes)
             </span>
           ) : (
-            <span className="px-3 py-1.5 bg-slate-800 text-slate-400 border border-slate-700 rounded-lg text-xs font-semibold flex items-center gap-2">
+            <span className="px-3 py-1.5 bg-slate-800/80 text-slate-400 border border-slate-700 rounded-xl text-xs font-semibold flex items-center gap-2">
               <span className="w-2.5 h-2.5 rounded-full bg-slate-600" />
               Stack Offline
             </span>
@@ -341,13 +302,13 @@ export default function RobotControlPanel({
 
       {/* Interactive Launch Stage Progress Indicator */}
       {actionInProgress === 'starting' && (
-        <div className="bg-cyan-950/40 border border-cyan-500/40 rounded-xl p-4 flex items-center gap-3.5 shadow-lg animate-pulse">
+        <div className="bg-cyan-950/50 border border-cyan-500/50 rounded-2xl p-4 flex items-center gap-3.5 shadow-xl animate-pulse">
           <RefreshCw className="w-5 h-5 text-cyan-400 animate-spin flex-shrink-0" />
           <div className="flex-1 min-w-0">
-            <p className="text-xs font-bold text-cyan-300">Launching Robot Stack...</p>
-            <p className="text-[11px] text-cyan-400/80 font-mono truncate">{launchProgressStage || 'Executing launch sequence...'}</p>
+            <p className="text-xs font-bold text-cyan-300">Launching Robot Navigation Stack...</p>
+            <p className="text-[11px] text-cyan-400/90 font-mono truncate">{launchProgressStage || 'Executing launch sequence...'}</p>
           </div>
-          <span className="text-[10px] font-mono bg-cyan-500/20 text-cyan-300 px-2 py-1 rounded border border-cyan-500/30 font-semibold">
+          <span className="text-[10px] font-mono bg-cyan-500/20 text-cyan-300 px-2.5 py-1 rounded-lg border border-cyan-500/40 font-semibold">
             In Progress
           </span>
         </div>
@@ -356,7 +317,7 @@ export default function RobotControlPanel({
       {/* Enhanced Feedback & Diagnostic Banner */}
       {feedback && (
         <div
-          className={`p-4 rounded-xl border flex items-start justify-between gap-3 text-xs shadow-md transition ${
+          className={`p-4 rounded-2xl border flex items-start justify-between gap-3 text-xs shadow-md transition ${
             feedback.type === 'success'
               ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
               : feedback.type === 'info'
@@ -368,117 +329,68 @@ export default function RobotControlPanel({
             {feedback.type === 'success' && <CheckCircle2 className="w-4 h-4 text-emerald-400 mt-0.5 flex-shrink-0" />}
             {feedback.type === 'info' && <RefreshCw className="w-4 h-4 text-cyan-400 mt-0.5 flex-shrink-0" />}
             {feedback.type === 'error' && <AlertTriangle className="w-4 h-4 text-rose-400 mt-0.5 flex-shrink-0" />}
-            <div className="space-y-1">
+            <div className="space-y-0.5">
               <div className="font-bold text-slate-100 flex items-center gap-2">
                 {feedback.title}
               </div>
-              <p className="text-xs">{feedback.text}</p>
+              <p className="text-xs text-slate-200">{feedback.text}</p>
               {feedback.details && (
                 <p className="text-[11px] font-mono opacity-80 pt-0.5">{feedback.details}</p>
               )}
             </div>
           </div>
-          <button onClick={() => setFeedback(null)} className="text-slate-400 hover:text-slate-200 text-base font-bold px-1">
+          <button onClick={() => setFeedback(null)} className="text-slate-400 hover:text-slate-200 text-lg font-bold px-1.5">
             &times;
           </button>
         </div>
       )}
 
-      {/* Authoritative Session & Power Cycle Card */}
-      {sessionData && (
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-sm">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 bg-cyan-500/10 border border-cyan-500/30 rounded-xl text-cyan-400">
-                <Shield className="w-5 h-5" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h3 className="text-sm font-bold text-slate-100">Authoritative Power-Cycle Session</h3>
-                  <span
-                    className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase tracking-wider ${
-                      sessionData.state === 'active'
-                        ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                        : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
-                    }`}
-                  >
-                    {sessionData.state}
-                  </span>
-                </div>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  Durable session identity generated on robot power-on and published over ROS topic <code className="text-cyan-400 font-mono">/amr/session</code>
-                </p>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 font-mono text-xs">
-              <div className="bg-slate-950 px-3 py-2 rounded-lg border border-slate-800">
-                <span className="text-[10px] text-slate-500 uppercase tracking-wider block">Robot ID</span>
-                <span className="text-slate-200 font-bold">{sessionData.robot_id || 'amr-1'}</span>
-              </div>
-              <div className="bg-slate-950 px-3 py-2 rounded-lg border border-slate-800">
-                <span className="text-[10px] text-slate-500 uppercase tracking-wider block">Session UUID</span>
-                <span className="text-cyan-300 font-semibold truncate block" title={sessionData.session_id}>
-                  {sessionData.session_id || 'N/A'}
-                </span>
-              </div>
-              <div className="bg-slate-950 px-3 py-2 rounded-lg border border-slate-800">
-                <span className="text-[10px] text-slate-500 uppercase tracking-wider block">Started At (UTC)</span>
-                <span className="text-slate-200 font-medium truncate block" title={sessionData.started_at}>
-                  {sessionData.started_at || 'N/A'}
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Main Controls Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left Card: Main Navigation & Core Sensor Stack */}
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4 flex flex-col justify-between shadow-lg">
+      {/* Primary 3-Card Command Center Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        {/* Card 1: Core Autonomous Navigation & Sensor Stack */}
+        <div className="bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-2xl p-5 space-y-4 flex flex-col justify-between shadow-lg transition">
           <div>
-            <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center justify-between mb-2.5">
               <h3 className="text-sm font-bold text-slate-200 flex items-center gap-2">
                 <Navigation className="w-4 h-4 text-cyan-400" />
                 Core Robot & Navigation Stack
               </h3>
-              <span className="text-[10px] font-mono bg-cyan-500/10 text-cyan-400 px-2 py-0.5 rounded border border-cyan-500/30">
-                Core Stack
+              <span className={`text-[10px] font-mono px-2 py-0.5 rounded-md border ${anyStackRunning ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 font-bold' : 'bg-slate-800 text-slate-400 border-slate-700'}`}>
+                {anyStackRunning ? 'Active' : 'Offline'}
               </span>
             </div>
-            <p className="text-xs text-slate-400 leading-relaxed mb-4">
-              Launches core autonomous systems: <strong>ESP32 Odometry</strong>, <strong>Hiwonder 9-DOF IMU</strong>, <strong>YDLIDAR</strong>, <strong>URDF 3D Tree</strong>, and <strong>SLAM Toolbox</strong>.
+            <p className="text-xs text-slate-400 leading-relaxed mb-3">
+              Brings up <strong>ESP32 Odometry</strong>, <strong>Hiwonder 9-DOF IMU</strong>, <strong>YDLIDAR</strong>, <strong>URDF/TF</strong>, and <strong>SLAM Toolbox</strong>.
             </p>
 
-            <div className="bg-slate-950 border border-slate-800 rounded-lg p-3 space-y-1.5 font-mono text-xs">
+            <div className="bg-slate-950 border border-slate-800/80 rounded-xl p-3 space-y-1.5 font-mono text-[11px]">
               <div className="flex justify-between text-slate-400">
                 <span>Core Nodes:</span>
-                <span className="text-slate-200">Odom, IMU, Lidar, SLAM, TF</span>
+                <span className="text-slate-200 truncate">Odom, IMU, Lidar, SLAM, TF</span>
               </div>
               <div className="flex justify-between text-slate-400">
                 <span>Launch File:</span>
-                <span className="text-cyan-400">navigation.launch.py</span>
+                <code className="text-cyan-400">navigation.launch.py</code>
               </div>
               <div className="flex justify-between text-slate-400">
-                <span>Stack Status:</span>
+                <span>Status:</span>
                 <span className={anyStackRunning ? 'text-emerald-400 font-bold' : 'text-slate-500'}>
-                  {anyStackRunning ? `Active (${runningCount} Nodes)` : 'Offline / Standby'}
+                  {anyStackRunning ? `Active (${runningCount} Nodes)` : 'Standby'}
                 </span>
               </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-3 pt-4 border-t border-slate-800">
+          <div className="flex items-center gap-2.5 pt-3 border-t border-slate-800">
             <button
               onClick={handleStartStack}
               disabled={actionInProgress !== null || !backendConnected}
-              className="flex-1 bg-cyan-500 hover:bg-cyan-400 disabled:opacity-50 text-slate-950 font-bold py-2.5 px-4 rounded-xl text-xs flex items-center justify-center gap-2 shadow transition cursor-pointer disabled:cursor-not-allowed"
+              className="flex-1 bg-cyan-500 hover:bg-cyan-400 disabled:opacity-50 text-slate-950 font-bold py-2.5 px-4 rounded-xl text-xs flex items-center justify-center gap-2 shadow-md transition cursor-pointer disabled:cursor-not-allowed"
             >
               {actionInProgress === 'starting' ? (
                 <>
                   <RefreshCw className="w-4 h-4 animate-spin" />
-                  <span>Launching Core Stack...</span>
+                  <span>Launching...</span>
                 </>
               ) : (
                 <>
@@ -491,7 +403,7 @@ export default function RobotControlPanel({
             <button
               onClick={handleStopStack}
               disabled={actionInProgress !== null || !backendConnected || (!anyStackRunning && actionInProgress !== 'starting')}
-              className="bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 disabled:opacity-40 font-bold py-2.5 px-4 rounded-xl text-xs flex items-center justify-center gap-2 transition cursor-pointer disabled:cursor-not-allowed"
+              className="bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 disabled:opacity-40 font-bold py-2.5 px-3.5 rounded-xl text-xs flex items-center justify-center gap-1.5 transition cursor-pointer disabled:cursor-not-allowed"
             >
               {actionInProgress === 'stopping' ? (
                 <RefreshCw className="w-4 h-4 animate-spin" />
@@ -503,30 +415,29 @@ export default function RobotControlPanel({
           </div>
         </div>
 
-        {/* Middle Card: Single Dedicated Radio Teleop & Motor Drive Panel */}
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4 flex flex-col justify-between shadow-lg">
+        {/* Card 2: Radio Teleop & Motor Drive */}
+        <div className="bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-2xl p-5 space-y-4 flex flex-col justify-between shadow-lg transition">
           <div>
-            <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center justify-between mb-2.5">
               <h3 className="text-sm font-bold text-slate-200 flex items-center gap-2">
                 <Radio className="w-4 h-4 text-purple-400" />
                 Radio Teleop & Motor Drive
               </h3>
-              <span className={`text-[10px] font-mono px-2 py-0.5 rounded border ${isTeleopRunning || isSabertoothRunning || isRadioRunning ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' : 'bg-slate-800 text-slate-400 border-slate-700'}`}>
+              <span className={`text-[10px] font-mono px-2 py-0.5 rounded-md border ${isTeleopRunning || isSabertoothRunning || isRadioRunning ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 font-bold' : 'bg-slate-800 text-slate-400 border-slate-700'}`}>
                 {isTeleopRunning ? 'Teleop ACTIVE' : isSabertoothRunning || isRadioRunning ? 'Driver ACTIVE' : 'Teleop IDLE'}
               </span>
             </div>
-            <p className="text-xs text-slate-400 leading-relaxed mb-4">
-              Single-click control for <strong>HOT RC DS-600</strong> remote receiver and <strong>Sabertooth 2x32</strong> motor driver.
+            <p className="text-xs text-slate-400 leading-relaxed mb-3">
+              One-click control for <strong>HOT RC DS-600</strong> remote receiver and <strong>Sabertooth 2x32</strong> motor driver.
             </p>
 
-            {/* Quick Status Pill Details */}
-            <div className="bg-slate-950 border border-slate-800 rounded-lg p-3 space-y-2 font-mono text-xs">
+            <div className="bg-slate-950 border border-slate-800/80 rounded-xl p-3 space-y-1.5 font-mono text-[11px]">
               <div className="flex justify-between items-center text-slate-400">
                 <span className="flex items-center gap-1.5">
                   <Radio className="w-3.5 h-3.5 text-purple-400" /> HOT RC DS-600:
                 </span>
                 <span className={isRadioRunning ? 'text-emerald-400 font-bold' : 'text-slate-500'}>
-                  {isRadioRunning ? 'Active (GPIO 8/24)' : 'Standby / Idle'}
+                  {isRadioRunning ? 'Active (GPIO 8/24)' : 'Standby'}
                 </span>
               </div>
               <div className="flex justify-between items-center text-slate-400">
@@ -534,18 +445,17 @@ export default function RobotControlPanel({
                   <Zap className="w-3.5 h-3.5 text-emerald-400" /> Sabertooth 2x32:
                 </span>
                 <span className={isSabertoothRunning ? 'text-emerald-400 font-bold' : 'text-slate-500'}>
-                  {isSabertoothRunning ? 'Running (/dev/sabertooth)' : 'Standby / Idle'}
+                  {isSabertoothRunning ? 'Running (/dev/sabertooth)' : 'Standby'}
                 </span>
               </div>
-              <div className="flex justify-between items-center text-slate-400 border-t border-slate-800/80 pt-1.5">
-                <span>Drive Mode:</span>
+              <div className="flex justify-between items-center text-slate-400 border-t border-slate-800/80 pt-1">
+                <span>Protocol:</span>
                 <span className="text-cyan-400 font-semibold">RC PWM $\rightarrow$ Twist /cmd_vel</span>
               </div>
             </div>
           </div>
 
-          {/* Single Simple ON / OFF Toggle Button */}
-          <div className="pt-4 border-t border-slate-800">
+          <div className="pt-3 border-t border-slate-800">
             {isTeleopRunning || isSabertoothRunning || isRadioRunning ? (
               <button
                 onClick={() => handleToggleTeleop(false)}
@@ -573,7 +483,7 @@ export default function RobotControlPanel({
                 {actionInProgress === 'teleop_on' ? (
                   <>
                     <RefreshCw className="w-4 h-4 animate-spin text-slate-950" />
-                    <span>Launching Radio Teleop...</span>
+                    <span>Launching Teleop...</span>
                   </>
                 ) : (
                   <>
@@ -586,56 +496,56 @@ export default function RobotControlPanel({
           </div>
         </div>
 
-        {/* Right Card: Independent Camera Module Toggle */}
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4 flex flex-col justify-between shadow-lg">
+        {/* Card 3: Camera Vision Stream */}
+        <div className="bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-2xl p-5 space-y-4 flex flex-col justify-between shadow-lg transition">
           <div>
-            <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center justify-between mb-2.5">
               <h3 className="text-sm font-bold text-slate-200 flex items-center gap-2">
                 <Camera className="w-4 h-4 text-cyan-400" />
                 Camera Module Control
               </h3>
-              <span className={`text-[10px] font-mono px-2 py-0.5 rounded border ${isCameraRunning ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' : 'bg-slate-800 text-slate-400 border-slate-700'}`}>
+              <span className={`text-[10px] font-mono px-2 py-0.5 rounded-md border ${isCameraRunning ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 font-bold' : 'bg-slate-800 text-slate-400 border-slate-700'}`}>
                 {isCameraRunning ? 'Camera ON' : 'Camera OFF'}
               </span>
             </div>
-            <p className="text-xs text-slate-400 leading-relaxed mb-4">
-              Turn the Logitech C270 HD 720p camera stream ON or OFF independently without affecting navigation or motor drive.
+            <p className="text-xs text-slate-400 leading-relaxed mb-3">
+              Independent video stream toggle for Logitech C270 HD (720p) camera without interrupting navigation.
             </p>
 
-            <div className="bg-slate-950 border border-slate-800 rounded-lg p-3 space-y-1.5 font-mono text-xs">
+            <div className="bg-slate-950 border border-slate-800/80 rounded-xl p-3 space-y-1.5 font-mono text-[11px]">
               <div className="flex justify-between text-slate-400">
                 <span>Driver:</span>
-                <span className="text-slate-200">v4l2_camera (Logitech C270 HD)</span>
+                <span className="text-slate-200">v4l2_camera (C270 HD)</span>
               </div>
               <div className="flex justify-between text-slate-400">
                 <span>Stream Topic:</span>
-                <span className="text-cyan-400 truncate">/camera/color/image_raw</span>
+                <code className="text-cyan-400 truncate">/camera/color/image_raw</code>
               </div>
               <div className="flex justify-between text-slate-400">
                 <span>Status:</span>
                 <span className={isCameraRunning ? 'text-emerald-400 font-bold' : 'text-slate-500'}>
-                  {isCameraRunning ? 'Active 720p Stream' : 'Stopped / Standby'}
+                  {isCameraRunning ? 'Active 720p Stream' : 'Standby'}
                 </span>
               </div>
             </div>
 
-            {/* Live Camera Stream Preview when ON */}
+            {/* Live Camera Stream Embedded Preview when ON */}
             {isCameraRunning && (
-              <div className="mt-3 rounded-lg overflow-hidden border border-slate-800 bg-slate-950">
+              <div className="mt-3 rounded-xl overflow-hidden border border-slate-800 bg-slate-950">
                 <iframe
                   src={`${typeof window !== 'undefined' && window.location?.hostname ? `http://${window.location.hostname}:8080` : 'http://localhost:8080'}/stream_viewer?topic=/camera/color/image_raw`}
                   title="Live Camera Preview"
-                  className="w-full h-48 border-0 bg-slate-950 block"
+                  className="w-full h-36 border-0 bg-slate-950 block"
                 />
               </div>
             )}
           </div>
 
-          <div className="flex items-center gap-3 pt-4 border-t border-slate-800">
+          <div className="flex items-center gap-2.5 pt-3 border-t border-slate-800">
             <button
               onClick={() => handleToggleCamera(true)}
               disabled={actionInProgress !== null || !backendConnected || isCameraRunning}
-              className="flex-1 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 disabled:opacity-40 text-emerald-400 font-bold py-2.5 px-4 rounded-xl text-xs flex items-center justify-center gap-2 transition cursor-pointer disabled:cursor-not-allowed"
+              className="flex-1 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 disabled:opacity-40 text-emerald-400 font-bold py-2.5 px-3 rounded-xl text-xs flex items-center justify-center gap-1.5 transition cursor-pointer disabled:cursor-not-allowed"
             >
               {actionInProgress === 'cam_on' ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Power className="w-4 h-4" />}
               Turn Camera ON
@@ -644,7 +554,7 @@ export default function RobotControlPanel({
             <button
               onClick={() => handleToggleCamera(false)}
               disabled={actionInProgress !== null || !backendConnected || !isCameraRunning}
-              className="flex-1 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 disabled:opacity-40 text-rose-400 font-bold py-2.5 px-4 rounded-xl text-xs flex items-center justify-center gap-2 transition cursor-pointer disabled:cursor-not-allowed"
+              className="flex-1 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 disabled:opacity-40 text-rose-400 font-bold py-2.5 px-3 rounded-xl text-xs flex items-center justify-center gap-1.5 transition cursor-pointer disabled:cursor-not-allowed"
             >
               {actionInProgress === 'cam_off' ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Power className="w-4 h-4" />}
               Turn Camera OFF
@@ -653,80 +563,186 @@ export default function RobotControlPanel({
         </div>
       </div>
 
-      {/* Subsystem Modules Breakdown Cards */}
-      <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
+      {/* Stacked Low-Priority Tray 1: Authoritative Session Info (Compact Bar) */}
+      {sessionData && (
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-sm">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-cyan-500/10 border border-cyan-500/30 rounded-lg text-cyan-400">
+                <Shield className="w-4 h-4" />
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs font-bold text-slate-200">Authoritative Session:</span>
+                <span className="font-mono text-xs font-semibold text-slate-300">{sessionData.robot_id || 'amr-1'}</span>
+                <span className="text-slate-600">&bull;</span>
+                <span className="font-mono text-xs text-cyan-400 truncate max-w-[200px] sm:max-w-xs" title={sessionData.session_id}>
+                  {sessionData.session_id ? `${sessionData.session_id.slice(0, 16)}...` : 'N/A'}
+                </span>
+                <span
+                  className={`px-2 py-0.5 rounded text-[9px] font-mono font-bold uppercase tracking-wider ${
+                    sessionData.state === 'active'
+                      ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                      : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                  }`}
+                >
+                  {sessionData.state}
+                </span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => handleCopySession(sessionData.session_id)}
+                className="p-1.5 text-slate-400 hover:text-cyan-400 bg-slate-950 rounded-lg border border-slate-800 transition"
+                title="Copy Session ID"
+              >
+                {copiedSession ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+              </button>
+              <button
+                onClick={() => setIsSessionExpanded(!isSessionExpanded)}
+                className="text-xs text-slate-400 hover:text-slate-200 flex items-center gap-1 font-mono py-1 px-2 rounded bg-slate-950 border border-slate-800"
+              >
+                {isSessionExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+              </button>
+            </div>
+          </div>
+
+          {isSessionExpanded && (
+            <div className="mt-3 pt-3 border-t border-slate-800/80 grid grid-cols-1 sm:grid-cols-3 gap-3 font-mono text-xs">
+              <div className="bg-slate-950 p-2.5 rounded-lg border border-slate-800">
+                <span className="text-[10px] text-slate-500 uppercase tracking-wider block">Full Session UUID</span>
+                <span className="text-cyan-300 font-semibold break-all text-[11px] select-all">{sessionData.session_id || 'N/A'}</span>
+              </div>
+              <div className="bg-slate-950 p-2.5 rounded-lg border border-slate-800">
+                <span className="text-[10px] text-slate-500 uppercase tracking-wider block">Started At (UTC)</span>
+                <span className="text-slate-200">{sessionData.started_at || 'N/A'}</span>
+              </div>
+              <div className="bg-slate-950 p-2.5 rounded-lg border border-slate-800">
+                <span className="text-[10px] text-slate-500 uppercase tracking-wider block">ROS 2 Topic</span>
+                <code className="text-cyan-400">/amr/session</code>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Stacked Low-Priority Tray 2: Subsystem Modules Breakdown (Collapsible Accordion) */}
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-3 shadow-md">
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-bold text-slate-200 flex items-center gap-2">
+          <div className="flex items-center gap-2.5">
             <Layers className="w-4 h-4 text-cyan-400" />
-            Active Stack Modules & Real-Time Telemetry
-          </h3>
-          <span className="text-xs text-slate-400 font-mono">
-            {runningCount} / {autoStackNodes.length} Online
-          </span>
+            <h3 className="text-sm font-bold text-slate-200">
+              Active Stack Modules & Real-Time Telemetry
+            </h3>
+            <span className="text-xs text-slate-400 font-mono bg-slate-950 px-2 py-0.5 rounded-lg border border-slate-800">
+              {runningCount} / {autoStackNodes.length} Online
+            </span>
+          </div>
+
+          <button
+            onClick={() => setIsDiagnosticsExpanded(!isDiagnosticsExpanded)}
+            className="flex items-center gap-1.5 text-xs text-slate-300 hover:text-cyan-400 font-semibold py-1.5 px-3 rounded-xl bg-slate-950 border border-slate-800 hover:border-cyan-500/40 transition"
+          >
+            <span>{isDiagnosticsExpanded ? 'Hide Diagnostics' : 'Show 10 Node Details'}</span>
+            {isDiagnosticsExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+          </button>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {autoStackNodes.map((node) => {
-            const proc = managedProcs[node.key] || {};
-            const isRunning = proc.running || false;
-            return (
-              <div
-                key={node.key}
-                className={`bg-slate-950 border rounded-xl p-4 flex flex-col justify-between space-y-3 transition ${
-                  isRunning ? 'border-emerald-500/30 shadow-sm' : 'border-slate-800'
-                }`}
-              >
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-xs font-bold text-slate-200 truncate">{node.name}</span>
-                    {isRunning ? (
-                      <span className="px-2 py-0.5 text-[10px] font-bold bg-emerald-500/10 text-emerald-400 rounded border border-emerald-500/30 flex items-center gap-1">
-                        <CheckCircle2 className="w-3 h-3" /> ONLINE
+        {/* Quick Compact Ribbon when collapsed */}
+        {!isDiagnosticsExpanded && (
+          <div className="pt-2 flex flex-wrap gap-2">
+            {autoStackNodes.map((node) => {
+              const proc = managedProcs[node.key] || {};
+              const isRunning = proc.running || false;
+              return (
+                <div
+                  key={node.key}
+                  className={`px-2.5 py-1 rounded-lg border text-[11px] font-mono flex items-center gap-1.5 ${
+                    isRunning
+                      ? 'bg-slate-950 border-emerald-500/30 text-slate-300'
+                      : 'bg-slate-950/60 border-slate-800/80 text-slate-500'
+                  }`}
+                  title={`${node.name} (${node.topic}) - ${isRunning ? `ONLINE (PID ${proc.pid})` : 'OFFLINE'}`}
+                >
+                  <span className={`w-2 h-2 rounded-full ${isRunning ? 'bg-emerald-400' : 'bg-slate-600'}`} />
+                  <span className="truncate max-w-[130px]">{node.name.split(' ')[0]}</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Expanded 10-node diagnostic cards */}
+        {isDiagnosticsExpanded && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5 pt-3 animate-in fade-in duration-200">
+            {autoStackNodes.map((node) => {
+              const proc = managedProcs[node.key] || {};
+              const isRunning = proc.running || false;
+              return (
+                <div
+                  key={node.key}
+                  className={`bg-slate-950 border rounded-xl p-3.5 flex flex-col justify-between space-y-2.5 transition ${
+                    isRunning ? 'border-emerald-500/30 shadow-sm' : 'border-slate-800'
+                  }`}
+                >
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-bold text-slate-200 truncate">{node.name}</span>
+                      {isRunning ? (
+                        <span className="px-2 py-0.5 text-[9px] font-bold bg-emerald-500/10 text-emerald-400 rounded border border-emerald-500/30 flex items-center gap-1">
+                          <CheckCircle2 className="w-2.5 h-2.5" /> ONLINE
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 text-[9px] font-semibold bg-slate-800 text-slate-400 rounded border border-slate-700">
+                          OFFLINE
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-slate-400 line-clamp-1">{node.desc}</p>
+                  </div>
+
+                  <div className="bg-slate-900/70 rounded-lg p-2 space-y-1 font-mono text-[10px]">
+                    <div className="flex justify-between text-slate-400">
+                      <span>Topic:</span>
+                      <code className="text-cyan-400">{node.topic}</code>
+                    </div>
+                    <div className="flex justify-between text-slate-400">
+                      <span>PID:</span>
+                      <span className="text-slate-200">{proc.pid || '—'}</span>
+                    </div>
+                    <div className="flex justify-between text-slate-400">
+                      <span>CPU / RAM:</span>
+                      <span className="text-slate-200">
+                        {isRunning ? `${proc.cpu_percent}% · ${proc.memory_percent}%` : '—'}
                       </span>
-                    ) : (
-                      <span className="px-2 py-0.5 text-[10px] font-semibold bg-slate-800 text-slate-400 rounded border border-slate-700">
-                        OFFLINE
-                      </span>
+                    </div>
+                    {isRunning && proc.uptime_seconds !== undefined && (
+                      <div className="flex justify-between text-slate-400">
+                        <span>Uptime:</span>
+                        <span className="text-slate-300">{proc.uptime_seconds}s</span>
+                      </div>
                     )}
                   </div>
-                  <p className="text-[11px] text-slate-400 line-clamp-1">{node.desc}</p>
                 </div>
-
-                <div className="bg-slate-900/60 rounded-lg p-2.5 space-y-1 font-mono text-[11px]">
-                  <div className="flex justify-between text-slate-400">
-                    <span>Topic:</span>
-                    <code className="text-cyan-400">{node.topic}</code>
-                  </div>
-                  <div className="flex justify-between text-slate-400">
-                    <span>PID:</span>
-                    <span className="text-slate-200">{proc.pid || '—'}</span>
-                  </div>
-                  <div className="flex justify-between text-slate-400">
-                    <span>CPU / RAM:</span>
-                    <span className="text-slate-200">
-                      {isRunning ? `${proc.cpu_percent}% · ${proc.memory_percent}%` : '—'}
-                    </span>
-                  </div>
-                  {isRunning && proc.uptime_seconds !== undefined && (
-                    <div className="flex justify-between text-slate-400">
-                      <span>Uptime:</span>
-                      <span className="text-slate-300">{proc.uptime_seconds}s</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
-      {/* Real-Time Bringup Launch Output Console */}
-      <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-3">
+      {/* Stacked Low-Priority Tray 3: Real-Time Bringup Launch Output Console (Collapsible) */}
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-3 shadow-md">
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-bold text-slate-200 flex items-center gap-2">
+          <div className="flex items-center gap-2.5">
             <Terminal className="w-4 h-4 text-cyan-400" />
-            Live Launch Console Output
-          </h3>
+            <h3 className="text-sm font-bold text-slate-200">
+              Live Launch Console Output
+            </h3>
+            <span className="text-xs font-mono text-slate-500">
+              ({logs.length} lines)
+            </span>
+          </div>
+
           <div className="flex items-center gap-3 text-xs">
             <label className="flex items-center gap-1.5 text-slate-400 cursor-pointer">
               <input
@@ -749,36 +765,57 @@ export default function RobotControlPanel({
             >
               <RefreshCw className="w-3.5 h-3.5" />
             </button>
+            <button
+              onClick={() => setIsConsoleExpanded(!isConsoleExpanded)}
+              className="flex items-center gap-1 text-xs text-slate-300 hover:text-cyan-400 font-semibold py-1 px-2.5 rounded-lg bg-slate-950 border border-slate-800 transition"
+            >
+              <span>{isConsoleExpanded ? 'Collapse' : 'Expand Terminal'}</span>
+              {isConsoleExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+            </button>
           </div>
         </div>
 
-        <div
-          ref={logTerminalRef}
-          className="bg-slate-950 border border-slate-800 rounded-xl p-4 font-mono text-xs text-slate-300 h-64 overflow-y-auto space-y-1 select-text"
-        >
-          {logs.length === 0 ? (
-            <p className="text-slate-500 italic">No output logged yet. Launch the stack to view live console output.</p>
-          ) : (
-            logs.map((line, idx) => (
-              <div
-                key={idx}
-                className={`leading-relaxed whitespace-pre-wrap ${
-                  line.includes('[error]') || line.includes('[ERROR]')
-                    ? 'text-rose-400'
-                    : line.includes('[warn]') || line.includes('[WARN]')
-                    ? 'text-amber-400'
-                    : line.includes('[INFO]')
-                    ? 'text-slate-300'
-                    : 'text-slate-400'
-                }`}
-              >
-                {line}
-              </div>
-            ))
-          )}
-        </div>
+        {/* Collapsible terminal body */}
+        {isConsoleExpanded ? (
+          <div
+            ref={logTerminalRef}
+            className="bg-slate-950 border border-slate-800 rounded-xl p-4 font-mono text-xs text-slate-300 h-64 overflow-y-auto space-y-1 select-text animate-in fade-in duration-150"
+          >
+            {logs.length === 0 ? (
+              <p className="text-slate-500 italic">No output logged yet. Launch the stack to view live console output.</p>
+            ) : (
+              logs.map((line, idx) => (
+                <div
+                  key={idx}
+                  className={`leading-relaxed whitespace-pre-wrap ${
+                    line.includes('[error]') || line.includes('[ERROR]')
+                      ? 'text-rose-400'
+                      : line.includes('[warn]') || line.includes('[WARN]')
+                      ? 'text-amber-400'
+                      : line.includes('[INFO]')
+                      ? 'text-slate-300'
+                      : 'text-slate-400'
+                  }`}
+                >
+                  {line}
+                </div>
+              ))
+            )}
+          </div>
+        ) : (
+          <div
+            onClick={() => setIsConsoleExpanded(true)}
+            className="bg-slate-950/80 border border-slate-800/80 rounded-xl p-2.5 font-mono text-xs text-slate-400 cursor-pointer hover:border-slate-700 flex items-center justify-between"
+          >
+            <span className="truncate">
+              {logs.length > 0 ? logs[logs.length - 1] : 'No output logged yet. Click to expand live console.'}
+            </span>
+            <span className="text-[10px] text-cyan-400 font-sans ml-2 flex-shrink-0">Click to expand</span>
+          </div>
+        )}
       </div>
     </div>
   );
 }
+
 
