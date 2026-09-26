@@ -10,7 +10,7 @@
 - [What This Is](#what-this-is)
 - [Repository Layout](#repository-layout)
 - [Active ROS Topics](#active-ros-topics)
-- [Dashboard Panels](#dashboard-panels)
+- [Dashboard Panels & Features](#dashboard-panels--features)
 - [Prerequisites](#prerequisites)
 - [Quick Start — Windows](#quick-start--windows)
 - [Quick Start — Linux / Ubuntu](#quick-start--linux--ubuntu)
@@ -41,17 +41,24 @@ The **Hybrid AMR Command Center** is a React + Vite single-page application that
 Hybrid-AMR/
 ├── amr-dashboard/          React/Vite operator ground control station
 │   ├── src/
-│   │   ├── components/     UI panels (StatusPanel, ImuPanel, GpsMapView, …)
-│   │   ├── hooks/          ROS topic hooks (useGps, useImu, useOdometry, …)
-│   │   ├── services/       RosConnectionService, McapRecordingService, …
-│   │   ├── config/         dataSources.js — MCAP recording topic registry
-│   │   └── utils/          gnss.js, freshness.js, …
+│   │   ├── components/     UI panels (StatusPanel, ImuPanel, GpsMapView, LidarView, CameraView, …)
+│   │   │   ├── mapping/    IndoorMappingWorkspace (SLAM state machine)
+│   │   │   ├── maps/       IndoorMapPicker, SavedMapPreview
+│   │   │   ├── navigation/ IndoorNavGate, IndoorNavPlanner
+│   │   │   └── onboarding/ Xtrmbly Workspace Onboarding flow
+│   │   ├── context/        WorkspaceContext (mode & environment orchestration)
+│   │   ├── hooks/          ROS topic & device hooks (useLaserScan, useCameraSettings, useGps, …)
+│   │   ├── services/       RosConnectionService, MappingService, WorkspaceBridge, McapRecordingService, …
+│   │   ├── config/         dataSources.js, endpoints.js, nav2Thresholds.js
+│   │   └── utils/          proximitySector.js, proximityAlarmSound.js, mapPackage.js, freshness.js, …
 │   ├── .env.example        Template for environment variables
 │   ├── package.json
 │   └── vite.config.js
 ├── architecture.drawio     System architecture diagram (open with draw.io)
 ├── docs/
 │   ├── dashboard-ui-guide.md
+│   ├── robot-repo-tasks.md
+│   ├── server-side-requests.md
 │   ├── prompts/            S.Prompt (robot) + C.Prompt (dashboard) handshake
 │   └── remediation/        Spec documents
 └── PROJECT_CONTEXT.md      Full ROS topic contract and architecture notes
@@ -61,45 +68,54 @@ Hybrid-AMR/
 
 ## Active ROS Topics
 
-| Topic | Message Type | Panel |
+| Topic | Message Type | Panel / Feature |
 |---|---|---|
 | `/hiwonder/gps/fix` | `sensor_msgs/NavSatFix` | Status, GPS Map, GNSS Quality |
 | `/hiwonder/gps/nmea` | `std_msgs/String` | Positioning (MCAP / Telemetry) |
 | `/hiwonder/imu/data_raw` | `sensor_msgs/Imu` | IMU Panel |
 | `/hiwonder/imu/mag` | `sensor_msgs/MagneticField` | IMU Panel |
-| `/odom` | `nav_msgs/Odometry` | Status |
-| `/scan` | `sensor_msgs/LaserScan` | LiDAR Preview |
-| `/map` | `nav_msgs/OccupancyGrid` | SLAM View |
+| `/odom` | `nav_msgs/Odometry` | Status, heading, velocity |
+| `/scan` | `sensor_msgs/LaserScan` | LiDAR Preview & Proximity Safety |
+| `/map` | `nav_msgs/OccupancyGrid` | SLAM View & Indoor Mapping |
 | `/battery_state` | `sensor_msgs/BatteryState` | Status / Power Telemetry |
-| `/amr/session` | `std_msgs/String` | Session Heartbeat |
-| `/cmd_vel` | `geometry_msgs/Twist` | Control Panel |
+| `/amr/session` | `std_msgs/String` | Power-On Session Heartbeat |
+| `/amr/workspace/state` | `std_msgs/String` | Workspace Capability & State Heartbeat |
+| `/amr/mapping/cmd` | `std_msgs/String` | Mapping Command (`start_mapping`, `finish_and_save`, `cancel_mapping`) |
+| `/amr/mapping/status` | `std_msgs/String` | Mapping Status & Heartbeat |
+| `/amr/map/activate` | `std_msgs/String` | Indoor Navigation Map Activation Request |
+| `/cmd_vel` | `geometry_msgs/Twist` | Control Panel / E-Stop zero-velocity |
 | `/radio/cmd_vel` | `geometry_msgs/Twist` | Commands / Radio Teleop |
 | `/radio/channels` | `sensor_msgs/Joy` | Radio RC Channels (DS-600) |
 | `/radio/status` | `std_msgs/String` | Radio Link Status |
-| `/tf` | `tf2_msgs/TFMessage` | URDF Widget |
-| `/tf_static` | `tf2_msgs/TFMessage` | URDF Widget |
+| `/tf` | `tf2_msgs/TFMessage` | URDF Widget & Localization |
+| `/tf_static` | `tf2_msgs/TFMessage` | URDF Widget & Sensor Transforms |
 | `/robot_description` | `std_msgs/String` | URDF Widget |
 | `/joint_states` | `sensor_msgs/JointState` | URDF Widget |
-| `/camera/color/image_raw` | `sensor_msgs/Image` | Logitech C270 HD Camera (MJPEG @ 30 FPS) |
+| `/initialpose` | `geometry_msgs/PoseWithCovarianceStamped` | AMCL Initial Pose |
+| `/navigate_to_pose` | `nav2_msgs/action/NavigateToPose` | Nav2 Goal Navigation Action |
+| `/camera/color/image_raw` | `sensor_msgs/Image` | Logitech C270 Camera (MJPEG @ 30 FPS) |
 
 ---
 
-## Dashboard Panels
+## Dashboard Panels & Features
 
-| Panel | Description |
+| Panel / Feature | Description |
 |---|---|
+| **Onboarding Wizard** | Environment selection (Indoor, Outdoor, Hybrid) & mode gating (Manual, Mapping, Navigation) |
 | **Main View** | Switchable: GPS Map / SLAM / LiDAR / Logitech C270 Camera (720p @ 30 FPS) |
-| **Status** | Speed, heading, GPS fix, lat/lon, HDOP, satellites |
+| **Status** | Speed, heading, GPS fix, lat/lon, HDOP, satellites, battery status |
 | **IMU** | Roll/pitch/yaw, accel XYZ, gyro XYZ, magnetometer XYZ |
-| **Mission Planner** | GPS waypoint mission control |
-| **Control Panel** | Velocity joystick / keyboard teleop |
-| **GPS Preview** | Thumbnail GPS map |
-| **LiDAR Preview** | Thumbnail LaserScan polar plot |
-| **Camera Preview** | Logitech C270 720p HD live stream thumbnail |
-| **URDF Widget** | 3D robot model (requires mesh server) |
-| **GNSS Quality** | Full DOP / satellite / RTK quality page (sidebar) |
-| **Nav2 Tuning** | Nav2 cost/inflation threshold sliders (sidebar) |
-| **Data & Backups** | MCAP recording + camera snapshot capture (sidebar) |
+| **Mission Planner** | Multi-waypoint GPS route builder with sequential dispatch |
+| **Control Panel** | Velocity joystick / keyboard teleop / confirmed E-Stop |
+| **GPS Preview** | Thumbnail GPS map (automatically unmounted in Indoor mode) |
+| **LiDAR Preview & Safety** | 8-sector proximity monitoring, dynamic color warning rings, and Web Audio synthesizer alarm beeper |
+| **Camera & Snapshot Engine** | Auto/360p/720p/1080p resolution scaling, interval snapshot mode (1f/1s to 1f/30s), manual snap, JPEG save |
+| **Indoor Mapping Workspace** | Dedicated SLAM control panel, real-time map expansion, and client-side map packaging |
+| **Indoor Navigation Gate** | Enforces map selection and server activation confirmation before accepting navigation goals |
+| **URDF Widget** | 3D robot model (requires static mesh server) |
+| **GNSS Quality** | Full DOP / satellite / RTK quality overlay page |
+| **Nav2 Tuning** | Nav2 cost/inflation threshold sliders (fronted by robot gatekeeper) |
+| **Data & Backups** | Client-side `.mcap` topic recording + camera timelapse snapshots to local session folders |
 
 All panels show **LIVE / STALE / NO DATA** freshness badges — no synthetic zeros are ever displayed.
 
