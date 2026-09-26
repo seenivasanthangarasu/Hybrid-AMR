@@ -68,7 +68,9 @@ The application operates within a unified React root with workspace-driven layou
 | **Light/dark theme** | Header sun/moon       | Persists in `localStorage`; first visit follows the OS setting.                                    |
 | **Edit layout**      | Sidebar (hamburger icon) → DASHBOARD LAYOUT | Drag/resize every panel; the arrangement persists and `Reset to default` restores the shipped one. |
 | **Error reference**  | Sidebar → HELP        | Catalogue of all 13 fault states with the dialog each raises.                                      |
-| **Fault dialogs**    | Automatic             | Selecting a view with no data, or a command that failed to send, explains the cause and the fix.   |
+| **LiDAR Proximity Alarms** | LiDAR Preview | 8-sector distance monitoring (Front, Rear, Sides) with dynamic color warning rings (SAFE, CAUTION, WARNING, CRITICAL) and Web Audio API synthesized warning beeps with mute toggle. |
+| **Camera Control & Snapshots** | Camera View | Resolution scaling (Auto, 360p, 720p, 1080p), live/snapshot toggle, configurable interval rates (1f/1s to 1f/30s or custom), pause/resume, and one-click JPEG save. |
+| **Indoor Mapping & Nav Gate** | Workspace / Navigation | Dedicated SLAM state machine via `/amr/mapping/cmd`, client-side map packaging (`manifest.json`, `map.yaml`, `map.pgm`), and mandatory map activation gate before Nav2 goal execution. |
 | **Data & Backups**   | Sidebar → DATA        | Record selected ROS topics to `.mcap` and capture periodic camera snapshots, entirely client-side — see below. |
 | **GNSS Quality**     | Sidebar → PANELS      | Fix-quality diagnostics — DOP, per-satellite C/N0, accuracy radii, RF front-end health. |
 | **Nav2 threshold tuning** | Sidebar → PANELS | Tune a curated set of Nav2 costmap/controller thresholds live over rosbridge — see below. |
@@ -288,15 +290,28 @@ catalog's invariants, and `Dialog` accessibility.
 
 ## Power-on session folders
 
-The robot must publish the versioned `/amr/session` contract described in
-[the server implementation prompt](../docs/server-session-agent-prompt.md).
-The client does not infer power-on from a WebSocket connection.
+The robot publishes the authoritative `/amr/session` heartbeat contract.
+The client does not infer power-on from an ephemeral WebSocket connection.
+
+Topic: `/amr/session`  
+Type: `std_msgs/String` (JSON string, published every 2 seconds and upon startup)
+
+```json
+{
+  "schema_version": 1,
+  "robot_id": "amr-1",
+  "session_id": "550e8400-e29b-41d4-a716-446655440000",
+  "started_at": "2026-09-26T10:00:00.000Z",
+  "state": "active"
+}
+```
 
 In **Data & Backups**, choose a parent folder and grant browser write access.
 A confirmed server session automatically creates a UTC timestamped child folder,
-with robot/session IDs appended to prevent collisions. MCAP files, `session.json`,
-and the `camera/` image folder stay inside that session. No recording is allowed
-before confirmation. If browser permissions expire, grant access again using
+with robot/session IDs appended to prevent collisions:
+`<parent>/YYYY-MM-DDTHH-mm-ss.sssZ__<robot_id>__<session_id>/`.
+MCAP files, `session.json`, and the `camera/` snapshot folder stay inside that session.
+No recording is allowed before confirmation. If browser permissions expire, grant access again using
 Start Recording. Folder creation is automatic; recording remains operator-started.
 
 A browser reload or reconnect reuses the same server session folder. Link loss,
