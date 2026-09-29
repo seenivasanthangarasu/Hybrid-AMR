@@ -969,4 +969,91 @@ Cycle    Status     Odom     IMU      GPS      Lidar    Camera   Depth    TF    
 - **Topic Publication Rate**: Verified on `/camera/camera/color/image_raw` at stable **15–25 Hz**.
 - **Test Suites**: 38/38 backend tests passing in `test_server.py`; 133/133 frontend tests passing in Vitest.
 
+---
+
+## 🚀 Session Log (2026-09-26) — AMR Control Operations & Workspace State Bridge Implementation
+
+### 1. Architectural Scope & Problem Statement
+- The client dashboard (`seenivasanthangarasu/Hybrid-AMR` on branch `client-dash`) enforces strict telemetry honesty via `WorkspaceBridge.js` and `RobotCommandService.js`.
+- The dashboard control buttons (START, PAUSE, RESUME, STOP, RETURN HOME, EMERGENCY STOP) require:
+  - An active, confirmed robot session on `/amr/session`.
+  - A live capability heartbeat on `/amr/workspace/state` (within 6 seconds).
+  - An authoritative correlated acknowledgement on `/amr/workspace/response` for RPC requests sent to `/amr/workspace/request` (within 15 seconds).
+  - Safety interlock on `/emergency_stop` (`std_msgs/msg/Bool`) and `/cmd_vel` (`geometry_msgs/msg/Twist`).
+
+### 2. Implementation: `amr_control_bridge` Package
+- Created dedicated ROS 2 package `src/amr_control_bridge` with node `amr_control_bridge_node`.
+- **Authoritative Session Broadcast (`/amr/session`)**:
+  - Broadcasts `{ "schema_version": 1, "robot_id": "amr-1", "session_id": "<UUID>", "started_at": "<ISO-UTC>", "state": "active" }` every 2.0s.
+  - Reuses boot-bound session metadata from `amr_session`'s `SessionManager`.
+- **Capability Heartbeat (`/amr/workspace/state`)**:
+  - Broadcasts monotonically increasing `sequence` and capability list every 1.0s.
+  - Reports `operation.state` (`idle` | `running` | `paused` | `canceling`), `navigation_ready`, `localization: "localized"`, and `active_map` metadata.
+- **Correlated RPC Request/Response Handler**:
+  - Subscribes to `/amr/workspace/request` and responds on `/amr/workspace/response` with correlated `client_id`, `request_id`, `op`, and `ok: true`, `result: {"acknowledged": true}`.
+  - Implements `operation.start`, `operation.pause`, `operation.resume`, `operation.cancel`, `navigation.home`, and `operation.reconcile`.
+  - Rejects unsupported or blocked operations with `ok: false` and explanatory `error`.
+  - Tracks `reconciled_request_ids`.
+- **Emergency Stop & Motion Interlock**:
+  - Subscribes to `/emergency_stop`. When `data: true`, sets `operation_state = "idle"`, zeroes `/cmd_vel`, and blocks non-cancel operations.
+- **Backwards Compatibility**:
+  - Subscribes to `/mission_state_cmd` (`START`, `PAUSE`, `RESUME`, `STOP`).
+
+### 3. Workspace & Infrastructure Integration
+- **`start_all.sh`**: Added launch of `amr_control_bridge_node` as core bridge service.
+- **`stop_all.sh`**: Added process termination for `amr_control_bridge`.
+- **`navigation.launch.py`**: Added `start_control_bridge` launch argument and conditioned node execution.
+- **`server.py`**: Added `control_bridge_proc` to `MANAGED_PROCESS_PATTERNS` and protected from bringup shutdown.
+
+### 4. Build & Unit Test Verification
+- Built cleanly via `colcon build --packages-select amr_control_bridge rock_bringup`.
+- 16/16 unit tests passing (9 `amr_session`, 7 `amr_control_bridge`) covering session contracts, state heartbeats, RPC lifecycle, and emergency stop interlocks.
+
+---
+
+## 🚀 Session Log (2026-09-29) — Production Docker Architecture & Hardware Verification
+
+### 1. Hardware Layer Normalization (`/dev/amr_*`)
+- Created `/etc/udev/rules.d/99-amr.rules` matching physical devices deterministically:
+  - Sabertooth 2x32 Motor Driver: `268b:0201`, serial `160091F3C484` $\rightarrow$ `/dev/amr_sabertooth`
+  - ESP32-S3 Wheel Encoders: CH343 `1a86:55d3`, serial `5B8F128275` $\rightarrow$ `/dev/amr_encoder`
+  - YDLIDAR G4 Laser Scanner: CP2102 `10c4:ea60`, port `1-2.1.3` $\rightarrow$ `/dev/amr_lidar`
+  - Hiwonder 9-DOF IMU: CH340 `1a86:7523`, port `1-2.3` $\rightarrow$ `/dev/amr_imu`
+  - Hiwonder GNSS GPS: CH340 `1a86:7523`, port `1-2.2` $\rightarrow$ `/dev/amr_gps`
+  - USB Video Camera: V4L2 device $\rightarrow$ `/dev/amr_camera`
+  - HOT RC DS-600 Radio Receiver: Qualcomm TLMM character device $\rightarrow$ `/dev/gpiochip4` (GPIO 8 & 24)
+- Updated ROS nodes (`esp32_odom`, `hiwonder_gps`, `hiwonder_imu`, `sabertooth_driver`, `rock_bringup`, `admin-dashboard`) to reference `/dev/amr_*` with full backwards-compatibility aliases.
+
+### 2. Multi-Stage Docker Architecture
+- Created `docker/Dockerfile`:
+  - **Stage 1 (Builder)**: Builds `YDLidar-SDK` into `/usr/local` and compiles all 15 ROS 2 Jazzy workspace packages via `colcon build`.
+  - **Stage 2 (Runtime)**: Extracts only the compiled workspace and minimal runtime dependencies (`python3-libgpiod`, `python3-serial`, `python3-numpy`, ROS 2 Jazzy runtime) into a lean image (`hybrid-amr:latest`).
+- Created `docker/docker-compose.yml`:
+  - Services: `amr-ros` (core navigation stack) and `amr-rosbridge` (port 9090).
+  - Explicit device mappings (zero `--privileged`).
+  - `network_mode: host` with FastDDS UDPv4 loopback (`docker/config/fastdds_udp.xml`).
+  - Persistent host mounts for `maps/` and `log/docker_ros_log/`.
+- Created platform configuration profiles:
+  - `docker/profiles/rubik-pi.env` (Qualcomm QCS6490)
+  - `docker/profiles/jetson-orin-nano.env` (NVIDIA Jetson Orin Nano migration)
+- Created operational helper scripts:
+  - `docker/scripts/run_container.sh` (`--sensors-only`, `--full`, `--shell`) with automatic safety checks preventing duplicate motor control.
+  - `docker/scripts/stop_container.sh` for graceful teardown.
+
+### 3. Empirical Hardware Verification Inside Container
+- Verified live topic streaming:
+  - `/scan`: **11.7 Hz**
+  - `/odom`: **50.0 Hz**
+  - `/hiwonder/imu/data_raw`: **30.0 Hz**
+  - `/hiwonder/gps/nmea`: **10.0 Hz**
+  - `/battery_state`: **14.6V** live telemetry
+  - `/tf` and `/tf_static`: Complete unbroken kinematic tree
+  - Sabertooth 2x32: Connected, watchdog active, verified zero motor command response
+  - Radio Receiver: GPIO edge monitor active on `/dev/gpiochip4`
+  - ROSBridge WebSocket: Tornado server active on port 9090
+- Verified cross-boundary discovery: Host ROS tools discovered container topics seamlessly.
+- Verified rollback: Native host installation preserved 100% intact.
+
+
+
 

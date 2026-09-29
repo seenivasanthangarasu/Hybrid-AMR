@@ -1,0 +1,46 @@
+# ==============================================================================
+# Hybrid-AMR Docker Compose Architecture
+# Target Platform: Thundercomm Rubik Pi 3 / NVIDIA Jetson Orin Nano
+# ==============================================================================
+services:
+  amr-ros:
+    image: hybrid-amr:latest
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: amr_ros_core
+    restart: unless-stopped
+    network_mode: host
+    ipc: host
+    user: "1000:1000"
+    group_add:
+      - dialout
+      - video
+    env_file:
+      - ./profiles/rubik-pi.env
+    devices:
+      - /dev/amr_sabertooth:/dev/amr_sabertooth
+      - /dev/amr_encoder:/dev/amr_encoder
+      - /dev/amr_lidar:/dev/amr_lidar
+      - /dev/amr_imu:/dev/amr_imu
+      - /dev/amr_gps:/dev/amr_gps
+      - /dev/amr_camera:/dev/amr_camera
+      - /dev/gpiochip4:/dev/gpiochip4
+    volumes:
+      - ./config/fastdds_udp.xml:/opt/amr/config/fastdds_udp.xml:ro
+      - ../maps:/opt/amr/maps:rw
+      - ../log/docker_ros_log:/home/ubuntu/.ros/log:rw
+    command: ["ros2", "launch", "rock_bringup", "navigation.launch.py"]
+
+  amr-rosbridge:
+    image: hybrid-amr:latest
+    container_name: amr_rosbridge
+    restart: unless-stopped
+    network_mode: host
+    ipc: host
+    user: "1000:1000"
+    env_file:
+      - ./profiles/rubik-pi.env
+    volumes:
+      - ./config/fastdds_udp.xml:/opt/amr/config/fastdds_udp.xml:ro
+    command: ["ros2", "launch", "rosbridge_server", "rosbridge_websocket_launch.xml", "port:=9090"]

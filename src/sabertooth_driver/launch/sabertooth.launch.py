@@ -9,7 +9,7 @@ def generate_launch_description():
             name='sabertooth_node',
             output='screen',
             parameters=[{
-                'port': '/dev/sabertooth',
+                'port': '/dev/amr_sabertooth',
                 'baudrate': 115200,
                 'address': 128,
                 'cmd_vel_topic': '/cmd_vel',

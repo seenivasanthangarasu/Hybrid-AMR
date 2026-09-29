@@ -23,7 +23,7 @@ class HiwonderIMUNode(Node):
         super().__init__('hiwonder_imu_node')
 
         # Parameters
-        self.declare_parameter('port', '/dev/hiwonder_imu')
+        self.declare_parameter('port', '/dev/amr_imu')
         self.declare_parameter('baudrate', 9600)
         self.declare_parameter('frame_id', 'imu_link')
 
@@ -75,13 +75,13 @@ class HiwonderIMUNode(Node):
         """Open the IMU serial port from configured path or fallback candidates."""
         candidate_ports = [
             self.configured_port,
-            '/dev/hiwonder_imu',
             '/dev/amr_imu',
+            '/dev/hiwonder_imu',
             '/dev/esp-imu',
             '/dev/ttyUSB1',
             '/dev/ttyUSB0',
-            '/dev/ttyUSB3',
-            '/dev/ttyUSB2'
+            '/dev/ttyUSB2',
+            '/dev/ttyUSB3'
         ]
 
         ports_to_try = []

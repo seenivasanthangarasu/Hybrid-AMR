@@ -28,7 +28,7 @@ class ESP32OdomNode(Node):
         # ----------------------------------------------------------------------
         # ROS 2 Parameters Declaration
         # ----------------------------------------------------------------------
-        self.declare_parameter('port', '/dev/ttyACM1')
+        self.declare_parameter('port', '/dev/amr_encoder')
         self.declare_parameter('baud_rate', 115200)
         self.declare_parameter('baudrate', 115200)
         self.declare_parameter('timeout', 0.1)
@@ -139,15 +139,15 @@ class ESP32OdomNode(Node):
         """Attempts connection to configured port and candidate serial devices."""
         candidate_ports = [
             self.configured_port,
-            '/dev/ttyACM1',
             '/dev/amr_encoder',
             '/dev/esp32',
             '/dev/esp',
+            '/dev/ttyACM1',
+            '/dev/ttyACM0',
+            '/dev/ttyACM2',
             '/dev/ttyUSB2',
             '/dev/ttyUSB1',
             '/dev/ttyUSB0',
-            '/dev/ttyACM0',
-            '/dev/ttyACM2',
         ]
         ports_to_try = []
         for p in candidate_ports:

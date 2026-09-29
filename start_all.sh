@@ -36,6 +36,7 @@ pkill -f diagnostic_cam.py 2>/dev/null || true
 pkill -f camera_streamer.py 2>/dev/null || true
 pkill -f v4l2_camera 2>/dev/null || true
 pkill -f session_publisher 2>/dev/null || true
+pkill -f amr_control_bridge 2>/dev/null || true
 sleep 0.5
 
 # 2a. Ensure Nginx CORS reverse proxy is running on port 8080
@@ -46,6 +47,12 @@ echo "🆔 Launching Authoritative AMR Session Publisher (/amr/session)..."
 setsid ros2 run amr_session session_publisher </dev/null > /tmp/session_publisher.log 2>&1 &
 SESSION_PUB_PID=$!
 echo "   ↳ Session Publisher PID: $SESSION_PUB_PID"
+
+# 2c. Start Server-Side AMR Control Operations & Workspace State Bridge
+echo "🎛️ Launching AMR Control Operations & Workspace State Bridge..."
+setsid ros2 run amr_control_bridge amr_control_bridge_node </dev/null > /tmp/control_bridge.log 2>&1 &
+BRIDGE_PID=$!
+echo "   ↳ Control Bridge PID: $BRIDGE_PID"
 
 # 3. Start ROSBridge WebSocket Server (Port 9090)
 echo "📡 Launching ROSBridge WebSocket Server (port 9090)..."

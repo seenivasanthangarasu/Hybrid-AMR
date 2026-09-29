@@ -53,6 +53,12 @@ def generate_launch_description():
         description='Whether to start GUI RViz2'
     )
 
+    start_control_bridge_arg = DeclareLaunchArgument(
+        'start_control_bridge',
+        default_value='false',
+        description='Whether to start the AMR Control Operations Bridge'
+    )
+
     # -----------------------------
     # Robot State Publisher & TF
     # -----------------------------
@@ -75,7 +81,7 @@ def generate_launch_description():
         name='hiwonder_gps_node',
         output='screen',
         parameters=[{
-            'port': '/dev/hiwonder_gps',
+            'port': '/dev/amr_gps',
             'baud_rate': 9600,
             'frame_id': 'gps_link'
         }],
@@ -121,7 +127,7 @@ def generate_launch_description():
         name='hiwonder_imu_node',
         output='screen',
         parameters=[{
-            'port': '/dev/hiwonder_imu',
+            'port': '/dev/amr_imu',
             'baudrate': 9600,
             'frame_id': 'imu_link'
         }]
@@ -203,7 +209,7 @@ def generate_launch_description():
         name='sabertooth_node',
         output='screen',
         parameters=[{
-            'port': '/dev/sabertooth',
+            'port': '/dev/amr_sabertooth',
             'baudrate': 115200,
             'address': 128,
             'cmd_vel_topic': '/cmd_vel',
@@ -253,6 +259,17 @@ def generate_launch_description():
         condition=IfCondition(LaunchConfiguration('start_radio'))
     )
 
+    # -----------------------------
+    # AMR Control Operations Bridge
+    # -----------------------------
+    control_bridge_node = Node(
+        package='amr_control_bridge',
+        executable='amr_control_bridge_node',
+        name='amr_control_bridge_node',
+        output='screen',
+        condition=IfCondition(LaunchConfiguration('start_control_bridge'))
+    )
+
     return LaunchDescription([
         start_gps_arg,
         start_manual_drive_arg,
@@ -260,6 +277,7 @@ def generate_launch_description():
         start_radio_arg,
         start_camera_arg,
         start_rviz_arg,
+        start_control_bridge_arg,
         robot_launch,
         gps_node,
         lidar_launch,
@@ -270,6 +288,7 @@ def generate_launch_description():
         radio_node,
         slam_node,
         rviz_node,
-        camera_launch
+        camera_launch,
+        control_bridge_node
     ])
 

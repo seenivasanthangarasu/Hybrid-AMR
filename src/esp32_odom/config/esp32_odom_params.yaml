@@ -6,7 +6,7 @@
 esp32_odom:
   ros__parameters:
     # Serial Port Settings
-    port: "/dev/ttyACM1"
+    port: "/dev/amr_encoder"
     baud_rate: 115200
     timeout: 0.1
 

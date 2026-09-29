@@ -15,6 +15,12 @@ __pycache__/
 .pytest_cache/
 *.egg-info/
 
+# Container Runtime & Persistent Logs
+log/docker_ros_log/
+*.log
+maps/*
+!maps/.gitkeep
+
 # IDE & Editor Configuration
 .vscode/
 .idea/

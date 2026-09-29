@@ -32,6 +32,7 @@ PORT = int(os.environ.get("ADMIN_BACKEND_PORT", 5001))
 
 MANAGED_PROCESS_PATTERNS = {
     "session_proc": ["amr_session_publisher", "session_publisher", "session_publisher.py"],
+    "control_bridge_proc": ["amr_control_bridge_node", "amr_control_bridge", "control_bridge"],
     "hybrid_manager": ["hybrid_manager.py", "hybrid_navigation"],
     "gps_proc": ["hiwonder_gps_node", "hiwonder_gps", "gps_node", "ublox_gps_node", "ublox_gps"],
     "urdf_proc": ["robot_state_publisher"],
@@ -144,7 +145,7 @@ def get_motor_driver_battery():
     except Exception:
         pass
 
-    candidate_ports = ["/dev/sabertooth", "/dev/amr_motors", "/dev/ttyACM0"]
+    candidate_ports = ["/dev/amr_sabertooth", "/dev/sabertooth", "/dev/amr_motors", "/dev/ttyACM0"]
     port_to_use = None
     for p in candidate_ports:
         if os.path.exists(p) and os.access(p, os.R_OK | os.W_OK):
@@ -333,11 +334,11 @@ def get_hardware_and_processes():
             "accessible": False
         }
 
-    hw_esp = check_dev_path("/dev/ttyACM1", "/dev/esp", "/dev/amr_encoder", "/dev/ttyUSB2", "/dev/esp32")
-    hw_lidar = check_dev_path("/dev/amr_lidar", "/dev/ttyUSB1", "/dev/ttyUSB3", "/dev/ttyUSB4", "/dev/lidar", "/dev/ydlidar")
-    hw_gps = check_dev_path("/dev/hiwonder_gps", "/dev/amr_gps", "/dev/gps", "/dev/ttyUSB0")
-    hw_imu = check_dev_path("/dev/hiwonder_imu", "/dev/amr_imu", "/dev/esp-imu", "/dev/ttyUSB1")
-    hw_sabertooth = check_dev_path("/dev/sabertooth", "/dev/amr_motors", "/dev/ttyACM0")
+    hw_esp = check_dev_path("/dev/amr_encoder", "/dev/esp", "/dev/esp32", "/dev/ttyACM1", "/dev/ttyUSB2")
+    hw_lidar = check_dev_path("/dev/amr_lidar", "/dev/lidar", "/dev/ydlidar", "/dev/ttyUSB2", "/dev/ttyUSB1", "/dev/ttyUSB3", "/dev/ttyUSB4")
+    hw_gps = check_dev_path("/dev/amr_gps", "/dev/hiwonder_gps", "/dev/gps", "/dev/ttyUSB0", "/dev/ttyUSB1")
+    hw_imu = check_dev_path("/dev/amr_imu", "/dev/hiwonder_imu", "/dev/esp-imu", "/dev/ttyUSB1", "/dev/ttyUSB2")
+    hw_sabertooth = check_dev_path("/dev/amr_sabertooth", "/dev/sabertooth", "/dev/amr_motors", "/dev/ttyACM0")
     hw_radio = {
         "path": "GPIO8 (CH1) & GPIO24 (CH2)",
         "exists": os.path.exists("/dev/gpiochip4"),
@@ -776,7 +777,7 @@ def stop_robot_stack():
     # 2. Terminate any remaining stack and video processes by pattern
     to_kill = []
     for proc_key, patterns in MANAGED_PROCESS_PATTERNS.items():
-        if proc_key in ["rosbridge_proc", "session_proc"]:
+        if proc_key in ["rosbridge_proc", "session_proc", "control_bridge_proc"]:
             continue  # Keep core bridge/session infrastructure servers alive
         for p in psutil.process_iter(['pid', 'name', 'cmdline']):
             try:
@@ -1064,6 +1065,7 @@ def _perform_server_shutdown():
         subprocess.run(["pkill", "-f", "vite"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=2)
         subprocess.run(["pkill", "-f", "rosbridge_websocket"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=2)
         subprocess.run(["pkill", "-f", "session_publisher"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=2)
+        subprocess.run(["pkill", "-f", "amr_control_bridge"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=2)
         subprocess.run(["pkill", "-f", "web_video_server"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=2)
         subprocess.run(["pkill", "-f", "camera_streamer.py"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=2)
         for pat in [

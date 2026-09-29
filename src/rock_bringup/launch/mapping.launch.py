@@ -29,6 +29,12 @@ def generate_launch_description():
         description='Whether to start Sabertooth manual radio drive stack (ros2 launch sabertooth_driver manual_radio_drive.launch.py)'
     )
 
+    start_gps_arg = DeclareLaunchArgument(
+        'start_gps',
+        default_value='true',
+        description='Whether to start Hiwonder GPS node for outdoor mapping telemetry'
+    )
+
     # 1. Robot State Publisher (URDF & Static Transforms)
     robot_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
@@ -66,7 +72,21 @@ def generate_launch_description():
         }]
     )
 
-    # 5. SLAM Toolbox Online Async Mapping Node (Managed Lifecycle)
+    # 5. Hiwonder GNSS / GPS Node (Outdoor Mapping Telemetry)
+    gps_node = Node(
+        package='hiwonder_gps',
+        executable='gps_node',
+        name='hiwonder_gps_node',
+        output='screen',
+        parameters=[{
+            'port': '/dev/hiwonder_gps',
+            'baud_rate': 9600,
+            'frame_id': 'gps_link'
+        }],
+        condition=IfCondition(LaunchConfiguration('start_gps'))
+    )
+
+    # 6. SLAM Toolbox Online Async Mapping Node (Managed Lifecycle)
     mapping_params_file = os.path.join(pkg_bringup, 'config', 'mapper_mapping.yaml')
     slam_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
@@ -79,7 +99,7 @@ def generate_launch_description():
         }.items()
     )
 
-    # 6. Sabertooth Manual Radio Drive
+    # 7. Sabertooth Manual Radio Drive
     manual_radio_drive_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(
@@ -91,7 +111,7 @@ def generate_launch_description():
         condition=IfCondition(LaunchConfiguration('start_manual_drive'))
     )
 
-    # 7. Optional RViz2
+    # 8. Optional RViz2
     rviz_node = Node(
         package='rviz2',
         executable='rviz2',
@@ -102,10 +122,12 @@ def generate_launch_description():
     return LaunchDescription([
         start_rviz_arg,
         start_manual_drive_arg,
+        start_gps_arg,
         robot_launch,
         odom_node,
         lidar_launch,
         imu_node,
+        gps_node,
         slam_launch,
         manual_radio_drive_launch,
         rviz_node

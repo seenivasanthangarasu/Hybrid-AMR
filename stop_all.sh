@@ -22,6 +22,7 @@ pkill -f depth_colorizer.py 2>/dev/null || true
 pkill -f diagnostic_cam.py 2>/dev/null || true
 pkill -f v4l2_camera 2>/dev/null || true
 pkill -f session_publisher 2>/dev/null || true
+pkill -f amr_control_bridge 2>/dev/null || true
 
 # 2. Stop ROSBridge & Web Video Server
 pkill -f rosbridge_websocket 2>/dev/null || true

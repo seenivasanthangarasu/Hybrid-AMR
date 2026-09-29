@@ -25,7 +25,7 @@ class SabertoothNode(Node):
         # -----------------------------
         # Parameters
         # -----------------------------
-        self.declare_parameter('port', '/dev/sabertooth')
+        self.declare_parameter('port', '/dev/amr_sabertooth')
         self.declare_parameter('baudrate', 115200)
         self.declare_parameter('address', 128)
         self.declare_parameter('cmd_vel_topic', '/cmd_vel')
@@ -104,6 +104,7 @@ class SabertoothNode(Node):
     def _connect_serial(self):
         candidate_ports = [
             self.configured_port,
+            '/dev/amr_sabertooth',
             '/dev/sabertooth',
             '/dev/amr_motors',
             '/dev/ttyACM0',

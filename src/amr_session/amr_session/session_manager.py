@@ -161,7 +161,20 @@ class SessionManager:
                 return DEFAULT_SESSION_DIR
         except Exception:
             pass
-        return FALLBACK_SESSION_DIR
+        # Try ~/.amr
+        try:
+            os.makedirs(FALLBACK_SESSION_DIR, exist_ok=True)
+            if os.access(FALLBACK_SESSION_DIR, os.W_OK):
+                return FALLBACK_SESSION_DIR
+        except Exception:
+            pass
+        # Fallback to /tmp/amr
+        tmp_dir = "/tmp/amr"
+        try:
+            os.makedirs(tmp_dir, exist_ok=True)
+            return tmp_dir
+        except Exception:
+            return "."
 
     def get_or_create_session(self):
         """

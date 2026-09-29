@@ -19,7 +19,7 @@ class HiwonderGpsNode(Node):
         super().__init__('hiwonder_gps_node')
 
         # ROS parameters
-        self.declare_parameter('port', '/dev/hiwonder_gps')
+        self.declare_parameter('port', '/dev/amr_gps')
         self.declare_parameter('baud_rate', 9600)
         self.declare_parameter('frame_id', 'gps_link')
 
@@ -60,13 +60,13 @@ class HiwonderGpsNode(Node):
         """Open the GPS serial port from configured path or fallback candidate ports."""
         candidate_ports = [
             self.configured_port,
-            '/dev/hiwonder_gps',
             '/dev/amr_gps',
+            '/dev/hiwonder_gps',
             '/dev/gps',
             '/dev/ttyUSB0',
-            '/dev/ttyUSB3',
             '/dev/ttyUSB1',
-            '/dev/ttyUSB2'
+            '/dev/ttyUSB2',
+            '/dev/ttyUSB3'
         ]
         
         ports_to_try = []

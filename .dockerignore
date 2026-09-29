@@ -1,0 +1,16 @@
+# Hybrid-AMR Docker Build Ignore List
+.git
+.gitignore
+build
+install
+log
+.ros_log
+.pytest_cache
+admin-dashboard/node_modules
+admin-dashboard/dist
+src/mapviz
+*.pyc
+__pycache__
+*.tar.gz
+*.zip
+amr_backups*
