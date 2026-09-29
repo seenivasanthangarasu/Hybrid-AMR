@@ -20,15 +20,24 @@ if ! command -v docker > /dev/null 2>&1; then
     exit 1
 fi
 
+# Determine whether docker requires sudo in this shell session
+DOCKER_CMD="docker"
 if ! docker info > /dev/null 2>&1; then
-    echo "❌ ERROR: Cannot connect to the Docker daemon. Check 'systemctl status docker' or run with sudo/add user to docker group."
-    exit 1
+    if sudo -n docker info > /dev/null 2>&1 || sudo docker info > /dev/null 2>&1; then
+        echo "ℹ️  Note: Elevating Docker command with sudo (current shell has not yet reloaded the 'docker' group)."
+        echo "   Tip: Run 'newgrp docker' or log out and back in to run without sudo."
+        DOCKER_CMD="sudo docker"
+    else
+        echo "❌ ERROR: Cannot connect to the Docker daemon."
+        echo "   Check 'sudo systemctl status docker' or run with sudo."
+        exit 1
+    fi
 fi
 
-if ! docker image inspect hybrid-amr:latest > /dev/null 2>&1; then
+if ! $DOCKER_CMD image inspect hybrid-amr:latest > /dev/null 2>&1; then
     echo "❌ ERROR: Docker image 'hybrid-amr:latest' not found."
     echo "   Please build the image first using:"
-    echo "     cd $WORKSPACE_DIR && docker compose build"
+    echo "     cd $WORKSPACE_DIR && $DOCKER_CMD compose build"
     exit 1
 fi
 
@@ -80,7 +89,7 @@ mkdir -p "$WORKSPACE_DIR/log/docker_ros_log"
 case "$MODE" in
     --sensors-only)
         echo "🔬 Starting container in SENSORS-ONLY mode (motors inactive)..."
-        docker run -it --rm \
+        $DOCKER_CMD run -it --rm \
             --name amr_ros_sensors \
             --network host \
             --ipc host \
@@ -103,12 +112,12 @@ case "$MODE" in
         ;;
     --full)
         echo "🚀 Starting full AMR stack via Docker Compose..."
-        docker compose -f "$DOCKER_DIR/docker-compose.yml" up -d
-        echo "✅ Hybrid-AMR services started in background. Inspect with: docker compose -f $DOCKER_DIR/docker-compose.yml logs -f"
+        $DOCKER_CMD compose -f "$DOCKER_DIR/docker-compose.yml" up -d
+        echo "✅ Hybrid-AMR services started in background. Inspect with: $DOCKER_CMD compose -f $DOCKER_DIR/docker-compose.yml logs -f"
         ;;
     --shell)
         echo "💻 Opening interactive diagnostic bash shell inside container..."
-        docker run -it --rm \
+        $DOCKER_CMD run -it --rm \
             --name amr_ros_debug \
             --network host \
             --ipc host \
